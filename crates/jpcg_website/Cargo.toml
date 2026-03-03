@@ -1,0 +1,11 @@
+[package]
+name = "jpcg_website"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,14 @@
+[package]
+name = "jpcg_core"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+colorized.workspace = true
+serde.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,30 @@
+xinfa_name = "莫问"
+xinfa_nom = "根骨"
+atk_up = 1.96
+pofang_up = 2.0
+
+[[skill]]
+skill_name = "宫"           #名字
+skill_id = 10447            #技能ID
+sub_id = 14474              #子ID
+group = 1                   #套路组编号
+weapon_request = 0          #需要武器编号
+design_effect = 0           #技能生效方式（直接伤害，Dot等）
+kind_type = 0               #技能类型(外功、毒性内功)
+cast_mode = 0               #释放方式（群攻、单体等）
+guaranteed_hit = false      #必定命中标签（true,false）
+has_critical_strike = true  #可暴击标签（true,false）
+effect_type = 0             #技能效果标签（有害0，有益1）
+jihuoqixue = ""             #激活奇穴
+base_damage1 = 160          #基本伤害
+base_damage2 = 200          #基本伤害2
+atk_xishu = 501             #伤害系数
+watk_xishu = 0              #武器伤害系数
+hit_up = 0                  #增伤乘区
+huixin_up = 0               #额外会心
+huixiao_up = 0              #额外会效
+wushifangyu = 0             #无视防御
+wushihuajin = 0             #无视化劲
+wushijianshang = 0          #无视减伤
+zhenshishanghai = 0         #真实伤害
+dot_flag = 0                #dot伤害标签

@@ -1,0 +1,189 @@
+[xinfa]
+xinfa_name = "莫问"
+xinfa_nom = "根骨"
+atk_up = 1.96
+pofang_up = 2.0
+
+[[skill]]
+skill_name = "宫"           #名字
+base_damage1 = 160          #基本伤害
+base_damage2 = 200          #基本伤害2
+atk_xishu = 2.609375        #伤害系数
+
+[[skill]]
+skill_name = "商"
+base_damage1 = 14
+base_damage2 = 19
+atk_xishu = 2.4479166666666665
+
+[[skill]]
+skill_name = "商（dot）"
+base_damage1 = 58
+base_damage2 = 58
+atk_xishu = 0.20833333333333334
+dot_flag = 1
+
+[[skill]]
+skill_name = "商（dot）"
+jihuoqixue = "疏曲"
+base_damage1 = 58
+base_damage2 = 58
+atk_xishu = 0.20833333333333334
+dot_flag = 1
+dot_up = 0.2
+
+[[skill]]
+skill_name = "角"
+base_damage1 = 14
+base_damage2 = 19
+atk_xishu = 2.4479166666666665
+
+[[skill]]
+skill_name = "角（dot）"
+base_damage1 = 58
+base_damage2 = 58
+atk_xishu = 0.234375
+dot_flag = 1
+
+[[skill]]
+skill_name = "角（dot）"
+jihuoqixue = "疏曲"
+base_damage1 = 58
+base_damage2 = 58
+atk_xishu = 0.234375
+dot_flag = 1
+dot_up = 0.2
+
+[[skill]]
+skill_name = "徵"
+base_damage1 = 190
+base_damage2 = 210
+atk_xishu = 1.7760416666666667
+
+[[skill]]
+skill_name = "徵"
+jihuoqixue = "豪情"
+base_damage1 = 190
+base_damage2 = 210
+atk_xishu = 1.7760416666666667
+hit_up = 20
+
+[[skill]]
+skill_name = "羽"
+base_damage1 = 143
+base_damage2 = 156
+atk_xishu = 2.6041666666666665
+
+[[skill]]
+skill_name = "羽"
+jihuoqixue = "微萤"
+base_damage1 = 143
+base_damage2 = 156
+atk_xishu = 2.6041666666666665
+hit_up = 100
+
+[[skill]]
+skill_name = "太常清乐·清角"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 6.09375
+
+[[skill]]
+skill_name = "相依1"
+base_damage1 = 4600
+base_damage2 = 4738
+atk_xishu = 35.36458333333333
+
+[[skill]]
+skill_name = "相依2"
+base_damage1 = 5520
+base_damage2 = 5658
+atk_xishu = 43.682291666666664
+
+[[skill]]
+skill_name = "冲秋冥"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 4.427083333333333
+
+[[skill]]
+skill_name = "剑·宫"
+base_damage1 = 330
+base_damage2 = 350
+atk_xishu = 3.09375
+
+[[skill]]
+skill_name = "剑·商"
+base_damage1 = 385
+base_damage2 = 405
+atk_xishu = 8.119791666666666
+
+[[skill]]
+skill_name = "剑·角（1）"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 3.4375
+
+[[skill]]
+skill_name = "剑·角（2）"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 5.15625
+
+[[skill]]
+skill_name = "剑·角（3）"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 6.875
+
+[[skill]]
+skill_name = "剑·徵"
+base_damage1 = 330
+base_damage2 = 350
+atk_xishu = 3.15625
+
+[[skill]]
+skill_name = "剑·徵"
+jihuoqixue = "削竹"
+base_damage1 = 330
+base_damage2 = 350
+atk_xishu = 3.15625
+wushifangyu = 90
+
+[[skill]]
+skill_name = "剑·羽"
+base_damage1 = 110
+base_damage2 = 120
+atk_xishu = 5.119791666666666
+
+[[skill]]
+skill_name = "剑·羽(影子)"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 1.7291666666666665
+
+[[skill]]
+skill_name = "剑·羽"
+jihuoqixue = "停拍"
+base_damage1 = 110
+base_damage2 = 120
+atk_xishu = 5.119791666666666
+hit_up = 20
+
+[[skill]]
+skill_name = "入月"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 1.625
+
+[[skill]]
+skill_name = "照雪"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 2.578125
+
+[[skill]]
+skill_name = "断水流"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 6.666666666666666

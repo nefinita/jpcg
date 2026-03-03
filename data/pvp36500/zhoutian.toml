@@ -1,0 +1,101 @@
+[xinfa]
+xinfa_name = "周天功"
+xinfa_nom = "元气"
+atk_up = 1.96
+pofang_up = 0.3
+
+[[skill]]
+skill_name = "破穴"
+base_damage1 = 20
+base_damage2 = 20
+atk_xishu = 3.75
+
+[[skill]]
+skill_name = "引窍"           #名字
+base_damage1 = 20          #基本伤害
+base_damage2 = 20          #基本伤害2
+atk_xishu = 9.535515625        #伤害系数
+
+[[skill]]
+skill_name = "绝脉"
+base_damage1 = 20
+base_damage2 = 20
+atk_xishu = 0.549479167
+
+[[skill]]
+skill_name = "骤风"
+base_damage1 = 20
+base_damage2 = 20
+atk_xishu = 1.286458333
+
+[[skill]]
+skill_name = "横驱风靡"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 2.192708333
+
+[[skill]]
+skill_name = "劈风令"
+base_damage1 = 20
+base_damage2 = 20
+atk_xishu = 4.494791667
+
+[[skill]]
+skill_name = "劈风令·骤"
+base_damage1 = 70
+base_damage2 = 70
+atk_xishu = 1.640625
+
+[[skill]]
+skill_name = "抟风令"
+base_damage1 = 20
+base_damage2 = 20
+atk_xishu = 2.5
+
+[[skill]]
+skill_name = "抟风令·爆"
+base_damage1 = 1220
+base_damage2 = 1220
+atk_xishu = 7.47359375
+
+[[skill]]
+skill_name = "骤涌"
+base_damage1 = 108
+base_damage2 = 341
+atk_xishu = 7.8125
+
+[[skill]]
+skill_name = "灵台"
+base_damage1 = 20
+base_damage2 = 20
+atk_xishu = 3.666666667
+
+[[skill]]
+skill_name = "胧雾观花"
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 7.9375
+
+[[skill]]
+skill_name = "风徊絮转"
+base_damage1 = 25
+base_damage2 = 40
+atk_xishu = 6.5989
+
+[[skill]]
+skill_name = "风徊"
+base_damage1 = 50
+base_damage2 = 80
+atk_xishu = 13.1979
+
+[[skill]]
+skill_name = "飞鸿"
+base_damage1 = 20
+base_damage2 = 20
+atk_xishu = 1.723958333
+
+[[skill]]
+skill_name = "破野"
+base_damage1 = 740
+base_damage2 = 740
+atk_xishu = 10.625
