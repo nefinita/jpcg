@@ -1,12 +1,12 @@
 [package]
-name = "jpcg_gui"
+name = "jpcg_test"
 license.workspace = true
 readme.workspace = true
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-iced.workspace = true
+jpcg_core = { path = "../jpcg_core" }
 
 [lints]
 workspace = true

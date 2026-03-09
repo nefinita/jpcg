@@ -1,5 +1,5 @@
 mod gui;
 
-fn main() {
-    println!("Hello, world!");
+pub fn gui_start() {
+    iced::application()
 }

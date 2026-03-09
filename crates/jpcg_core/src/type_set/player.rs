@@ -32,6 +32,18 @@ impl PlayerConfig {
         }
     }
 
+    pub fn default() -> Self {
+        Self {
+            jcsx: "根骨".to_string(),
+            jichu_shuxing: 100,
+            jichu_gongji: 200,
+            huixin_dengji: 1,
+            huixin_xiaoguo: 10,
+            pofang_dengji: 1,
+            wuqi_shanghai: 50,
+        }
+    }
+
     pub fn atk(&self, atk_up: f32) -> AtkConfig {
         let base = (self.jichu_gongji + self.jichu_shuxing) as f32 * (1.0 + atk_up);
         AtkConfig {

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/jpcg_core", "crates/jpcg_gui",
+    "crates/jpcg_core", "crates/jpcg_gui", "crates/jpcg_test",
     "crates/jpcg_website",
     
 ]
@@ -21,6 +21,8 @@ toml = "*"
 colorized = "*"
 libc = "*"
 iced = { version = "*", features = ["tokio", "canvas", "svg", "image"] }
+axum = "*"
+tower-http = { version = "*", features = ["fs", "cors"] }
 
 [workspace.lints.clippy]
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::log::{error, info, warn};
 use crate::io::toml_input;
+use crate::log::{error, info, warn};
 
 fn data_load() {
     let content = toml_input("data/atk_config");
