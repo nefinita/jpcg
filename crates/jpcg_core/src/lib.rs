@@ -21,13 +21,13 @@ pub mod save_config {
         type_set::{hostilepile::HostilepileConfig, player::PlayerConfig},
     };
 
-    pub fn save(player: PlayerConfig, hostilepile: HostilepileConfig) {
-        save_config(player, hostilepile);
+    pub fn save(player: PlayerConfig, hostilepile: HostilepileConfig, xinfa: crate::type_set::xinfa::XinfaConfig) {
+        save_config(player, hostilepile, xinfa);
     }
 }
 
 pub mod calculate {
-    use crate::cal::{CalculateResult, start_calculation};
+    use crate::cal;
     use crate::type_set::{
         hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig,
     };
@@ -35,7 +35,35 @@ pub mod calculate {
         player: PlayerConfig,
         hostilepile: HostilepileConfig,
         xinfa: XinfaConfig,
-    ) -> Vec<CalculateResult> {
-        start_calculation(player, hostilepile, xinfa)
+    ) -> Vec<cal::CalculateResult> {
+        cal::start_calculation(player, hostilepile, xinfa)
     }
+}
+
+use crate::type_set::{
+    hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig,
+};
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct FFIPlayerConfig(*const u8);
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct FFIHostilepileConfig(*const u8);
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct FFIXinfaConfig(*const u8);
+
+#[unsafe(no_mangle)]
+pub extern "C" fn start_calculation(
+    player: *const u8,
+    hostilepile: *const u8,
+    xinfa: *const u8,
+) -> *const u8 {
+    let _player: &PlayerConfig = unsafe { &*(player as *const PlayerConfig) };
+    let _hostilepile: &HostilepileConfig = unsafe { &*(hostilepile as *const HostilepileConfig) };
+    let _xinfa: &XinfaConfig = unsafe { &*(xinfa as *const XinfaConfig) };
+    std::ptr::null()
 }

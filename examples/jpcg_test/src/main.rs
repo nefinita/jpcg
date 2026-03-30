@@ -11,6 +11,5 @@ fn main() {
         HostilepileConfig::default(),
         XinfaConfig::default(),
     );
-    save(PlayerConfig::default(), HostilepileConfig::default());
-    println!("Hello, world!");
+    save(PlayerConfig::default(), HostilepileConfig::default(), XinfaConfig::default());
 }

@@ -1,8 +1,9 @@
 [xinfa]
-xinfa_name = "莫问"
-xinfa_nom = "根骨"
+xinfa_name = "mowen"
+xinfa_nom = "gengu"
 atk_up = 1.96
 pofang_up = 2.0
+huixin_up = 0.0
 
 [[skill]]
 skill_name = "宫"           #名字

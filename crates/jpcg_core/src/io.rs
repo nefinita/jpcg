@@ -1,4 +1,6 @@
 use crate::log::{error, info, warn};
+use crate::type_set::skilltype::Skilltype;
+use crate::type_set::xinfa::XinfaConfig;
 use crate::type_set::{hostilepile, player, skilltype, xinfa};
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +42,7 @@ impl Config {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct SaveConfig {
+    pub xinfa: xinfa::XinfaConfig,
     pub player: player::PlayerConfig,
     pub hostilepile: hostilepile::HostilepileConfig,
 }
@@ -60,11 +63,12 @@ pub fn load_config(profession: &str) -> TomlConfig {
     toml::from_str(&content).expect("Failed to parse TOML")
 }
 
-pub fn save_config(player: player::PlayerConfig, hostilepile: hostilepile::HostilepileConfig) {
+pub fn save_config(player: player::PlayerConfig, hostilepile: hostilepile::HostilepileConfig, xinfa: xinfa::XinfaConfig) {
     //SaveConfig 结构体转换为 TOML 字符串
     let save_config = SaveConfig {
         player,
         hostilepile,
+        xinfa,
     };
     let x = toml::to_string(&save_config).unwrap();
     match std::fs::write("saved_config.toml", x) {

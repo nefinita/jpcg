@@ -1,6 +1,13 @@
+mod atkcal;
+
 use crate::{
-    log::success,
-    type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
+    cal::atkcal::atkout,
+    io::{TomlConfig, toml_input},
+    log::{error, success},
+    type_set::{
+        hostilepile::HostilepileConfig, player::PlayerConfig,
+        xinfa::XinfaConfig,
+    },
 };
 
 pub fn start_calculation(
@@ -9,16 +16,30 @@ pub fn start_calculation(
     xinfa: XinfaConfig,
 ) -> Vec<CalculateResult> {
     success("Calculation started!");
-    // 这里可以调用具体的计算逻辑
-    vec![
-        CalculateResult::new("技能1".to_string(), 100, 2000, 300, 400, 500, 600),
-        CalculateResult::new("技能2".to_string(), 150, 2500, 350, 450, 550, 650),
-    ]
+
+    let current_dir = match std::env::current_exe() {
+        Ok(path) => path
+            .parent()
+            .expect("Failed to get parent directory")
+            .to_path_buf(),
+        Err(e) => {
+            error(format!("Failed to get current exe path: {}", e).as_str());
+            return vec![CalculateResult::default()];
+        }
+    };
+    let file_path = current_dir
+        .join("data")
+        .join("pvp36500")
+        .join(xinfa.xinfa_name.clone());
+    let content = toml_input(file_path.to_str().unwrap());
+    let skill_table: TomlConfig = toml::from_str(&content).unwrap();
+    call_back(&skill_table, &player, &hostilepile)
 }
 
+#[derive(Default)]
 pub struct CalculateResult {
     skill_name: String,
-    y: u16,
+    y: u32,
     b: u32,
     i: u32,
     n: u32,
@@ -27,7 +48,7 @@ pub struct CalculateResult {
 }
 
 impl CalculateResult {
-    pub fn new(skill_name: String, y: u16, b: u32, i: u32, n: u32, h: u32, q: u32) -> Self {
+    pub fn new(skill_name: String, y: u32, b: u32, i: u32, n: u32, h: u32, q: u32) -> Self {
         CalculateResult {
             skill_name,
             y,
@@ -45,4 +66,27 @@ impl CalculateResult {
             self.skill_name, self.y, self.b, self.i, self.n, self.h, self.q
         ));
     }
+}
+
+fn call_back(
+    toml_config: &TomlConfig,
+    player: &PlayerConfig,
+    hostilepile: &HostilepileConfig,
+) -> Vec<CalculateResult> {
+    let mut results = Vec::new();
+    for skill in &toml_config.skill {
+        let damage_result = atkout(player, hostilepile, skill, &toml_config.xinfa, "pvp36500");
+        let calculate_result = CalculateResult::new(
+            skill.skill_name.clone(),
+            damage_result.y,
+            damage_result.b,
+            damage_result.i,
+            damage_result.g_damage,
+            damage_result.h_damage,
+            damage_result.q_damage,
+        );
+        calculate_result.get_message();
+        results.push(calculate_result);
+    }
+    results
 }

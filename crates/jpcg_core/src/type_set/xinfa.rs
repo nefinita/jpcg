@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone)]
+#[serde(default)]
 pub struct XinfaConfig {
     pub xinfa_name: String,
     pub xinfa_nom: String,

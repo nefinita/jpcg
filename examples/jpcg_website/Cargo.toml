@@ -9,7 +9,7 @@ edition.workspace = true
 tokio.workspace = true
 axum.workspace = true
 tower-http.workspace = true
-jpcg_core = {path = "../jpcg_core"}
+jpcg_core = {path = "../../crates/jpcg_core"}
 
 [lints]
 workspace = true

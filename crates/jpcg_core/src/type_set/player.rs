@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+use crate::log::error;
+#[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayerConfig {
     jcsx: String,
-    jichu_shuxing: u32,
-    jichu_gongji: u32,
-    huixin_dengji: u32,
-    huixin_xiaoguo: u32,
-    pofang_dengji: u32,
-    wuqi_shanghai: u32,
+    pub jichu_shuxing: u32,
+    pub jichu_gongji: u32,
+    pub huixin_dengji: u32,
+    pub huixin_xiaoguo: u32,
+    pub pofang_dengji: u32,
+    pub wuqi_shanghai: u32,
 }
 
 impl PlayerConfig {
@@ -34,7 +36,7 @@ impl PlayerConfig {
 
     pub fn default() -> Self {
         Self {
-            jcsx: "根骨".to_string(),
+            jcsx: "gengu".to_string(),
             jichu_shuxing: 100,
             jichu_gongji: 200,
             huixin_dengji: 1,
@@ -53,13 +55,31 @@ impl PlayerConfig {
     }
 
     fn jcsx_to_atk(&self) -> u32 {
-        32
+        match self.jcsx.as_str() {
+            "gengu" => self.jichu_shuxing * 2,
+            "yuanqi" => self.jichu_shuxing * 2,
+            "lidao" => self.jichu_shuxing * 2,
+            "shenfa" => self.jichu_shuxing * 2,
+            _ => {
+                error(format!("未知的基础属性: {}", self.jcsx).as_str());
+                0
+            }
+        }
     }
 
-    pub fn guo_pofang(&self) {}
+    pub fn guo_pofang(&self) -> u32 {
+        ((self.pofang_dengji * 1024) as f32 / 225957.6) as u32
+    }
+    pub fn guo_huixinxiaoguo(&self) -> u32 {
+        (self.huixin_xiaoguo as f32 * 1024.0 / 72844.2) as u32
+    }
+
+    pub fn guo_huixin(&self) -> f32 {
+        self.huixin_dengji as f32 / 197703.0
+    }
 }
 
-struct AtkConfig {
+pub struct AtkConfig {
     base: u32,
     extra: u32,
 }

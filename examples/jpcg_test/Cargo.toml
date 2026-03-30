@@ -6,7 +6,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-jpcg_core = { path = "../jpcg_core" }
+jpcg_core = { path = "../../crates/jpcg_core" }
 
 [lints]
 workspace = true

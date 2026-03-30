@@ -1,9 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/jpcg_core", "crates/jpcg_gui", "crates/jpcg_test",
-    "crates/jpcg_website",
-    
+    "crates/*",
+    "examples/*"
 ]
 
 [workspace.package]
