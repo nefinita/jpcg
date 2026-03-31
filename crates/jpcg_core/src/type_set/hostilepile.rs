@@ -38,16 +38,19 @@ impl HostilepileConfig {
 
     pub fn guo_wfangyu(&self, guo_wsfangyu: u32) -> u32 {
         ((self.waigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0)) * 1024.0
-            / (self.waigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0) + 126007.2)) as u32
+            / (self.waigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0) + 126007.2))
+            as u32
     }
 
     pub fn guo_nfangyu(&self, guo_wsfangyu: u32) -> u32 {
         ((self.neigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0)) * 1024.0
-            / (self.neigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0) + 126007.2)) as u32
+            / (self.neigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0) + 126007.2))
+            as u32
     }
 
     pub fn guo_huajin(&self) -> u32 {
-        ((self.huajin_dengji as f32 / (self.huajin_dengji as f32 + 30115.8) + 102.0 / 1024.0) * 1024.0) as u32
+        ((self.huajin_dengji as f32 / (self.huajin_dengji as f32 + 30115.8) + 102.0 / 1024.0)
+            * 1024.0) as u32
     }
 
     pub fn guo_yujin_huixiao(&self) -> u32 {

@@ -1,22 +1,22 @@
 [xinfa]
-xinfa_name = "mowen"
-xinfa_nom = "根骨"
+xinfa_name = "莫问"
+xinfa_nom = "gengu"
 atk_up = 0.0
 pofang_up = 0.0
 huixin_up = 0.0
 
 [player]
-jcsx = "gengu"
-jichu_shuxing = 100
-jichu_gongji = 200
-huixin_dengji = 1
-huixin_xiaoguo = 10
-pofang_dengji = 1
-wuqi_shanghai = 50
+jcsx = "莫问"
+jichu_shuxing = 0
+jichu_gongji = 0
+huixin_dengji = 0
+huixin_xiaoguo = 0
+pofang_dengji = 0
+wuqi_shanghai = 0
 
 [hostilepile]
-waigong_fangyu = 100
-neigong_fangyu = 100
-yujin_dengji = 1
-huajin_dengji = 1
-jianshang_bili = 10
+waigong_fangyu = 0
+neigong_fangyu = 0
+yujin_dengji = 0
+huajin_dengji = 0
+jianshang_bili = 0

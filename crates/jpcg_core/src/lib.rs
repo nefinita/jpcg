@@ -21,7 +21,11 @@ pub mod save_config {
         type_set::{hostilepile::HostilepileConfig, player::PlayerConfig},
     };
 
-    pub fn save(player: PlayerConfig, hostilepile: HostilepileConfig, xinfa: crate::type_set::xinfa::XinfaConfig) {
+    pub fn save(
+        player: PlayerConfig,
+        hostilepile: HostilepileConfig,
+        xinfa: crate::type_set::xinfa::XinfaConfig,
+    ) {
         save_config(player, hostilepile, xinfa);
     }
 }
@@ -40,9 +44,7 @@ pub mod calculate {
     }
 }
 
-use crate::type_set::{
-    hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig,
-};
+use crate::type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -62,8 +64,10 @@ pub extern "C" fn start_calculation(
     hostilepile: *const u8,
     xinfa: *const u8,
 ) -> *const u8 {
-    let _player: &PlayerConfig = unsafe { &*(player as *const PlayerConfig) };
-    let _hostilepile: &HostilepileConfig = unsafe { &*(hostilepile as *const HostilepileConfig) };
-    let _xinfa: &XinfaConfig = unsafe { &*(xinfa as *const XinfaConfig) };
-    std::ptr::null()
+    let player: &PlayerConfig = unsafe { &*(player as *const PlayerConfig) };
+    let hostilepile: &HostilepileConfig = unsafe { &*(hostilepile as *const HostilepileConfig) };
+    let xinfa: &XinfaConfig = unsafe { &*(xinfa as *const XinfaConfig) };
+    //输出*const u8
+    let result = calculate::start(player.clone(), hostilepile.clone(), xinfa.clone());
+    Box::into_raw(Box::new(result)) as *const u8
 }

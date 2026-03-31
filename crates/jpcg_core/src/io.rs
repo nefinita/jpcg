@@ -63,7 +63,11 @@ pub fn load_config(profession: &str) -> TomlConfig {
     toml::from_str(&content).expect("Failed to parse TOML")
 }
 
-pub fn save_config(player: player::PlayerConfig, hostilepile: hostilepile::HostilepileConfig, xinfa: xinfa::XinfaConfig) {
+pub fn save_config(
+    player: player::PlayerConfig,
+    hostilepile: hostilepile::HostilepileConfig,
+    xinfa: xinfa::XinfaConfig,
+) {
     //SaveConfig 结构体转换为 TOML 字符串
     let save_config = SaveConfig {
         player,

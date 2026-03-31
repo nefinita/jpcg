@@ -1917,7 +1917,9 @@ dependencies = [
 name = "jpcg_gui"
 version = "2.0.0-alpha.0"
 dependencies = [
+ "colorized",
  "iced",
+ "jpcg_core",
 ]
 
 [[package]]

@@ -4,10 +4,7 @@ use crate::{
     cal::atkcal::atkout,
     io::{TomlConfig, toml_input},
     log::{error, success},
-    type_set::{
-        hostilepile::HostilepileConfig, player::PlayerConfig,
-        xinfa::XinfaConfig,
-    },
+    type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
 };
 
 pub fn start_calculation(
@@ -38,13 +35,13 @@ pub fn start_calculation(
 
 #[derive(Default)]
 pub struct CalculateResult {
-    skill_name: String,
-    y: u32,
-    b: u32,
-    i: u32,
-    n: u32,
-    h: u32,
-    q: u32,
+    pub skill_name: String,
+    pub y: u32,
+    pub b: u32,
+    pub i: u32,
+    pub n: u32,
+    pub h: u32,
+    pub q: u32,
 }
 
 impl CalculateResult {

@@ -15,8 +15,8 @@ pub struct Skilltype {
     pub has_critical_strike: bool, //无质标签（true,false）
     pub effect_type: u8,           //技能效果标签（有害0，有益1）
     pub jihuoqixue: String,        //激活奇穴
-    pub base_damage1: u32,             //基本伤害
-    pub base_damage2: u32,             //基本伤害2
+    pub base_damage1: u32,         //基本伤害
+    pub base_damage2: u32,         //基本伤害2
     pub atk_xishu: f32,            //伤害系数
     pub watk_xishu: u32,           //武器伤害系数
     pub hit_up: u32,               //增伤乘区

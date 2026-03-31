@@ -22,6 +22,7 @@ libc = "*"
 iced = { version = "*", features = ["tokio", "canvas", "svg", "image"] }
 axum = "*"
 tower-http = { version = "*", features = ["fs", "cors"] }
+jpcg_core = { path = "crates/jpcg_core" }
 
 [workspace.lints.clippy]
 

@@ -4,7 +4,7 @@ use crate::log::error;
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayerConfig {
-    jcsx: String,
+    pub jcsx: String,
     pub jichu_shuxing: u32,
     pub jichu_gongji: u32,
     pub huixin_dengji: u32,

@@ -59,7 +59,7 @@ pub fn atkout(
         )
         .as_str(),
     );
-    DamageResult::new(y,i_damage,b_damage,g_damage, h_damage, q_damage)
+    DamageResult::new(y, i_damage, b_damage, g_damage, h_damage, q_damage)
 }
 
 fn iatkc(base_atk: u32, atk: u32, atk_xishu: f32, watk: u32, watk_xishu: f32) -> u32 {
@@ -125,7 +125,7 @@ pub fn no_hatkc(
             * (1.0 - hostilepile.jianshang_bili as f32 / 100.0)) as u32
     };
     //debug(format!("y:{}, b:{}, i:{}, g:{}", y, b_damage, i_damage, g_damage).as_str());
-    DamageResult::new(y, i_damage,b_damage,g_damage, g_damage, g_damage)
+    DamageResult::new(y, i_damage, b_damage, g_damage, g_damage, g_damage)
 }
 
 pub struct DamageResult {
