@@ -6,6 +6,7 @@ use crate::{
     log::{error, success},
     type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
 };
+use serde::{Serialize};
 
 pub fn start_calculation(
     player: PlayerConfig,
@@ -33,7 +34,7 @@ pub fn start_calculation(
     call_back(&skill_table, &player, &hostilepile)
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct CalculateResult {
     pub skill_name: String,
     pub y: u32,
