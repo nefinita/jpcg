@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "crates/*",
-    "examples/*"
+    "examples/jpcg_app/src-tauri"
 ]
 
 [workspace.package]

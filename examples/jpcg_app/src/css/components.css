@@ -1,0 +1,173 @@
+/* ==================== 组件增强样式 ==================== */
+
+/* 心法选择器增强 */
+.xinfa-select option {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  padding: 8px;
+}
+
+.xinfa-select option:checked {
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* 输入框验证状态 */
+.form-input:invalid:not(:placeholder-shown) {
+  border-color: var(--accent-danger);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15);
+}
+
+.form-input:invalid:not(:placeholder-shown) + .input-error {
+  display: block;
+}
+
+.input-error {
+  display: none;
+  font-size: 0.75rem;
+  color: var(--accent-danger);
+  margin-top: 4px;
+}
+
+/* 表格高亮行 */
+.result-table tbody tr[data-skill-type="ultimate"] {
+  background: rgba(124, 92, 255, 0.05);
+  border-left: 3px solid var(--accent-primary);
+}
+
+.result-table tbody tr[data-skill-type="ultimate"] td {
+  font-weight: 500;
+}
+
+/* 数值变化指示器 */
+.value-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.8rem;
+  margin-left: 6px;
+}
+
+.value-change.up {
+  color: var(--accent-success);
+}
+
+.value-change.down {
+  color: var(--accent-danger);
+}
+
+/* 加载骨架屏 */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--bg-secondary) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+}
+
+.skeleton-cell {
+  height: 20px;
+  flex: 1;
+}
+
+.skeleton-cell:nth-child(odd) { flex: 2; }
+.skeleton-cell:nth-child(even) { flex: 1; }
+
+/* 工具提示 */
+[data-tooltip] {
+  position: relative;
+  cursor: help;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-fast);
+  z-index: 100;
+  pointer-events: none;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 拖拽区域（未来扩展） */
+.drop-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+}
+
+.drop-zone:hover,
+.drop-zone.dragover {
+  border-color: var(--accent-secondary);
+  background: rgba(92, 156, 255, 0.05);
+  color: var(--text-primary);
+}
+
+/* 折叠面板 */
+.collapse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.collapse-header:hover {
+  background: var(--input-hover);
+}
+
+.collapse-header .toggle-icon {
+  transition: transform var(--transition-fast);
+}
+
+.collapse-header[aria-expanded="true"] .toggle-icon {
+  transform: rotate(180deg);
+}
+
+.collapse-content {
+  overflow: hidden;
+  transition: max-height var(--transition-normal), opacity var(--transition-normal);
+  max-height: 0;
+  opacity: 0;
+}
+
+.collapse-content[aria-hidden="false"] {
+  max-height: 500px;
+  opacity: 1;
+}
