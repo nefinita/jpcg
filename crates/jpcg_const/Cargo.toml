@@ -1,16 +1,11 @@
 [package]
-name = "jpcg_gui"
+name = "jpcg_const"
 license.workspace = true
 readme.workspace = true
 version.workspace = true
 edition.workspace = true
-default-run = "jpcg_gui"
 
 [dependencies]
-iced.workspace = true
-colorized.workspace = true
-jpcg_core.workspace = true
 
 [lints]
 workspace = true
-

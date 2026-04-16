@@ -1,10 +1,18 @@
+mod drug_table;
+mod message;
+mod qixue_table;
+mod xinfa_table;
+mod yanxi_table;
+
 use iced::widget::{
-    Space, button, column, container, pick_list, row, scrollable, space, text, text_input,
+    Space, button, column, container, image, pick_list, row, scrollable, space, text, text_input,
 };
 use iced::*;
 use jpcg_core::type_set::hostilepile::HostilepileConfig;
 use jpcg_core::type_set::player::PlayerConfig;
 use jpcg_core::type_set::xinfa::XinfaConfig;
+use message::Message;
+use xinfa_table::Xinfa;
 
 #[derive(Default)]
 pub struct Counter {
@@ -34,30 +42,8 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn new() -> Self {
-        Counter {
-            selected_xinfa: Some(Xinfa::Mowen),
-            jcsx: String::new(),
-            jcgj: String::new(),
-            hxdj: String::new(),
-            hxxg: String::new(),
-            pfdj: String::new(),
-            wqsh: String::new(),
-            wgfy: String::new(),
-            ngfy: String::new(),
-            yjdj: String::new(),
-            hjdj: String::new(),
-            jsbl: String::new(),
-            skill_table1: String::new(),
-            skill_table2: String::new(),
-            skill_table3: String::new(),
-            skill_table4: String::new(),
-            skill_table5: String::new(),
-        }
-    }
-
     pub fn view(&self) -> Element<'_, Message> {
-        container(
+        container(column![
             row![
                 column![
                     row![
@@ -194,14 +180,122 @@ impl Counter {
                     .height(300.0)
                     .spacing(20)
                 ]
-                .width(920.0)
                 .spacing(20),
-                row![Space::new()],
             ]
             .spacing(20),
-        )
-        .center_x(Fill)
-        .center_y(Fill)
+            column![
+                row![
+                    space().width(20),
+                    text("奇穴调整区（开发中）").size(24),
+                    space().width(100)
+                ]
+                .spacing(20),
+                row![text("流派选择",)],
+                row![
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                ],
+                row![
+                    space().width(20),
+                    text("奇穴1"),
+                    text("奇穴2"),
+                    text("奇穴3"),
+                    text("奇穴4"),
+                    text("奇穴5"),
+                    text("奇穴6"),
+                    text("奇穴7"),
+                    text("奇穴8"),
+                    text("奇穴9")
+                ]
+                .spacing(30),
+                row![space().width(20), text("buff选择区(开发中)")].spacing(20),
+                row![
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                ]
+                .spacing(20),
+                row![
+                    space().width(20),
+                    text("宴席1"),
+                    space().width(20),
+                    text("宴席2"),
+                    space().width(20),
+                    text("小药1"),
+                    space().width(20),
+                    text("小药2"),
+                    space().width(20),
+                    text("小药3"),
+                    space().width(20),
+                    text("小药4"),
+                    space().width(20),
+                    text("小药5"),
+                ]
+                .spacing(20),
+                row![
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                    space().width(20),
+                    image("assets/test.png").width(50).height(50),
+                ]
+                .spacing(20),
+                row![
+                    space().width(20),
+                    text("阵眼"),
+                    space().width(20),
+                    text("增益1"),
+                    space().width(20),
+                    text("增益2"),
+                    space().width(20),
+                    text("增益3"),
+                    space().width(20),
+                    text("增益4"),
+                    space().width(20),
+                    text("增益5"),
+                    space().width(20),
+                    text("增益6"),
+                ]
+                .spacing(20),
+            ]
+            .spacing(20)
+        ])
         .into()
     }
 
@@ -349,6 +443,18 @@ impl Counter {
             Message::LoadConfig => {
                 let x = jpcg_core::load_config::default_load();
                 self.selected_xinfa = Some(Xinfa::from_string(&x.xinfa.xinfa_name)); //默认心法
+                Xinfa::from_string(&x.xinfa.xinfa_name);
+                self.jcsx = x.player.jichu_shuxing.to_string();
+                self.jcgj = x.player.jichu_gongji.to_string();
+                self.hxdj = x.player.huixin_dengji.to_string();
+                self.hxxg = x.player.huixin_xiaoguo.to_string();
+                self.pfdj = x.player.pofang_dengji.to_string();
+                self.wqsh = x.player.wuqi_shanghai.to_string();
+                self.wgfy = x.hostilepile.waigong_fangyu.to_string();
+                self.ngfy = x.hostilepile.neigong_fangyu.to_string();
+                self.yjdj = x.hostilepile.yujin_dengji.to_string();
+                self.hjdj = x.hostilepile.huajin_dengji.to_string();
+                self.jsbl = x.hostilepile.jianshang_bili.to_string();
             }
             Message::ClearConfig => {
                 //清空配置
@@ -373,121 +479,4 @@ impl Counter {
             }
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Xinfa {
-    YinLongJue,         // 隐龙诀
-    Wufang,             // 无方
-    CangJianShanZhuang, // 藏剑山庄
-    QiXiuFang,          // 七秀坊
-    WanHuaGu,           // 万花谷
-    TianCeFu,           // 天策府
-    ShaoLinSi,          // 少林寺
-    ChunYangGuan,       // 纯阳观
-    WuDouJiao,          // 五毒教
-    TangMen,            // 唐门
-    MingJiao,           // 明教
-    GaiBang,            // 丐帮
-    CangYun,            // 苍云
-    Mowen,              // 长歌门
-    BaDaoShanZhuang,    // 霸刀山庄
-    PengLai,            // 蓬莱
-    YanTianZong,        // 衍天宗
-    YaoZong,            // 药宗
-}
-
-impl Xinfa {
-    pub const ALL: [Xinfa; 18] = [
-        Xinfa::YinLongJue,
-        Xinfa::Wufang,
-        Xinfa::CangJianShanZhuang,
-        Xinfa::QiXiuFang,
-        Xinfa::WanHuaGu,
-        Xinfa::TianCeFu,
-        Xinfa::ShaoLinSi,
-        Xinfa::ChunYangGuan,
-        Xinfa::WuDouJiao,
-        Xinfa::TangMen,
-        Xinfa::MingJiao,
-        Xinfa::GaiBang,
-        Xinfa::CangYun,
-        Xinfa::Mowen,
-        Xinfa::BaDaoShanZhuang,
-        Xinfa::PengLai,
-        Xinfa::YanTianZong,
-        Xinfa::YaoZong,
-    ];
-
-    pub fn from_string(s: &str) -> Self {
-        match s {
-            "隐龙诀" => Xinfa::YinLongJue,
-            "无方" => Xinfa::Wufang,
-            "藏剑山庄" => Xinfa::CangJianShanZhuang,
-            "七秀坊" => Xinfa::QiXiuFang,
-            "万花谷" => Xinfa::WanHuaGu,
-            "天策府" => Xinfa::TianCeFu,
-            "少林寺" => Xinfa::ShaoLinSi,
-            "纯阳观" => Xinfa::ChunYangGuan,
-            "五毒教" => Xinfa::WuDouJiao,
-            "唐门" => Xinfa::TangMen,
-            "明教" => Xinfa::MingJiao,
-            "丐帮" => Xinfa::GaiBang,
-            "苍云" => Xinfa::CangYun,
-            "莫问" => Xinfa::Mowen,
-            "霸刀山庄" => Xinfa::BaDaoShanZhuang,
-            "蓬莱" => Xinfa::PengLai,
-            "衍天宗" => Xinfa::YanTianZong,
-            "药宗" => Xinfa::YaoZong,
-            _ => {
-                crate::log::error(format!("未知的心法: {}", s).as_str());
-                Xinfa::Mowen // 默认返回莫问
-            }
-        }
-    }
-}
-
-impl std::fmt::Display for Xinfa {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Xinfa::YinLongJue => write!(f, "隐龙诀"),
-            Xinfa::Wufang => write!(f, "无方"),
-            Xinfa::CangJianShanZhuang => write!(f, "藏剑山庄"),
-            Xinfa::QiXiuFang => write!(f, "七秀坊"),
-            Xinfa::WanHuaGu => write!(f, "万花谷"),
-            Xinfa::TianCeFu => write!(f, "天策府"),
-            Xinfa::ShaoLinSi => write!(f, "少林寺"),
-            Xinfa::ChunYangGuan => write!(f, "纯阳观"),
-            Xinfa::WuDouJiao => write!(f, "五毒教"),
-            Xinfa::TangMen => write!(f, "唐门"),
-            Xinfa::MingJiao => write!(f, "明教"),
-            Xinfa::GaiBang => write!(f, "丐帮"),
-            Xinfa::CangYun => write!(f, "苍云"),
-            Xinfa::Mowen => write!(f, "莫问"),
-            Xinfa::BaDaoShanZhuang => write!(f, "霸刀山庄"),
-            Xinfa::PengLai => write!(f, "蓬莱"),
-            Xinfa::YanTianZong => write!(f, "衍天宗"),
-            Xinfa::YaoZong => write!(f, "药宗"),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Message {
-    XinfaSelected(Xinfa),
-    JcsxChanged(String),
-    JcgjChanged(String),
-    HxdjChanged(String),
-    HxxgChanged(String),
-    PfdjChanged(String),
-    WqshChanged(String),
-    WgfyChanged(String),
-    NgfyChanged(String),
-    YjdjChanged(String),
-    HjdjChanged(String),
-    JsblChanged(String),
-    Calculator,
-    SaveConfig,
-    LoadConfig,
-    ClearConfig,
 }

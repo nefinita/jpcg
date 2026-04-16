@@ -30,7 +30,7 @@ impl XinfaConfig {
     }
     pub fn default() -> Self {
         Self {
-            xinfa_name: "mowen".to_string(),
+            xinfa_name: "莫问".to_string(),
             xinfa_nom: "根骨".to_string(),
             atk_up: 0.0,
             pofang_up: 0.0,
