@@ -64,7 +64,7 @@ async function initApp() {
       if (!config.xinfa) throw new Error('请先选择心法');
       const results = await calculateDamage(config);
       renderResults(results, DOM.resultBody);
-      showToast('✅ 计算完成', 'success');
+      showToast('计算完成', 'success');
     } catch (err) {
       console.error('计算失败:', err);
       showToast(err.message || '计算失败', 'error');

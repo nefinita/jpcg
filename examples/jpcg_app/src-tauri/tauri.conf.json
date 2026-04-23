@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "jpcg_app",
+  "productName": "剑网三pvp计算器",
   "version": "0.1.0",
-  "identifier": "com.qinthirteen.jpcg_app",
+  "identifier": "com.qinthirteen.jpcg",
   "build": {
     "frontendDist": "../src"
 
