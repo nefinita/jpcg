@@ -194,6 +194,7 @@ export function collectFormData() {
   return {
     xinfa: document.getElementById('xinfa-select')?.value || DEFAULT_CONFIG.xinfa,
     player: {
+	jcsx : "gengu",
       jichu_shuxing: getVal('jichu_shuxing'),
       jichu_gongji: getVal('jichu_gongji'),
       huixin_dengji: getVal('huixin_dengji'),

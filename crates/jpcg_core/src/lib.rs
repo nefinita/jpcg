@@ -31,6 +31,8 @@ pub mod save_config {
 }
 
 pub mod calculate {
+    use std::io::Error;
+
     use crate::cal;
     use crate::type_set::{
         hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig,
@@ -39,7 +41,7 @@ pub mod calculate {
         player: PlayerConfig,
         hostilepile: HostilepileConfig,
         xinfa: XinfaConfig,
-    ) -> Vec<cal::CalculateResult> {
+    ) -> Result<Vec<cal::CalculateResult>, Error> {
         cal::start_calculation(player, hostilepile, xinfa)
     }
 }

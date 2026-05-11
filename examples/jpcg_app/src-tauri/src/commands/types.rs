@@ -35,7 +35,7 @@ pub struct XinfaConfigDTO {
 pub struct CalculateRequest {
     pub player: PlayerConfigDTO,
     pub hostile: HostileConfigDTO,
-    pub xinfa_config: XinfaConfigDTO,  // 可选扩展
+    pub xinfa_config: XinfaConfigDTO, // 可选扩展
 }
 
 #[derive(Debug, Serialize)]
@@ -60,7 +60,7 @@ impl PlayerConfigDTO {
             self.huixin_dengji,
             self.huixin_xiaoguo,
             self.pofang_dengji,
-            self.wuqi_shanghai
+            self.wuqi_shanghai,
         )
     }
 }
@@ -68,7 +68,11 @@ impl PlayerConfigDTO {
 impl HostileConfigDTO {
     pub fn into_core(self) -> jpcg_core::type_set::hostilepile::HostilepileConfig {
         jpcg_core::type_set::hostilepile::HostilepileConfig::new(
-            self.waigong_fangyu, self.neigong_fangyu, self.yujin_dengji, self.huajin_dengji, self.jianshang_bili,
+            self.waigong_fangyu,
+            self.neigong_fangyu,
+            self.yujin_dengji,
+            self.huajin_dengji,
+            self.jianshang_bili,
         )
     }
 }
@@ -78,7 +82,9 @@ impl XinfaConfigDTO {
         jpcg_core::type_set::xinfa::XinfaConfig::new(
             self.xinfa_name,
             self.xinfa_nom,
-            self.atk_up, self.pofang_up, self.huixin_up,
+            self.atk_up,
+            self.pofang_up,
+            self.huixin_up,
         )
     }
 }

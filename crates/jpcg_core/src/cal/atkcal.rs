@@ -1,131 +1,97 @@
-use crate::log::{debug, info};
 use crate::type_set::hostilepile::HostilepileConfig;
-use crate::type_set::jcsx_set;
 use crate::type_set::player::PlayerConfig;
 use crate::type_set::skilltype::Skilltype;
-use crate::type_set::xinfa;
+use crate::type_set::xinfa::XinfaConfig;
 
-pub fn atkout(
-    playerdata: &PlayerConfig,
-    hostilepile: &HostilepileConfig,
-    skilltype: &Skilltype,
-    xinfadata: &xinfa::XinfaConfig,
-    jc: &str,
-) -> DamageResult {
-    info(format!("计算技能：{}", skilltype.skill_name).as_str());
-    let guo_fangyu = match xinfadata.xinfa_nom.as_str() {
-        "gengu" | "yuanqi" => hostilepile.guo_nfangyu(skilltype.wushifangyu),
-        _ => hostilepile.guo_wfangyu(skilltype.wushifangyu),
-    };
-    info(format!("使用防御: {}", guo_fangyu).as_str());
-    let guo_huixin = if playerdata.guo_huixin() - hostilepile.guo_yujin_huixin() >= 0.0 {
-        playerdata.guo_huixin() - hostilepile.guo_yujin_huixin()
-    } else {
-        0.0
-    };
-    info(format!("使用会心：{}", guo_huixin).as_str());
-    let y = ycal(playerdata.guo_pofang(), guo_fangyu);
-    let b_damage = playerdata.atk(0.0).total();
-    let i_damage = iatkc(
-        skilltype.base_atk(),
-        b_damage,
-        skilltype.atk_xishu,
-        playerdata.wuqi_shanghai,
-        skilltype.watk_xishu as f32 / 100.0,
-    );
-    let g_damage = gatkc(
-        i_damage,
-        y,
-        hostilepile.guo_huajin(),
-        skilltype.hit_up as f32 / 100.0,
-        hostilepile.jianshang_bili,
-    );
-    let h_damage = hatkc(
-        g_damage,
-        playerdata.guo_huixinxiaoguo(),
-        skilltype.huixiao_up as f32 / 100.0,
-        hostilepile.guo_yujin_huixiao(),
-    );
-    let q_damage = qatkc(
-        g_damage,
-        guo_huixin,
-        h_damage,
-        skilltype.huixin_up as f32 / 100.0,
-    );
-    debug(
-        format!(
-            "name:{}, y:{}, b:{}, i:{} g:{}, h:{}, q:{}",
-            skilltype.skill_name, y, b_damage, i_damage, g_damage, h_damage, q_damage
-        )
-        .as_str(),
-    );
-    DamageResult::new(y, i_damage, b_damage, g_damage, h_damage, q_damage)
+pub struct JpcgConfig {
+    player: PlayerConfig,
+    hostilepile: HostilepileConfig,
+    skilltype: Skilltype,
+    xinfa: XinfaConfig,
 }
 
-fn iatkc(base_atk: u32, atk: u32, atk_xishu: f32, watk: u32, watk_xishu: f32) -> u32 {
-    base_atk + (atk as f32 * atk_xishu) as u32 + (watk as f32 * watk_xishu) as u32
-}
+impl JpcgConfig {
+    pub fn new(
+        playerdata: PlayerConfig,
+        hostilepiledata: HostilepileConfig,
+        skilltypedata: Skilltype,
+        xinfadata: XinfaConfig,
+    ) -> JpcgConfig {
+        JpcgConfig {
+            player: playerdata,
+            hostilepile: hostilepiledata,
+            skilltype: skilltypedata,
+            xinfa: xinfadata,
+        }
+    }
 
-fn gatkc(i_hit: u32, y: u32, guo_huajin: u32, hit_up: f32, jianshang: u32) -> u32 {
-    (((((i_hit as f32 * (1.0 + hit_up)) * (y as f32 / 1024.0)) as u32 as f32
-        * (1.0 - (guo_huajin as f32 / 1024.0))) as u32 as f32
-        * 0.9)
-        * (1.0 - jianshang as f32 / 100.0)) as u32
-}
+    fn guo_fangyu(&self) -> u32 {
+        match self.xinfa.xinfa_nom.as_str() {
+            "gengu" | "yuanqi" => self.hostilepile.guo_nfangyu(self.skilltype.wushifangyu),
+            _ => self.hostilepile.guo_wfangyu(self.skilltype.wushifangyu),
+        }
+    }
 
-fn hatkc(g_damage: u32, guo_huixinxiaoguo: u32, e_huxin_xiaoguo: f32, guo_yujin: u32) -> u32 {
-    g_damage
-        + (g_damage as f32
-            * (0.75 + guo_huixinxiaoguo as f32 / 1024.0 + e_huxin_xiaoguo)
-            * (1.0 - guo_yujin as f32 / 1024.0)) as u32
-}
+    fn guo_huixin(&self) -> f32 {
+        if self.player.guo_huixin() >= self.hostilepile.guo_yujin_huixin() {
+            self.player.guo_huixin() - self.hostilepile.guo_yujin_huixin()
+        } else {
+            0.0
+        }
+    }
 
-fn qatkc(g_damage: u32, guo_huixin: f32, h_damage: u32, e_huixin: f32) -> u32 {
-    (g_damage as f32 * (1.0 - (guo_huixin + e_huixin)) + h_damage as f32 * (guo_huixin + e_huixin))
-        as u32
-}
+    fn y_cal(&self) -> u32 {
+        1024 + self.player.guo_pofang()
+            - ((1024.0 + self.player.guo_pofang() as f32) * (self.guo_fangyu() as f32 / 1024.0))
+                as u32
+    }
 
-fn ycal(gpofang: u32, gfangyu: u32) -> u32 {
-    1024 + gpofang - ((1024.0 + gpofang as f32) * (gfangyu as f32 / 1024.0)) as u32
-}
+    fn b_cal(&self) -> u32 {
+        self.player.atk(0.0).total()
+    }
 
-pub fn no_hatkc(
-    playerdata: &PlayerConfig,
-    hostilepile: &HostilepileConfig,
-    skilltype: &Skilltype,
-    xinfadata: &xinfa::XinfaConfig,
-    jc: &str,
-) -> DamageResult {
-    let guo_fangyu = match xinfadata.xinfa_nom.as_str() {
-        "gengu" | "yuanqi" => hostilepile.guo_nfangyu(skilltype.wushifangyu),
-        _ => hostilepile.guo_wfangyu(skilltype.wushifangyu),
-    };
-    //debug(format!("使用防御: {}", guo_fangyu).as_str());
-    let guo_huixin = if playerdata.guo_huixin() - hostilepile.guo_yujin_huixin() >= 0.0 {
-        playerdata.guo_huixin() - hostilepile.guo_yujin_huixin()
-    } else {
-        0.0
-    };
-    //debug(format!("使用会心：{}", guo_huixin).as_str());
-    let y = ycal(playerdata.guo_pofang(), guo_fangyu);
-    let b_damage = playerdata.atk(0.0).total();
-    let i_damage = iatkc(
-        skilltype.base_atk(),
-        b_damage,
-        skilltype.atk_xishu,
-        playerdata.wuqi_shanghai,
-        skilltype.watk_xishu as f32 / 100.0,
-    );
-    let g_damage = {
-        (((((i_damage as f32 * (1.0 + skilltype.hit_up as f32 / 100.0)) * (y as f32 / 1024.0))
-            as u32 as f32
-            * (1.0 - (hostilepile.guo_huajin() as f32 / 1024.0))) as u32 as f32
-            * (1.0 + guo_huixin) as u32 as f32
-            + (1.0 + playerdata.guo_huixinxiaoguo() as f32 / 1024.0) as u32 as f32 * 0.9)
-            * (1.0 - hostilepile.jianshang_bili as f32 / 100.0)) as u32
-    };
-    //debug(format!("y:{}, b:{}, i:{}, g:{}", y, b_damage, i_damage, g_damage).as_str());
-    DamageResult::new(y, i_damage, b_damage, g_damage, g_damage, g_damage)
+    fn i_cal(&self) -> [u32; 5] {
+        let atk = self.b_cal();
+        let x = self.skilltype.base_atk()
+            + (atk as f32 * self.skilltype.atk_xishu) as u32
+            + (self.player.wuqi_shanghai as f32 * self.skilltype.watk_xishu as f32 / 100.0) as u32;
+        [0, atk, x, 0, 0]
+    }
+
+    fn g_cal(&self) -> [u32; 5] {
+        let i = self.i_cal();
+        let y = self.y_cal();
+        let i_hit = i[2];
+        let x = (((((i_hit as f32 * (1.0 + self.skilltype.hit_up as f32 / 100.0))
+            * (y as f32 / 1024.0)) as u32 as f32
+            * (1.0 - (self.hostilepile.guo_huajin() as f32 / 1024.0))) as u32
+            as f32
+            * 0.9)
+            * (1.0 - self.hostilepile.jianshang_bili as f32 / 100.0)) as u32;
+        [y, i[1], i[2], x, 0]
+    }
+
+    fn h_cal(&self) -> [u32; 5] {
+        let i = self.g_cal();
+        let g_damage = i[3];
+        let x = g_damage
+            + (g_damage as f32
+                * (0.75
+                    + self.player.guo_huixinxiaoguo() as f32 / 1024.0
+                    + self.skilltype.huixiao_up as f32 / 100.0)
+                * (1.0 - self.hostilepile.guo_yujin_huixiao() as f32 / 1024.0))
+                as u32;
+        [i[0], i[1], i[2], i[3], x]
+    }
+
+    pub fn q_cal(&self) -> DamageResult {
+        let i = self.h_cal();
+        let x = (i[3] as f32
+            * (1.0 - (self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0))
+            + i[4] as f32 * (self.player.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0))
+            as u32;
+        DamageResult::new(i, x)
+    }
 }
 
 pub struct DamageResult {
@@ -138,64 +104,14 @@ pub struct DamageResult {
 }
 
 impl DamageResult {
-    pub fn new(
-        y: u32,
-        i: u32,
-        b: u32,
-        g_damage: u32,
-        h_damage: u32,
-        q_damage: u32,
-    ) -> DamageResult {
+    pub fn new(i: [u32; 5], x: u32) -> DamageResult {
         DamageResult {
-            y,
-            i,
-            b,
-            g_damage,
-            h_damage,
-            q_damage,
+            y: i[0],
+            i: i[1],
+            b: i[2],
+            g_damage: i[3],
+            h_damage: i[4],
+            q_damage: x,
         }
     }
-}
-
-//对gatk求全微分
-pub fn cal_attr_change(
-    playerdata: &PlayerConfig,
-    hostilepile: &HostilepileConfig,
-    skilltype: &Skilltype,
-    xinfadata: &xinfa::XinfaConfig,
-    jc: &str,
-) {
-    let base_gatk = atkout(playerdata, hostilepile, skilltype, xinfadata, jc).q_damage;
-
-    //基础攻击微分
-    let mut playerdata_delta = playerdata.clone();
-    playerdata_delta.jichu_gongji += 849;
-    let new_gatk = atkout(&playerdata_delta, hostilepile, skilltype, xinfadata, jc).q_damage;
-    let diff1 = new_gatk - base_gatk;
-
-    //基础属性微分
-    let mut playerdata_delta = playerdata.clone();
-    playerdata_delta.jichu_shuxing += 359;
-    playerdata_delta.pofang_dengji += (359.0 * xinfadata.pofang_up) as u32;
-    let new_gatk = atkout(&playerdata_delta, hostilepile, skilltype, xinfadata, jc).q_damage;
-    let diff2 = new_gatk - base_gatk;
-
-    //破防微分
-    let mut playerdata_delta = playerdata.clone();
-    playerdata_delta.pofang_dengji += 2801;
-    let new_gatk = atkout(&playerdata_delta, hostilepile, skilltype, xinfadata, jc).q_damage;
-    let diff3 = new_gatk - base_gatk;
-
-    //会心微分
-    let mut playerdata_delta = playerdata.clone();
-    playerdata_delta.huixin_dengji += 2801;
-    let new_gatk = atkout(&playerdata_delta, hostilepile, skilltype, xinfadata, jc).q_damage;
-    let diff4 = new_gatk - base_gatk;
-
-    //会效微分
-    let mut playerdata_delta = playerdata.clone();
-    playerdata_delta.huixin_xiaoguo += 2801;
-    let new_gatk = atkout(&playerdata_delta, hostilepile, skilltype, xinfadata, jc).q_damage;
-    let diff5 = new_gatk - base_gatk;
-    info(format!("计算技能：{} : 基础攻击微分：{}，基础属性微分: {}，破防微分: {}，会心微分: {}，会效微分: {}。", skilltype.skill_name, diff1, diff2, diff3, diff4, diff5).as_str());
 }

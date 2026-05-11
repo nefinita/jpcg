@@ -1,18 +1,20 @@
 mod atkcal;
 
+use std::io::Error;
+
 use crate::{
-    cal::atkcal::atkout,
-    io::{TomlConfig, toml_input},
+    cal::atkcal::JpcgConfig,
+    io::{toml_input, TomlConfig},
     log::{error, success},
     type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
 };
-use serde::{Serialize};
+use serde::Serialize;
 
 pub fn start_calculation(
     player: PlayerConfig,
     hostilepile: HostilepileConfig,
     xinfa: XinfaConfig,
-) -> Vec<CalculateResult> {
+) -> Result<Vec<CalculateResult>, Error> {
     success("Calculation started!");
 
     let current_dir = match std::env::current_exe() {
@@ -22,7 +24,7 @@ pub fn start_calculation(
             .to_path_buf(),
         Err(e) => {
             error(format!("Failed to get current exe path: {}", e).as_str());
-            return vec![CalculateResult::default()];
+            return Err(Error::other("Failed to get current exe path"));
         }
     };
     let file_path = current_dir
@@ -30,8 +32,11 @@ pub fn start_calculation(
         .join("pvp36500")
         .join(xinfa.xinfa_name.clone());
     let content = toml_input(file_path.to_str().unwrap());
-    let skill_table: TomlConfig = toml::from_str(&content).unwrap();
-    call_back(&skill_table, &player, &hostilepile)
+    let skill_table: TomlConfig = match content.as_str() {
+        "none" => TomlConfig::default(),
+        _ => toml::from_str(content.as_str()).unwrap(),
+    };
+    Ok(call_back(skill_table, player, hostilepile))
 }
 
 #[derive(Default, Serialize)]
@@ -67,15 +72,21 @@ impl CalculateResult {
 }
 
 fn call_back(
-    toml_config: &TomlConfig,
-    player: &PlayerConfig,
-    hostilepile: &HostilepileConfig,
+    toml_config: TomlConfig,
+    player: PlayerConfig,
+    hostilepile: HostilepileConfig,
 ) -> Vec<CalculateResult> {
     let mut results = Vec::new();
-    for skill in &toml_config.skill {
-        let damage_result = atkout(player, hostilepile, skill, &toml_config.xinfa, "pvp36500");
+    for skill in toml_config.skill {
+        let damage_result = JpcgConfig::new(
+            player.clone(),
+            hostilepile.clone(),
+            skill.clone(),
+            toml_config.xinfa.clone(),
+        )
+        .q_cal();
         let calculate_result = CalculateResult::new(
-            skill.skill_name.clone(),
+            skill.skill_name,
             damage_result.y,
             damage_result.b,
             damage_result.i,

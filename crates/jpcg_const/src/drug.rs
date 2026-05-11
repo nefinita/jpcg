@@ -12,5 +12,3 @@ pub const YAO_NEI_HUI_LOW: u32 = 1000;
 pub const YAO_NEI_GONG_HIGH: u32 = 1000;
 ///内攻药蓝
 pub const YAO_NEI_GONG_LOW: u32 = 500;
-
-

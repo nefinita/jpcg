@@ -11,7 +11,7 @@ pub fn toml_input(profession: &str) -> String {
         Ok(content) => content,
         Err(e) => {
             error(&format!("Failed to read config file: {}", e));
-            "".into()
+            "none".into()
         }
     }
 }

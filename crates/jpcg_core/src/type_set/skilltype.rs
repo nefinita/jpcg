@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, Clone)]
 #[serde(default)]
 pub struct Skilltype {
     pub skill_name: String,        //名字

@@ -15,15 +15,14 @@ pub fn error(message: &str) {
     eprintln!("{}   {}", x, message.color(colorized::Colors::RedFg));
 }
 
+/*
 pub fn debug(message: &str) {
     let x = "CORE_DEBUG";
     println!("{}   {}", x, message);
 }
+*/
 
 pub fn success(message: &str) {
     let x = "CORE_SUCCESS".color(colorized::Colors::GreenBg);
-    println!(
-        "{} {}", x,
-        message.color(colorized::Colors::GreenFg)
-    );
+    println!("{} {}", x, message.color(colorized::Colors::GreenFg));
 }

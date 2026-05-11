@@ -52,9 +52,7 @@ export async function calculateDamage(config) {
   console.log('[calculateDamage] config.jcsx =', config.jcsx, 'type:', typeof config.jcsx);
   const payload = {
     req: {
-      player: {
-        jcsx: "gengu",
-        ..._sanitizeNumbers(config.player)},
+      player: _sanitizeNumbers(config.player),
       hostile: _sanitizeNumbers(config.hostile),
       xinfa_config: {
         xinfa_name: config.xinfa || config.xinfa_config?.xinfa_name || 'mowen',
