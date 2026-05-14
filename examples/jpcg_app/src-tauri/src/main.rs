@@ -1,4 +1,10 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+// ============================================================================
+// main.rs — Tauri 桌面应用入口
+// 框架自动生成的入口文件，仅调用 lib.rs 中的 run() 函数。
+// 发布模式下隐藏 Windows 控制台窗口。
+// ============================================================================
+
+// 发布版本禁用 Windows 控制台窗口（仅 Windows 生效）
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {

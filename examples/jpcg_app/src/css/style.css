@@ -1,76 +1,111 @@
-/* ==================== 全局变量 & 主题 ==================== */
+/* ============================================================================
+   style.css — 全局样式与主题系统
+   JPCG 剑网3 伤害计算器 — 深色/浅色双主题
+   使用 CSS 变量统一管理颜色、间距、阴影等设计令牌。
+   ============================================================================
+
+   文件结构:
+     1. 全局变量 & 主题 (深色/浅色)
+     2. 基础重置
+     3. 布局容器
+     4. 面板系统
+     5. 表单元素
+     6. 按钮系统
+     7. 数据表格
+     8. 结果统计
+     9. 状态栏 & Toast 通知
+    10. 滚动条定制
+    11. 响应式适配
+    12. 动画工具类
+   ============================================================================ */
+
+/* ==================== 1. 全局变量 & 主题 ==================== */
+
 :root {
-  /* 深色主题（默认） */
+  /* --- 深色主题（默认） --- */
+  /* 背景层级：primary < secondary < tertiary < card */
   --bg-primary: #0f0f1a;
   --bg-secondary: #1a1a2e;
   --bg-tertiary: #252542;
   --bg-card: #1e1e32;
-  
+
+  /* 文字层级：primary > secondary > muted */
   --text-primary: #f0f0ff;
   --text-secondary: #a0a0c0;
   --text-muted: #666688;
-  
-  --accent-primary: #7c5cff;
-  --accent-secondary: #5c9cff;
-  --accent-success: #4ade80;
-  --accent-warning: #fbbf24;
-  --accent-danger: #f87171;
-  
+
+  /* 强调色 */
+  --accent-primary: #7c5cff;   /* 主色调（紫色） */
+  --accent-secondary: #5c9cff; /* 辅色调（蓝色） */
+  --accent-success: #4ade80;   /* 成功（绿色） */
+  --accent-warning: #fbbf24;   /* 警告（黄色） */
+  --accent-danger: #f87171;    /* 危险（红色） */
+
+  /* 边框 */
   --border-color: #333355;
   --border-focus: #7c5cff;
-  
+
+  /* 输入框 */
   --input-bg: #151528;
   --input-hover: #1e1e35;
   --input-focus: #252545;
-  
+
+  /* 阴影 */
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  
+
+  /* 圆角 */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
-  
+
+  /* 间距系统（4 的倍数） */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
   --spacing-lg: 24px;
   --spacing-xl: 32px;
-  
+
+  /* 字体 */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  
+
+  /* 过渡动画时长 */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
 }
 
-/* 浅色主题 */
+/* --- 浅色主题（通过 data-theme 切换） --- */
 [data-theme="light"] {
   --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f1f5f9;
   --bg-card: #ffffff;
-  
+
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
-  
+
   --accent-primary: #6366f1;
   --accent-secondary: #3b82f6;
-  
+
   --border-color: #e2e8f0;
   --border-focus: #6366f1;
-  
+
   --input-bg: #f8fafc;
   --input-hover: #f1f5f9;
   --input-focus: #e2e8f0;
-  
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
 }
 
-/* ==================== 基础重置 ==================== */
+
+/* ==================== 2. 基础重置 ==================== */
+
+/* 全局盒模型重置 */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -78,7 +113,7 @@
 }
 
 html {
-  font-size: 14px;
+  font-size: 14px; /* 基准字号 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -92,7 +127,9 @@ body {
   transition: background var(--transition-normal), color var(--transition-normal);
 }
 
-/* ==================== 布局 ==================== */
+
+/* ==================== 3. 布局容器 ==================== */
+
 .app-container {
   display: flex;
   flex-direction: column;
@@ -103,15 +140,121 @@ body {
   gap: var(--spacing-md);
 }
 
+/* 应用主体：活动栏 + 侧栏 + 主区域水平排列 */
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+
+/* 活动栏（VSCode 风格左侧图标条） */
+.activity-bar {
+  width: 44px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-right: none;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+.activity-bar-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.activity-bar-btn:hover {
+  background: var(--input-hover);
+  color: var(--text-primary);
+}
+
+.activity-bar-btn.active {
+  color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+/* 论坛侧栏 */
+.forum-sidebar {
+  width: 340px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width var(--transition-normal), opacity var(--transition-normal), padding var(--transition-normal);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.forum-sidebar.collapsed {
+  width: 0;
+  padding: 0;
+  opacity: 0;
+  border: none;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  min-height: 48px;
+}
+
+.sidebar-header h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+}
+
+.sidebar-footer {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+/* 主区域：包含 header / main / footer */
+.main-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: var(--spacing-md);
+}
+
+/* 顶栏 */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border-radius: 0 var(--radius-lg) 0 0;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
+  border-bottom: none;
 }
 
 .logo {
@@ -139,6 +282,7 @@ body {
   gap: var(--spacing-sm);
 }
 
+/* 主内容区：两栏布局（左配置 420px + 右结果自适应） */
 .main-content {
   display: grid;
   grid-template-columns: 420px 1fr;
@@ -147,14 +291,18 @@ body {
   min-height: 0;
 }
 
+/* 底栏 */
 .app-footer {
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-card);
-  border-radius: var(--radius-md);
+  border-radius: 0 0 var(--radius-md) 0;
   border: 1px solid var(--border-color);
+  border-top: none;
 }
 
-/* ==================== 面板样式 ==================== */
+
+/* ==================== 4. 面板系统 ==================== */
+
 .panel {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
@@ -182,6 +330,7 @@ body {
   gap: var(--spacing-sm);
 }
 
+/* 面板徽章（显示状态） */
 .panel-badge {
   padding: 4px 10px;
   background: var(--bg-tertiary);
@@ -198,7 +347,10 @@ body {
   color: var(--accent-success);
 }
 
-/* ==================== 表单样式 ==================== */
+
+/* ==================== 5. 表单元素 ==================== */
+
+/* 表单项容器 */
 .form-group {
   padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--border-color);
@@ -218,6 +370,7 @@ body {
   font-size: 1rem;
 }
 
+/* 选择框 & 输入框 */
 .form-select,
 .form-input {
   width: 100%;
@@ -257,12 +410,14 @@ body {
   color: var(--text-muted);
 }
 
+/* 隐藏 number 输入框的上下箭头 */
 .form-input[type="number"]::-webkit-inner-spin-button,
 .form-input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
+/* 属性分组（fieldset） */
 .attr-group {
   padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--border-color);
@@ -280,6 +435,7 @@ body {
   gap: var(--spacing-xs);
 }
 
+/* 属性网格：两列布局 */
 .attr-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -298,7 +454,9 @@ body {
   color: var(--text-muted);
 }
 
-/* ==================== 按钮样式 ==================== */
+
+/* ==================== 6. 按钮系统 ==================== */
+
 .action-bar {
   padding: var(--spacing-md) var(--spacing-lg);
   display: grid;
@@ -332,12 +490,14 @@ body {
   font-size: 1rem;
 }
 
+/* 大按钮（跨两列） */
 .btn-lg {
   grid-column: span 2;
   padding: 12px 20px;
   font-size: 1rem;
 }
 
+/* 主按钮：渐变紫色 */
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   color: white;
@@ -353,6 +513,7 @@ body {
   transform: translateY(0);
 }
 
+/* 次按钮：透明背景 */
 .btn-secondary {
   background: var(--input-bg);
   color: var(--text-primary);
@@ -364,6 +525,7 @@ body {
   border-color: var(--accent-secondary);
 }
 
+/* 危险按钮：红色边框 */
 .btn-danger {
   background: transparent;
   color: var(--accent-danger);
@@ -374,6 +536,7 @@ body {
   background: rgba(248, 113, 113, 0.1);
 }
 
+/* 图标按钮 */
 .icon-btn {
   width: 36px;
   height: 36px;
@@ -396,7 +559,9 @@ body {
   border-color: var(--accent-secondary);
 }
 
-/* ==================== 表格样式 ==================== */
+
+/* ==================== 7. 数据表格 ==================== */
+
 .result-scroll {
   flex: 1;
   overflow: auto;
@@ -450,11 +615,13 @@ body {
   color: var(--text-primary);
 }
 
+/* 高亮列（会心、期望伤害） */
 .result-table td.highlight {
   color: var(--accent-success);
   font-weight: 600;
 }
 
+/* 空表格提示行 */
 .result-table .empty-row td {
   padding: var(--spacing-xl);
   text-align: center;
@@ -477,7 +644,10 @@ body {
   font-size: 0.95rem;
 }
 
-/* ==================== 结果统计 ==================== */
+
+/* ==================== 8. 结果统计 ==================== */
+
+/* 底栏统计三列卡片 */
 .result-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -512,7 +682,9 @@ body {
   font-family: var(--font-mono);
 }
 
-/* ==================== 状态栏 & Toast ==================== */
+
+/* ==================== 9. 状态栏 & Toast 通知 ==================== */
+
 .status-bar {
   display: flex;
   align-items: center;
@@ -521,6 +693,7 @@ body {
   color: var(--text-secondary);
 }
 
+/* 状态指示灯 */
 .status-dot {
   width: 8px;
   height: 8px;
@@ -547,6 +720,7 @@ body {
   50% { opacity: 0.5; }
 }
 
+/* Toast 通知容器（固定在右下角） */
 .toast-container {
   position: fixed;
   bottom: var(--spacing-lg);
@@ -574,45 +748,27 @@ body {
   max-width: 320px;
 }
 
-.toast.success {
-  border-left: 4px solid var(--accent-success);
-}
-
-.toast.error {
-  border-left: 4px solid var(--accent-danger);
-}
-
-.toast.warning {
-  border-left: 4px solid var(--accent-warning);
-}
+.toast.success { border-left: 4px solid var(--accent-success); }
+.toast.error   { border-left: 4px solid var(--accent-danger); }
+.toast.warning { border-left: 4px solid var(--accent-warning); }
 
 .toast-icon {
   font-size: 1.2rem;
 }
 
 @keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes fadeOut {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(20px);
-  }
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(20px); }
 }
 
-/* ==================== 滚动条 ==================== */
+
+/* ==================== 10. 滚动条定制 ==================== */
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -633,70 +789,43 @@ body {
   background: var(--accent-secondary);
 }
 
-/* ==================== 响应式 ==================== */
+
+/* ==================== 11. 响应式适配 ==================== */
+
+/* 中等屏幕：侧栏折叠，主内容改为一列 */
 @media (max-width: 1100px) {
   .main-content {
     grid-template-columns: 1fr;
   }
-  
-  .config-panel {
-    order: 2;
-  }
-  
-  .result-panel {
-    order: 1;
-    min-height: 400px;
-  }
-  
-  .attr-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .action-bar {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .btn-lg {
-    grid-column: span 2;
-  }
+  .config-panel { order: 2; }
+  .result-panel { order: 1; min-height: 400px; }
+  .attr-grid { grid-template-columns: 1fr; }
+  .action-bar { grid-template-columns: repeat(2, 1fr); }
+  .btn-lg { grid-column: span 2; }
 }
 
+/* 小屏幕：紧凑间距，活动栏变窄 */
 @media (max-width: 600px) {
-  .app-container {
-    padding: var(--spacing-sm);
-  }
-  
-  .panel-header {
-    padding: var(--spacing-sm) var(--spacing-md);
-  }
-  
-  .form-group,
-  .attr-group,
-  .action-bar {
-    padding: var(--spacing-sm) var(--spacing-md);
-  }
-  
-  .action-bar {
-    grid-template-columns: 1fr;
-  }
-  
-  .btn-lg {
-    grid-column: span 1;
-  }
-  
-  .result-stats {
-    grid-template-columns: 1fr;
-  }
+  .app-container { padding: var(--spacing-sm); }
+  .panel-header { padding: var(--spacing-sm) var(--spacing-md); }
+  .form-group, .attr-group, .action-bar { padding: var(--spacing-sm) var(--spacing-md); }
+  .action-bar { grid-template-columns: 1fr; }
+  .btn-lg { grid-column: span 1; }
+  .result-stats { grid-template-columns: 1fr; }
+  .forum-sidebar { width: 280px; }
+  .sidebar-body { padding: var(--spacing-sm); }
 }
 
-/* ==================== 动画工具类 ==================== */
+
+/* ==================== 12. 动画工具类 ==================== */
+
 .fade-in {
   animation: fadeIn 0.3s ease forwards;
 }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .shake {
@@ -705,10 +834,11 @@ body {
 
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
+  25%  { transform: translateX(-5px); }
+  75%  { transform: translateX(5px); }
 }
 
+/* 加载状态蒙层 */
 .loading {
   position: relative;
   pointer-events: none;

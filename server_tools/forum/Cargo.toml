@@ -1,0 +1,17 @@
+[package]
+name = "forum"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum = { workspace = true, features = ["multipart"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tower-http = { workspace = true }
+futures-util = "0.3"
+
+[lints]
+workspace = true

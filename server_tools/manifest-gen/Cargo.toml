@@ -1,0 +1,16 @@
+[package]
+name = "manifest-gen"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+toml = { workspace = true }
+
+[lints]
+workspace = true

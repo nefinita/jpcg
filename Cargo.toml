@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
     "crates/*",
-    "examples/jpcg_app/src-tauri"
+    "examples/jpcg_app/src-tauri",
+    "server_tools/manifest-gen",
+    "server_tools/forum"
 ]
 
 [workspace.package]
@@ -31,6 +33,7 @@ hex = "0.4.3"
 tar = "0.4.45"
 flate2 = "1.1.9"
 jpcg_core = { path = "crates/jpcg_core" }
+jpcg_update = { path = "crates/jpcg_update" }
 
 [workspace.lints.clippy]
 

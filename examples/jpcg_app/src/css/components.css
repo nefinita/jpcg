@@ -1,6 +1,21 @@
-/* ==================== 组件增强样式 ==================== */
+/* ============================================================================
+   components.css — 组件增强样式
+   补充 style.css 中未覆盖的组件级样式，包括：
+     1. 心法选择器
+     2. 输入框验证状态
+     3. 表格行高亮
+     4. 数值变化指示器
+     5. 骨架屏加载
+     6. 工具提示
+     7. 拖拽区域
+     8. 折叠面板
+     9. 更新进度条
+    10. 更新按钮状态
+   ============================================================================ */
 
-/* 心法选择器增强 */
+
+/* ==================== 1. 心法选择器增强 ==================== */
+
 .xinfa-select option {
   background: var(--bg-card);
   color: var(--text-primary);
@@ -12,12 +27,16 @@
   color: white;
 }
 
-/* 输入框验证状态 */
+
+/* ==================== 2. 输入框验证状态 ==================== */
+
+/* 输入框内容无效时显示红色边框 */
 .form-input:invalid:not(:placeholder-shown) {
   border-color: var(--accent-danger);
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15);
 }
 
+/* 错误提示文本 */
 .form-input:invalid:not(:placeholder-shown) + .input-error {
   display: block;
 }
@@ -29,7 +48,10 @@
   margin-top: 4px;
 }
 
-/* 表格高亮行 */
+
+/* ==================== 3. 表格行高亮 ==================== */
+
+/* 最高期望伤害的技能行 */
 .result-table tbody tr[data-skill-type="ultimate"] {
   background: rgba(124, 92, 255, 0.05);
   border-left: 3px solid var(--accent-primary);
@@ -39,7 +61,9 @@
   font-weight: 500;
 }
 
-/* 数值变化指示器 */
+
+/* ==================== 4. 数值变化指示器 ==================== */
+
 .value-change {
   display: inline-flex;
   align-items: center;
@@ -48,15 +72,12 @@
   margin-left: 6px;
 }
 
-.value-change.up {
-  color: var(--accent-success);
-}
+.value-change.up   { color: var(--accent-success); }
+.value-change.down { color: var(--accent-danger); }
 
-.value-change.down {
-  color: var(--accent-danger);
-}
 
-/* 加载骨架屏 */
+/* ==================== 5. 骨架屏加载 ==================== */
+
 .skeleton {
   background: linear-gradient(
     90deg,
@@ -70,7 +91,7 @@
 }
 
 @keyframes skeleton-loading {
-  0% { background-position: 200% 0; }
+  0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 
@@ -85,10 +106,12 @@
   flex: 1;
 }
 
-.skeleton-cell:nth-child(odd) { flex: 2; }
+.skeleton-cell:nth-child(odd)  { flex: 2; }
 .skeleton-cell:nth-child(even) { flex: 1; }
 
-/* 工具提示 */
+
+/* ==================== 6. 工具提示 ==================== */
+
 [data-tooltip] {
   position: relative;
   cursor: help;
@@ -120,7 +143,9 @@
   transform: translateX(-50%) translateY(0);
 }
 
-/* 拖拽区域（未来扩展） */
+
+/* ==================== 7. 拖拽区域 ==================== */
+
 .drop-zone {
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-md);
@@ -137,7 +162,9 @@
   color: var(--text-primary);
 }
 
-/* 折叠面板 */
+
+/* ==================== 8. 折叠面板 ==================== */
+
 .collapse-header {
   display: flex;
   align-items: center;
@@ -171,3 +198,303 @@
   max-height: 500px;
   opacity: 1;
 }
+
+
+/* ==================== 9. 更新进度条 ==================== */
+
+.update-progress {
+  margin-top: 8px;
+  width: 100%;
+}
+
+/* 进度条轨道 */
+.update-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* 进度条填充 */
+.update-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-primary), #3b82f6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* 进度文本（显示当前下载文件名和百分比） */
+.update-progress-text {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ==================== 10. 更新按钮状态 ==================== */
+
+.btn-updating {
+  background: linear-gradient(135deg, var(--accent-primary), #3b82f6) !important;
+  background-size: 200% 200% !important;
+  animation: gradientShift 2s ease infinite, pulse 2s infinite !important;
+  cursor: wait !important;
+  min-width: 180px;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* ==================== 11. 论坛侧栏表格 ==================== */
+
+.forum-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.forum-search {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.forum-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.forum-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border-color);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.forum-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.forum-table tbody tr:hover td {
+  background: var(--bg-tertiary);
+}
+
+.forum-table .col-size { width: 80px; text-align: right; }
+.forum-table .col-time { width: 150px; }
+.forum-table .col-action { width: 80px; text-align: center; }
+
+.forum-table .empty {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 30px;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.btn-download {
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.btn-download:hover { filter: brightness(1.15); }
+.btn-download:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.page-info {
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-width: 100px;
+  text-align: center;
+}
+
+/* ==================== 12. 技能连招面板 ==================== */
+
+.sidebar-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sidebar-panel[hidden] {
+  display: none;
+}
+
+.combo-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.combo-sequence-wrap {
+  margin-bottom: var(--spacing-lg);
+}
+
+.combo-sequence {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 60px;
+  background: var(--input-bg);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
+}
+
+.combo-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--spacing-md);
+}
+
+.combo-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  animation: slideIn 0.2s ease;
+}
+
+.combo-chip .combo-idx {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.combo-chip .combo-name {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.combo-chip .combo-remove {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.combo-chip .combo-remove:hover {
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--accent-danger);
+}
+
+.combo-pool {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.combo-pool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.combo-pool-skill {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 8px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.85rem;
+}
+
+.combo-pool-skill:hover {
+  background: var(--input-hover);
+  border-color: var(--accent-secondary);
+}
+
+.combo-pool-skill .combo-add {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: var(--accent-primary);
+  color: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.combo-pool-skill .combo-add:hover {
+  filter: brightness(1.2);
+}
+
+.combo-pool-skill .combo-add.in-combo {
+  background: var(--accent-success);
+}
+
+.combo-pool-skill .combo-name {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.combo-pool-skill .combo-h {
+  color: var(--accent-success);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-10px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+

@@ -1,15 +1,35 @@
+// ============================================================================
+// cal — 剑网3 伤害计算引擎
+// 根据玩家属性、目标防御属性、心法配置、技能数据，
+// 逐一计算每个技能的多段伤害（Y/B/I/N/H/Q）。
+// 核心公式参考剑网3 现行版本伤害机制。
+// ============================================================================
+
 mod atkcal;
 
 use std::io::Error;
 
 use crate::{
-    cal::atkcal::JpcgConfig,
-    io::{toml_input, TomlConfig},
-    log::{error, success},
+    cal::atkcal::JpcgConfig,                // 单技能伤害计算器
+    io::{toml_input, TomlConfig},           // TOML 配置输入
+    log::{error, success},                  // 日志工具
     type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
 };
 use serde::Serialize;
 
+/// 启动完整伤害计算
+/// 1. 定位可执行文件所在目录下的 data/pvp36500/{心法名}.toml
+/// 2. 解析 TOML 获得技能列表
+/// 3. 对每个技能调用单技能伤害计算
+///
+/// # 参数
+/// - `player`: 玩家属性（基础属性、攻击、会心、破防、武器伤害）
+/// - `hostilepile`: 目标属性（外内防、御劲、化劲、减伤）
+/// - `xinfa`: 心法配置（心法名、根骨/元气、攻击/破防/会心加成）
+///
+/// # 返回
+/// - `Ok(Vec<CalculateResult>)`: 每个技能的各段伤害结果
+/// - `Err`: 路径定位或 TOML 解析失败
 pub fn start_calculation(
     player: PlayerConfig,
     hostilepile: HostilepileConfig,
@@ -17,40 +37,77 @@ pub fn start_calculation(
 ) -> Result<Vec<CalculateResult>, Error> {
     success("Calculation started!");
 
+    // ---- 步骤1: 定位可执行文件目录（用于建立数据文件路径） ----
     let current_dir = match std::env::current_exe() {
-        Ok(path) => path
-            .parent()
-            .expect("Failed to get parent directory")
-            .to_path_buf(),
+        Ok(path) => match path.parent() {
+            Some(parent) => parent.to_path_buf(),
+            None => {
+                error("无法获取可执行文件的父目录");
+                return Err(Error::other("无法获取可执行文件的父目录"));
+            }
+        },
         Err(e) => {
-            error(format!("Failed to get current exe path: {}", e).as_str());
-            return Err(Error::other("Failed to get current exe path"));
+            // 记录错误并返回，避免 panic
+            error(format!("无法获取可执行文件路径: {}", e).as_str());
+            return Err(Error::other("无法获取可执行文件路径"));
         }
     };
+
+    // ---- 步骤2: 构建心法 TOML 配置文件路径 ----
+    // 路径模式: {exe_dir}/data/pvp36500/{xinfa_name}.toml
     let file_path = current_dir
         .join("data")
         .join("pvp36500")
         .join(xinfa.xinfa_name.clone());
-    let content = toml_input(file_path.to_str().unwrap());
-    let skill_table: TomlConfig = match content.as_str() {
-        "none" => TomlConfig::default(),
-        _ => toml::from_str(content.as_str()).unwrap(),
+
+    // 将 Path 转换为字符串（检查非 UTF-8 路径）
+    let file_path_str = match file_path.to_str() {
+        Some(s) => s.to_string(),
+        None => {
+            error("配置文件路径包含非法 UTF-8 字符");
+            return Err(Error::other("配置文件路径包含非法 UTF-8 字符"));
+        }
     };
+
+    // ---- 步骤3: 读取 TOML 内容并解析 ----
+    let content = toml_input(&file_path_str);
+    let skill_table: TomlConfig = match content.as_str() {
+        // 文件不存在时 toml_input 返回 "none"，使用默认空技能表
+        "none" => TomlConfig::default(),
+        _ => match toml::from_str(content.as_str()) {
+            Ok(config) => config,
+            Err(e) => {
+                error(format!("心法技能 TOML 解析失败: {}", e).as_str());
+                return Err(Error::other(format!("心法技能 TOML 解析失败: {}", e)));
+            }
+        },
+    };
+
+    // ---- 步骤4: 逐技能计算伤害 ----
+    // call_back 遍历 skill_table 中的每个技能调用 JpcgConfig 计算
     Ok(call_back(skill_table, player, hostilepile))
 }
 
+// ============================================================================
+// CalculateResult — 单技能计算结果
+// 包含技能名称及各段伤害数值，对应前端表格 7 列。
+// ============================================================================
+
+/// 单技能完整的伤害计算结果
 #[derive(Default, Serialize)]
 pub struct CalculateResult {
-    pub skill_name: String,
-    pub y: u32,
-    pub b: u32,
-    pub i: u32,
-    pub n: u32,
-    pub h: u32,
-    pub q: u32,
+    pub skill_name: String, // 技能名称
+    pub y: u32,             // 破防系数计算结果（Y 段）
+    pub b: u32,             // 基础攻击力（B 段）
+    pub i: u32,             // 技能基础伤害（I 段）
+    pub n: u32,             // 普通命中伤害（N 段，常规命中）
+    pub h: u32,             // 会心伤害（H 段）
+    pub q: u32,             // 期望伤害（Q 段，考虑会心概率的加权值）
 }
 
 impl CalculateResult {
+    /// 构造完整的计算结算
+    #[allow(clippy::too_many_arguments)]
     pub fn new(skill_name: String, y: u32, b: u32, i: u32, n: u32, h: u32, q: u32) -> Self {
         CalculateResult {
             skill_name,
@@ -63,6 +120,7 @@ impl CalculateResult {
         }
     }
 
+    /// 打印当前伤害计算结果到日志
     pub fn get_message(&self) {
         success(&format!(
             "技能: {}, Y: {}, B: {}, I: {}, N: {}, H: {}, Q: {}",
@@ -71,6 +129,20 @@ impl CalculateResult {
     }
 }
 
+// ============================================================================
+// call_back — 遍历技能表执行计算
+// 读取 TomlConfig 中的技能列表，对每个技能实例化 JpcgConfig 并计算伤害。
+// ============================================================================
+
+/// 回调遍历函数: 将 TOML 配置中的每个技能送入计算引擎
+///
+/// # 参数
+/// - `toml_config`: 从 TOML 文件解析出的心法+技能配置
+/// - `player`: 玩家属性
+/// - `hostilepile`: 目标属性
+///
+/// # 返回
+/// 所有技能的伤害结果列表
 fn call_back(
     toml_config: TomlConfig,
     player: PlayerConfig,
@@ -78,6 +150,7 @@ fn call_back(
 ) -> Vec<CalculateResult> {
     let mut results = Vec::new();
     for skill in toml_config.skill {
+        // 实例化单技能计算器，传入玩家/目标/技能/心法数据
         let damage_result = JpcgConfig::new(
             player.clone(),
             hostilepile.clone(),
@@ -85,14 +158,16 @@ fn call_back(
             toml_config.xinfa.clone(),
         )
         .q_cal();
+
+        // 将 5 段伤害数组映射为 CalculateResult
         let calculate_result = CalculateResult::new(
             skill.skill_name,
-            damage_result.y,
-            damage_result.b,
-            damage_result.i,
-            damage_result.g_damage,
-            damage_result.h_damage,
-            damage_result.q_damage,
+            damage_result.y,      // Y: 破防系数段
+            damage_result.b,      // B: 基础攻击段
+            damage_result.i,      // I: 技能基础段
+            damage_result.g_damage, // N: 普通命中段
+            damage_result.h_damage, // H: 会心段
+            damage_result.q_damage, // Q: 期望值段
         );
         calculate_result.get_message();
         results.push(calculate_result);

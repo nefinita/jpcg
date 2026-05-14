@@ -1,0 +1,22 @@
+[xinfa]
+xinfa_name = "mowen"
+xinfa_nom = "gengu"
+atk_up = 0.0
+pofang_up = 0.0
+huixin_up = 0.0
+
+[player]
+jcsx = "gengu"
+jichu_shuxing = 0
+jichu_gongji = 0
+huixin_dengji = 0
+huixin_xiaoguo = 0
+pofang_dengji = 0
+wuqi_shanghai = 0
+
+[hostilepile]
+waigong_fangyu = 0
+neigong_fangyu = 0
+yujin_dengji = 0
+huajin_dengji = 0
+jianshang_bili = 0
