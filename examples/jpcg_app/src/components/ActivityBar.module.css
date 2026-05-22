@@ -1,0 +1,31 @@
+.bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 44px;
+  padding: var(--space-sm) 0;
+  background: var(--glass-bg);
+  border-right: 1px solid var(--border-subtle);
+  backdrop-filter: var(--glass-blur);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn:hover {
+  background: var(--glass-highlight);
+}
+
+.active {
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
+  box-shadow: var(--shadow-glow);
+}

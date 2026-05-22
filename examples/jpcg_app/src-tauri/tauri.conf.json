@@ -4,16 +4,18 @@
   "version": "0.1.0",
   "identifier": "com.qinthirteen.jpcg",
   "build": {
-    "frontendDist": "../src"
-
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
   },
   "app": {
     "withGlobalTauri": true,
     "windows": [
       {
         "title": "jpcg_app",
-        "width": 800,
-        "height": 600
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {

@@ -1,0 +1,225 @@
+.sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  background: var(--glass-bg);
+  border-right: 1px solid var(--border-subtle);
+  backdrop-filter: var(--glass-blur);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideIn 0.25s var(--ease-out);
+}
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.panelHeader button {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  transition: opacity var(--duration-fast);
+}
+
+.panelHeader button:hover { opacity: 1; }
+
+.panelBody {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.search {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-md);
+}
+
+.search:focus {
+  outline: none;
+  border-color: var(--primary-500);
+}
+
+.fileTable {
+  width: 100%;
+  font-size: 0.8rem;
+}
+
+.fileTable th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fileTable td {
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fileTable tr:hover {
+  background: var(--glass-highlight);
+}
+
+.downloadBtn {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-500);
+  color: white;
+  font-size: 0.75rem;
+  transition: background var(--duration-fast);
+}
+
+.downloadBtn:hover {
+  background: var(--primary-400);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  font-size: 0.8rem;
+}
+
+.pagination button {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.75rem;
+}
+
+.pagination button:hover {
+  background: var(--glass-highlight);
+}
+
+.pagination button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.comboPool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+}
+
+.skillChip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.skillChip:hover {
+  background: var(--glass-highlight);
+  border-color: var(--primary-500);
+}
+
+.comboSequence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  min-height: 32px;
+  padding: var(--space-sm);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.comboItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
+  color: white;
+  font-size: 0.75rem;
+  cursor: default;
+  user-select: none;
+  transition: opacity var(--duration-fast);
+}
+
+.comboItem:hover {
+  opacity: 0.8;
+}
+
+.comboIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 0.6rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.avgDamage {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: var(--space-sm);
+  text-align: center;
+}
+
+.skillCounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.countBadge {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--glass-bg);
+}
+
+.countBadge strong {
+  color: var(--accent-400);
+}
+
+.poolHeader {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}

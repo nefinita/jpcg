@@ -1,16 +1,24 @@
 {
-  "name": "jpcg_app",
-  "version": "1.0.0",
-  "description": "This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.",
-  "main": "index.js",
+  "name": "jpcg-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "@tauri-apps/api": "^2.11.0"
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/cli": "^2.5.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "~5.7.2",
+    "vite": "^6.3.5"
   }
 }
