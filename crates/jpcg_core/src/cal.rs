@@ -10,9 +10,9 @@ mod atkcal;
 use std::io::Error;
 
 use crate::{
-    cal::atkcal::JpcgConfig,                // 单技能伤害计算器
-    io::{toml_input, TomlConfig},           // TOML 配置输入
-    log::{error, success},                  // 日志工具
+    cal::atkcal::JpcgConfig,
+    io::{data_dir, toml_input, TomlConfig},
+    log::{error, success},
     type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
 };
 use serde::Serialize;
@@ -37,30 +37,16 @@ pub fn start_calculation(
 ) -> Result<Vec<CalculateResult>, Error> {
     success("Calculation started!");
 
-    // ---- 步骤1: 定位可执行文件目录（用于建立数据文件路径） ----
-    let current_dir = match std::env::current_exe() {
-        Ok(path) => match path.parent() {
-            Some(parent) => parent.to_path_buf(),
-            None => {
-                error("无法获取可执行文件的父目录");
-                return Err(Error::other("无法获取可执行文件的父目录"));
-            }
-        },
-        Err(e) => {
-            // 记录错误并返回，避免 panic
-            error(format!("无法获取可执行文件路径: {}", e).as_str());
-            return Err(Error::other("无法获取可执行文件路径"));
+    // ---- 步骤1: 定位心法数据文件路径 ----
+    let dir = match data_dir() {
+        Some(d) => d,
+        None => {
+            error("无法获取数据文件目录");
+            return Err(Error::other("无法获取数据文件目录"));
         }
     };
 
-    // ---- 步骤2: 构建心法 TOML 配置文件路径 ----
-    // 路径模式: {exe_dir}/data/pvp36500/{xinfa_name}.toml
-    let file_path = current_dir
-        .join("data")
-        .join("pvp36500")
-        .join(xinfa.xinfa_name.clone());
-
-    // 将 Path 转换为字符串（检查非 UTF-8 路径）
+    let file_path = dir.join(xinfa.xinfa_name.clone());
     let file_path_str = match file_path.to_str() {
         Some(s) => s.to_string(),
         None => {

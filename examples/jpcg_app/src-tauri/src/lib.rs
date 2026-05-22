@@ -14,14 +14,14 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // 注册命令处理函数（前端通过 invoke 调用）
         .invoke_handler(tauri::generate_handler![
-            commands::calculate_damage,       // 伤害计算
-            commands::save_config_cmd,        // 保存配置
-            commands::load_config_cmd,        // 加载配置
-            commands::load_profession_config,  // 按心法加载
-            commands::check_update,           // 检查更新
-            commands::perform_update,         // 执行更新
-            commands::forum_list_files,       // 论坛文件列表
-            commands::forum_download_file,    // 论坛文件下载
+            commands::calculate::calculate_damage,
+            commands::config::save_config_cmd,
+            commands::config::load_config_cmd,
+            commands::config::load_profession_config,
+            commands::update::check_update,
+            commands::update::perform_update,
+            commands::forum::forum_list_files,
+            commands::forum::forum_download_file,
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用程序时发生错误");

@@ -10,6 +10,11 @@ use crate::type_set::skilltype::Skilltype;
 use crate::type_set::xinfa::XinfaConfig;
 use crate::type_set::{hostilepile, player, skilltype, xinfa};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+pub fn data_dir() -> Option<PathBuf> {
+    std::env::current_exe().ok()?.parent().map(|p| p.join("data").join("pvp36500"))
+}
 
 // ============================================================================
 // toml_input — 读取 .toml 文件内容为字符串
@@ -97,16 +102,11 @@ pub struct SaveConfig {
 /// - `profession`: 心法名称（同时也是 .toml 文件名，不含扩展名）
 /// - 返回: TomlConfig，若文件不存在或解析失败则返回默认空配置
 pub fn load_config(profession: &str) -> TomlConfig {
-    // 定位可执行文件所在目录
-    let current_dir = match std::env::current_exe() {
-        Ok(path) => path.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
-        Err(e) => {
-            error(&format!("无法获取当前可执行文件路径: {}", e));
-            return TomlConfig::default();
-        }
+    let dir = match data_dir() {
+        Some(d) => d,
+        None => return TomlConfig::default(),
     };
-    // 构建文件完整路径
-    let file_path = current_dir.join("data").join("pvp36500").join(profession);
+    let file_path = dir.join(profession);
     let file_path_str = file_path.to_str().unwrap_or("").to_string();
     if file_path_str.is_empty() {
         error("配置文件路径包含非法 UTF-8 字符");
