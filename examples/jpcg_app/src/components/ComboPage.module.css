@@ -1,0 +1,360 @@
+.page {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.header h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, var(--primary-400), var(--accent-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.primaryBtn {
+  padding: 6px 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: opacity var(--duration-fast);
+}
+
+.primaryBtn:hover {
+  opacity: 0.9;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--glass-highlight);
+}
+
+.section {
+  margin-bottom: var(--space-md);
+}
+
+.sectionTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-sm);
+}
+
+.comboSequence {
+  min-height: 48px;
+  padding: var(--space-sm);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.sequenceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  min-height: 32px;
+}
+
+.comboItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
+  color: white;
+  font-size: 0.8rem;
+  cursor: default;
+  user-select: none;
+  transition: opacity var(--duration-fast);
+}
+
+.comboItem:hover {
+  opacity: 0.85;
+}
+
+.dragging {
+  opacity: 0.6;
+  transform: rotate(2deg);
+}
+
+.comboIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 0.65rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.comboName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comboActions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.smallBtn {
+  font-size: 0.75rem;
+  padding: 0 4px;
+  opacity: 0.7;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.smallBtn:hover {
+  opacity: 1;
+}
+
+.emptyHint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.presetBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.presetSelect {
+  max-width: 200px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+}
+
+.saveDialog {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-sm);
+  background: var(--bg-elevated);
+  align-items: center;
+}
+
+.saveDialog .input {
+  flex: 1;
+  max-width: 240px;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+}
+
+.comboPool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.skillChip {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.skillChip:hover {
+  background: var(--glass-highlight);
+  border-color: var(--primary-500);
+}
+
+.favoriteChip {
+  border-color: var(--accent-500);
+  background: linear-gradient(135deg, var(--bg-elevated), rgba(168, 85, 247, 0.1));
+}
+
+.starIcon {
+  margin-left: 3px;
+  font-size: 0.65rem;
+}
+
+.poolCount {
+  margin-left: var(--space-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Modal (shared with StepAdjustModal) */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  width: 380px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.modalHeader button {
+  font-size: 0.85rem;
+  opacity: 0.5;
+}
+
+.modalHeader button:hover {
+  opacity: 1;
+}
+
+.modalBody {
+  padding: var(--space-md) var(--space-lg);
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-sm);
+}
+
+.modalField label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.modalField input {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.85rem;
+}
+
+.modalActions {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Combo result */
+.comboResult {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  overflow: hidden;
+}
+
+.comboResultSummary {
+  display: flex;
+  justify-content: space-around;
+  padding: var(--space-md);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+  font-size: 0.85rem;
+}
+
+.comboResultSummary strong {
+  color: var(--accent-400);
+}
+
+.comboChartSection {
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.sectionLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.chartContainer {
+  width: 100%;
+}
+
+.comboDetailTable {
+  width: 100%;
+  font-size: 0.75rem;
+  border-collapse: collapse;
+}
+
+.comboDetailTable th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.comboDetailTable td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.comboDetailTable tr:hover {
+  background: var(--glass-highlight);
+}

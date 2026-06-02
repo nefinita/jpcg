@@ -51,6 +51,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .btn-primary:hover { background: #2d2d5e; }
 .btn-download { background: #0d6efd; color: #fff; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 3px; }
 .btn-download:hover { background: #0b5ed7; }
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.tab { padding: 6px 16px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.tab:hover { background: #eef; }
+.tab.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+.category-select { margin-bottom: 12px; }
+.category-select label { font-size: 14px; margin-right: 8px; }
+.category-select select { padding: 6px 12px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
 th { background: #f8f9fa; font-weight: 600; color: #555; }
@@ -70,6 +77,10 @@ tr:hover td { background: #f8f9fa; }
 <div class="card">
 <div class="card-header">上传数据文件</div>
 <div class="card-body">
+<div class="category-select">
+<label for="uploadCategory">分类：</label>
+<select id="uploadCategory"></select>
+</div>
 <form id="uploadForm" enctype="multipart/form-data">
 <div class="upload-area" id="dropArea">
 <input type="file" name="file" id="fileInput" accept=".toml">
@@ -87,6 +98,7 @@ tr:hover td { background: #f8f9fa; }
 <div class="card">
 <div class="card-header">已上传的文件</div>
 <div class="card-body">
+<div class="tabs" id="categoryTabs"></div>
 <table>
 <thead><tr><th>文件名</th><th>大小</th><th>上传时间</th><th>操作</th></tr></thead>
 <tbody id="fileList"><tr><td colspan="4" class="empty">加载中...</td></tr></tbody>
@@ -95,46 +107,68 @@ tr:hover td { background: #f8f9fa; }
 </div>
 
 <div class="notice">
-<strong>提示：</strong>下载文件后，请放入计算器的 <code>data/pvp36500/</code> 目录中使用。上传的文件将供所有用户共享下载。
+<strong>提示：</strong>文件按分类（shuxing/combo等）组织。下载后放入计算器的对应 <code>data/{分类}/</code> 目录中使用。
 </div>
 </div>
 
 <script>
+let currentCategory = 'shuxing';
+
+async function loadCategories() {
+    try {
+        const r = await fetch('/api/categories');
+        const cats = await r.json();
+        const tabs = document.getElementById('categoryTabs');
+        const sel = document.getElementById('uploadCategory');
+        if (cats.length === 1) { tabs.innerHTML = ''; return; }
+        tabs.innerHTML = cats.map(c => `<button class="tab${c === currentCategory ? ' active' : ''}" onclick="switchCategory('${c}')">${c}</button>`).join('');
+        sel.innerHTML = cats.map(c => `<option value="${c}"${c === currentCategory ? ' selected' : ''}>${c}</option>`).join('');
+    } catch (_) {}
+}
+
+async function switchCategory(cat) {
+    currentCategory = cat;
+    document.getElementById('uploadCategory').value = cat;
+    loadCategories();
+    loadFiles();
+}
+
+async function loadFiles() {
+    try {
+        const r = await fetch('/api/files/' + currentCategory);
+        const files = await r.json();
+        const tbody = document.getElementById('fileList');
+        if (!files.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">暂无上传的文件</td></tr>'; return; }
+        tbody.innerHTML = files.map(f => `<tr><td>${f.name}</td><td>${(f.size / 1024).toFixed(1)} KB</td><td>${f.modified}</td><td><a href="/download/${currentCategory}/${f.name}" class="btn-download" download>下载</a></td></tr>`).join('');
+    } catch (_) { document.getElementById('fileList').innerHTML = '<tr><td colspan="4" class="empty">加载失败</td></tr>'; }
+}
+
 const fileInput = document.getElementById('fileInput');
 const dropArea = document.getElementById('dropArea');
-const uploadForm = document.getElementById('uploadForm');
-const uploadBtn = document.getElementById('uploadBtn');
-const uploadMsg = document.getElementById('uploadMsg');
-const fileList = document.getElementById('fileList');
-
 dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.style.borderColor = '#1a1a2e'; });
 dropArea.addEventListener('dragleave', () => { dropArea.style.borderColor = '#ccc'; });
 dropArea.addEventListener('drop', e => { e.preventDefault(); dropArea.style.borderColor = '#ccc'; if (e.dataTransfer.files.length) fileInput.files = e.dataTransfer.files; });
 
-uploadForm.addEventListener('submit', async e => {
+document.getElementById('uploadForm').addEventListener('submit', async e => {
     e.preventDefault();
-    if (!fileInput.files.length) { uploadMsg.textContent = '请先选择一个文件'; return; }
+    if (!fileInput.files.length) { document.getElementById('uploadMsg').textContent = '请先选择一个文件'; return; }
     const fd = new FormData();
     fd.append('file', fileInput.files[0]);
-    uploadBtn.disabled = true; uploadBtn.textContent = '上传中...';
-    uploadMsg.textContent = '';
+    fd.append('category', currentCategory);
+    const btn = document.getElementById('uploadBtn');
+    const msg = document.getElementById('uploadMsg');
+    btn.disabled = true; btn.textContent = '上传中...';
+    msg.textContent = '';
     try {
         const r = await fetch('/upload', { method: 'POST', body: fd });
         const d = await r.json();
-        if (r.ok) { uploadMsg.style.color = 'green'; uploadMsg.textContent = d.message || '上传成功'; fileInput.value = ''; loadFiles(); }
-        else { uploadMsg.style.color = 'red'; uploadMsg.textContent = d.error || '上传失败'; }
-    } catch (e) { uploadMsg.style.color = 'red'; uploadMsg.textContent = '网络错误'; }
-    finally { uploadBtn.disabled = false; uploadBtn.textContent = '上传'; }
+        if (r.ok) { msg.style.color = 'green'; msg.textContent = d.message || '上传成功'; fileInput.value = ''; loadFiles(); }
+        else { msg.style.color = 'red'; msg.textContent = d.error || '上传失败'; }
+    } catch (e) { msg.style.color = 'red'; msg.textContent = '网络错误'; }
+    finally { btn.disabled = false; btn.textContent = '上传'; }
 });
 
-async function loadFiles() {
-    try {
-        const r = await fetch('/api/files');
-        const files = await r.json();
-        if (!files.length) { fileList.innerHTML = '<tr><td colspan="4" class="empty">暂无上传的文件</td></tr>'; return; }
-        fileList.innerHTML = files.map(f => `<tr><td>${f.name}</td><td>${(f.size / 1024).toFixed(1)} KB</td><td>${f.modified}</td><td><a href="/download/${f.name}" class="btn-download" download>下载</a></td></tr>`).join('');
-    } catch (_) { fileList.innerHTML = '<tr><td colspan="4" class="empty">加载失败</td></tr>'; }
-}
+loadCategories();
 loadFiles();
 </script>
 </body>
@@ -153,9 +187,10 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(index_handler))
-        .route("/api/files", get(list_files_handler))
+        .route("/api/categories", get(categories_handler))
+        .route("/api/files/{category}", get(list_files_handler))
         .route("/upload", post(upload_handler))
-        .route("/download/{filename}", get(download_handler))
+        .route("/download/{category}/{filename}", get(download_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -174,11 +209,35 @@ async fn index_handler() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
+async fn categories_handler(
+    State(state): State<Arc<AppState>>,
+) -> Json<Vec<String>> {
+    let mut cats = Vec::new();
+    if let Ok(entries) = fs::read_dir(&state.data_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if !name.starts_with('.') {
+                        cats.push(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    cats.sort();
+    Json(cats)
+}
+
 async fn list_files_handler(
     State(state): State<Arc<AppState>>,
+    Path(category): Path<String>,
 ) -> Result<Json<Vec<FileInfo>>, (StatusCode, String)> {
+    let dir = state.data_dir.join(&category);
+    if !dir.is_dir() {
+        return Ok(Json(vec![]));
+    }
     let mut files = Vec::new();
-    let mut entries = match fs::read_dir(&state.data_dir) {
+    let mut entries = match fs::read_dir(&dir) {
         Ok(e) => e,
         Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     };
@@ -194,6 +253,9 @@ async fn list_files_handler(
             Some(n) => n.to_string(),
             None => continue,
         };
+        if name.starts_with('_') || name.starts_with('.') {
+            continue;
+        }
         let metadata = match fs::metadata(&path) {
             Ok(m) => m,
             Err(_) => continue,
@@ -225,6 +287,7 @@ async fn upload_handler(
     mut multipart: Multipart,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let mut saved = false;
+    let mut upload_category = "shuxing".to_string();
 
     loop {
         let field = match multipart.next_field().await {
@@ -239,6 +302,15 @@ async fn upload_handler(
         };
 
         let name = field.name().unwrap_or("").to_string();
+        if name == "category" {
+            if let Some(val) = field.text().await.ok() {
+                let val = val.trim().to_string();
+                if !val.is_empty() {
+                    upload_category = val;
+                }
+            }
+            continue;
+        }
         if name != "file" {
             continue;
         }
@@ -273,7 +345,15 @@ async fn upload_handler(
             ));
         }
 
-        let dest = state.data_dir.join(&filename);
+        let dest_dir = state.data_dir.join(&upload_category);
+        fs::create_dir_all(&dest_dir).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("创建分类目录失败: {}", e)})),
+            )
+        })?;
+
+        let dest = dest_dir.join(&filename);
         fs::write(&dest, &data).map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -296,14 +376,14 @@ async fn upload_handler(
 
 async fn download_handler(
     State(state): State<Arc<AppState>>,
-    Path(filename): Path<String>,
+    Path((category, filename)): Path<(String, String)>,
 ) -> Result<Response<Body>, (StatusCode, String)> {
     let filename = sanitize_filename(&filename);
     if !filename.ends_with(".toml") {
         return Err((StatusCode::BAD_REQUEST, "仅支持下载 .toml 文件".to_string()));
     }
 
-    let path = state.data_dir.join(&filename);
+    let path = state.data_dir.join(&category).join(&filename);
     if !path.exists() {
         return Err((StatusCode::NOT_FOUND, "文件不存在".to_string()));
     }

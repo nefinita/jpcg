@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::type_set::coefficient::CoefficientConfig;
+
 /// 敌方（木桩/玩家目标）属性配置
 /// 所有字段根据剑网3 属性压缩公式进行计算转换
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
@@ -15,6 +17,7 @@ pub struct HostilepileConfig {
     pub yujin_dengji: u32,   // 御劲等级（影响会心率和会心效果减免）
     pub huajin_dengji: u32,  // 化劲等级（影响伤害减免）
     pub jianshang_bili: u32, // 减伤比例（百分比，如 10 表示 10%）
+    pub target_hp: u32,      // 目标血量（万），用于击杀概率计算
 }
 
 impl HostilepileConfig {
@@ -33,6 +36,7 @@ impl HostilepileConfig {
             yujin_dengji,
             huajin_dengji,
             jianshang_bili,
+            target_hp: 0,
         }
     }
 
@@ -44,6 +48,7 @@ impl HostilepileConfig {
             yujin_dengji: 1,
             huajin_dengji: 1,
             jianshang_bili: 10,
+            target_hp: 0,
         }
     }
 
@@ -85,5 +90,33 @@ impl HostilepileConfig {
     /// 返回值为小数（如 0.05 表示 5%）
     pub fn guo_yujin_huixin(&self) -> f32 {
         self.yujin_dengji as f32 / 197703.0
+    }
+
+    /// 使用可配置系数计算外功防御
+    pub fn guo_wfangyu_with(&self, guo_wsfangyu: u32, coeff: &CoefficientConfig) -> u32 {
+        let def = self.waigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0);
+        (def * 1024.0 / (def + coeff.fangyu_xishu)) as u32
+    }
+
+    /// 使用可配置系数计算内功防御
+    pub fn guo_nfangyu_with(&self, guo_wsfangyu: u32, coeff: &CoefficientConfig) -> u32 {
+        let def = self.neigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0);
+        (def * 1024.0 / (def + coeff.fangyu_xishu)) as u32
+    }
+
+    /// 使用可配置系数的化劲计算
+    pub fn guo_huajin_with(&self, coeff: &CoefficientConfig) -> u32 {
+        ((self.huajin_dengji as f32 / (self.huajin_dengji as f32 + coeff.huajin_xishu) + 102.0 / 1024.0)
+            * 1024.0) as u32
+    }
+
+    /// 使用可配置系数的御劲会效减免
+    pub fn guo_yujin_huixiao_with(&self, coeff: &CoefficientConfig) -> u32 {
+        (self.yujin_dengji as f32 * 1024.0 / coeff.huixin_xishu) as u32
+    }
+
+    /// 使用可配置系数的御劲会心率减免
+    pub fn guo_yujin_huixin_with(&self, coeff: &CoefficientConfig) -> f32 {
+        self.yujin_dengji as f32 / coeff.huixin_xishu
     }
 }

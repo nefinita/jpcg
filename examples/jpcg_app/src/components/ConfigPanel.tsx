@@ -1,6 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import type { FormData, UpdateProgressEvent, UpdateCheckResult } from "../types";
-import { XINFA_LIST, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS } from "../utils/constants";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO } from "../types";
+import {
+  XINFA_LIST as XINFA_FALLBACK, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS,
+  BUFF_FIELDS, COEFFICIENT_FIELDS, DEFAULT_BUFF, DEFAULT_COEFFICIENT,
+} from "../utils/constants";
 import * as api from "../api/commands";
 import styles from "./ConfigPanel.module.css";
 
@@ -9,6 +12,7 @@ interface Props {
   calculating: boolean;
   addToast: (msg: string, type?: "success" | "error" | "warning" | "info") => void;
   setStatus: (msg: string) => void;
+  onXinfaChange?: (xinfa: string) => void;
 }
 
 const defaultForm = (): FormData => ({
@@ -22,36 +26,45 @@ const defaultForm = (): FormData => ({
     pofang_up: 0,
     huixin_up: 0,
   },
+  buff: { ...DEFAULT_BUFF },
+  coefficient: { ...DEFAULT_COEFFICIENT },
 });
 
-export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus }: Props) {
+export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus, onXinfaChange }: Props) {
   const [form, setForm] = useState<FormData>(() => {
     const last = typeof localStorage !== "undefined"
       ? localStorage.getItem(STORAGE_KEYS.lastXinfa)
       : null;
     const defaultXinfa = last || "mowen";
-    const entry = XINFA_LIST.find((x) => x.value === defaultXinfa) || XINFA_LIST[0];
+    const entry = XINFA_FALLBACK.find((x) => x.value === defaultXinfa) || XINFA_FALLBACK[0];
     return { ...defaultForm(), xinfa: defaultXinfa, xinfa_config: { ...defaultForm().xinfa_config, xinfa_name: entry.label } };
   });
 
-  // Update progress state
+  const [professionOptions, setProfessionOptions] = useState<{value: string; label: string; nom: string; version_label: string | null}[]>(
+    () => XINFA_FALLBACK.map((x) => ({value: x.value, label: x.label, nom: "", version_label: null}))
+  );
   const [updating, setUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
 
-  const xinfaEntry = XINFA_LIST.find((x) => x.value === form.xinfa);
-  const defaultXinfa = XINFA_LIST.find((x) => x.default) || XINFA_LIST[0];
+  useEffect(() => {
+    api.listProfessions().then((list) => {
+      if (list.length > 0) setProfessionOptions(list);
+    }).catch(() => {});
+  }, []);
+
+  const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
 
   const handleXinfaChange = useCallback((value: string) => {
-    const entry = XINFA_LIST.find((x) => x.value === value) || defaultXinfa;
+    const entry = professionOptions.find((x) => x.value === value);
     localStorage.setItem(STORAGE_KEYS.lastXinfa, value);
     setForm((prev): FormData => ({
       ...prev,
       xinfa: value,
-      xinfa_config: { ...prev.xinfa_config, xinfa_name: entry.label },
+      xinfa_config: { ...prev.xinfa_config, xinfa_name: entry?.label ?? defaultXinfa.label },
     }));
-    // Load profession config
+    onXinfaChange?.(value);
     api.loadProfessionConfig(value).then((cfg) => {
       if (cfg) {
         setForm((prev): FormData => ({
@@ -66,7 +79,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         }));
       }
     }).catch(() => {});
-  }, [defaultXinfa]);
+  }, [professionOptions, defaultXinfa, onXinfaChange]);
 
   const updateField = useCallback(
     (section: "player" | "hostile", id: string, value: string) => {
@@ -79,21 +92,32 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     [],
   );
 
+  const updateBuff = useCallback((id: string, value: string) => {
+    const num = value === "" ? 0 : Number(value);
+    setForm((prev) => ({
+      ...prev,
+      buff: { ...prev.buff, [id]: isNaN(num) ? 0 : num },
+    }));
+  }, []);
+
+  const updateCoefficient = useCallback((id: string, value: string) => {
+    const num = value === "" ? 0 : Number(value);
+    setForm((prev) => ({
+      ...prev,
+      coefficient: { ...prev.coefficient, [id]: isNaN(num) ? 0 : num },
+    }));
+  }, []);
+
   const handleCalculate = useCallback(() => {
     onCalculate(form);
   }, [form, onCalculate]);
 
   const handleSave = useCallback(async () => {
     try {
-      const req = {
-        player: form.player as Record<string, unknown>,
-        hostile: form.hostile as Record<string, unknown>,
-        xinfa_config: form.xinfa_config,
-      };
       await api.saveConfig({
-        player: req.player as never,
-        hostile: req.hostile as never,
-        xinfa_config: req.xinfa_config,
+        player: form.player as never,
+        hostile: form.hostile as never,
+        xinfa_config: form.xinfa_config,
       });
       addToast("配置已保存", "success");
     } catch (err) {
@@ -108,7 +132,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         addToast("没有已保存的配置", "warning");
         return;
       }
-      const entry = XINFA_LIST.find((x) => x.label === cfg.xinfa_config.xinfa_name);
+      const entry = professionOptions.find((x) => x.label === cfg.xinfa_config.xinfa_name);
       const xinfaVal = entry?.value || "mowen";
       localStorage.setItem(STORAGE_KEYS.lastXinfa, xinfaVal);
       setForm({
@@ -127,8 +151,11 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           yujin_dengji: cfg.hostile.yujin_dengji,
           huajin_dengji: cfg.hostile.huajin_dengji,
           jianshang_bili: cfg.hostile.jianshang_bili,
+          target_hp: cfg.hostile.target_hp,
         },
         xinfa_config: cfg.xinfa_config,
+        buff: cfg.buff || { ...DEFAULT_BUFF },
+        coefficient: cfg.coefficient || { ...DEFAULT_COEFFICIENT },
       });
       addToast("配置已加载", "success");
     } catch (err) {
@@ -140,6 +167,41 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     setForm(defaultForm());
     addToast("已清空", "info");
   }, [addToast]);
+
+  const handleExport = useCallback(async () => {
+    try {
+      const toml = await api.exportConfig();
+      const blob = new Blob([toml], { type: "application/toml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${form.xinfa}_config.toml`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast("配置已导出", "success");
+    } catch (err) {
+      addToast(String(err), "error");
+    }
+  }, [form, addToast]);
+
+  const handleImport = useCallback(async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".toml";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        await api.importConfig(text);
+        addToast("配置已导入", "success");
+        handleLoad();
+      } catch (err) {
+        addToast(String(err), "error");
+      }
+    };
+    input.click();
+  }, [addToast, handleLoad]);
 
   const handleUpdateClick = useCallback(async () => {
     if (updating) return;
@@ -157,12 +219,10 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       }
       setUpdateMessage(`发现 ${result.data_files_to_update.length} 个文件需要更新`);
       addToast("发现更新", "info");
-
       const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
         setUpdateProgress(evt.progress);
         setUpdateMessage(`正在下载: ${evt.file || evt.message}`);
       });
-
       await api.performUpdate(false, result);
       unlisten();
       setUpdateProgress(1);
@@ -176,10 +236,20 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     }
   }, [updating, addToast]);
 
-  // Load initial profession config on mount
   useEffect(() => {
     handleXinfaChange(form.xinfa);
   }, []);
+
+  const playerStats = React.useMemo(() => {
+    const pct = (v: number) => (v * 100).toFixed(1) + "%";
+    const huixinRate = form.player.huixin_dengji / (form.coefficient.huixin_xishu || 197703);
+    const pofangRate = form.player.pofang_dengji / (form.coefficient.pofang_xishu || 225957.6);
+    return {
+      huixinRate: pct(huixinRate + form.buff.huixin_pct / 100),
+      pofangRate: pct(pofangRate + form.buff.pofang_pct / 100),
+      jianshang: form.hostile.jianshang_bili + "%",
+    };
+  }, [form]);
 
   return (
     <div className={styles.card}>
@@ -190,8 +260,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           value={form.xinfa}
           onChange={(e) => handleXinfaChange(e.target.value)}
         >
-          {XINFA_LIST.map((x) => (
-            <option key={x.value} value={x.value}>{x.label}</option>
+          {professionOptions.map((x) => (
+            <option key={x.value} value={x.value}>{x.label}（{x.nom}）{x.version_label ?? ""}</option>
           ))}
         </select>
       </div>
@@ -202,18 +272,41 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           {PLAYER_FIELDS.map((f) => (
             <div key={f.id} className={styles.field}>
               <label className={styles.fieldLabel}>{f.label}</label>
-              <input
-                className={styles.input}
-                type="number"
-                min={f.min}
-                step={f.step}
+              <input className={styles.input} type="number" min={f.min} step={f.step}
                 value={form.player[f.id] ?? ""}
-                onChange={(e) => updateField("player", f.id, e.target.value)}
-              />
+                onChange={(e) => updateField("player", f.id, e.target.value)} />
             </div>
           ))}
         </div>
       </div>
+
+      <details className={styles.details}>
+        <summary className={styles.sectionTitle}>阵眼/奇穴增益</summary>
+        <div className={styles.grid}>
+          {BUFF_FIELDS.map((f) => (
+            <div key={f.id} className={styles.field}>
+              <label className={styles.fieldLabel}>{f.label}</label>
+              <input className={styles.input} type="number" min={0} step={0.1}
+                value={String(form.buff[f.id as keyof BuffConfigDTO] ?? "")}
+                onChange={(e) => updateBuff(f.id, e.target.value)} />
+            </div>
+          ))}
+        </div>
+      </details>
+
+      <details className={styles.details}>
+        <summary className={styles.sectionTitle}>系数设置</summary>
+        <div className={styles.grid}>
+          {COEFFICIENT_FIELDS.map((f) => (
+            <div key={f.id} className={styles.field}>
+              <label className={styles.fieldLabel}>{f.label}</label>
+              <input className={styles.input} type="number" min={0} step={0.1}
+                value={form.coefficient[f.id as keyof typeof form.coefficient] ?? ""}
+                onChange={(e) => updateCoefficient(f.id, e.target.value)} />
+            </div>
+          ))}
+        </div>
+      </details>
 
       <div className={styles.section}>
         <div className={styles.sectionTitle}>目标属性</div>
@@ -221,49 +314,39 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           {HOSTILE_FIELDS.map((f) => (
             <div key={f.id} className={styles.field}>
               <label className={styles.fieldLabel}>{f.label}</label>
-              <input
-                className={styles.input}
-                type="number"
-                min={f.min}
-                max={f.max}
-                step={f.step}
+              <input className={styles.input} type="number" min={f.min} max={f.max} step={f.step}
                 value={form.hostile[f.id] ?? ""}
-                onChange={(e) => updateField("hostile", f.id, e.target.value)}
-              />
+                onChange={(e) => updateField("hostile", f.id, e.target.value)} />
             </div>
           ))}
         </div>
       </div>
 
+      <div className={styles.statBar}>
+        <span>会心率: {playerStats.huixinRate}</span>
+        <span>破防率: {playerStats.pofangRate}</span>
+        <span>减伤: {playerStats.jianshang}</span>
+      </div>
+
       <div className={styles.section}>
         <div className={styles.actions}>
-          <button
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={handleCalculate}
-            disabled={calculating}
-          >
+          <button className={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={handleCalculate} disabled={calculating}>
             {calculating ? "计算中..." : "开始计算"}
           </button>
           <button className={styles.btn} onClick={handleSave}>保存</button>
           <button className={styles.btn} onClick={handleLoad}>加载</button>
-          <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleClear}>
-            清空
-          </button>
-          <button
-            className={styles.btn}
-            onClick={handleUpdateClick}
-            disabled={updating}
-          >
+          <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleClear}>清空</button>
+          <button className={styles.btn} onClick={handleExport}>导出</button>
+          <button className={styles.btn} onClick={handleImport}>导入</button>
+          <button className={styles.btn} onClick={handleUpdateClick} disabled={updating}>
             {updating ? "更新中..." : "检查更新"}
           </button>
         </div>
         {updating && (
           <div className={styles.progress}>
             <div className={styles.progressTrack}>
-              <div
-                className={styles.progressFill}
-                style={{ width: `${Math.round(updateProgress * 100)}%` }}
-              />
+              <div className={styles.progressFill} style={{ width: `${Math.round(updateProgress * 100)}%` }} />
             </div>
             <div className={styles.progressText}>{updateMessage}</div>
           </div>

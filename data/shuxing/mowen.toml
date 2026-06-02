@@ -1,9 +1,14 @@
 [xinfa]
-xinfa_name = "mowen"
-xinfa_nom = "gengu"
+xinfa_name = "莫问"
+xinfa_nom = "根骨"
 atk_up = 1.96
 pofang_up = 2.0
 huixin_up = 0.0
+
+[version]
+level = 130
+season = 3
+modified = 20260602
 
 [[skill]]
 skill_name = "宫"           #名字

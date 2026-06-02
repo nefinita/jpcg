@@ -6,6 +6,7 @@
 // ============================================================================
 
 mod atkcal;
+pub mod kill_prob;
 
 use std::io::Error;
 
@@ -13,12 +14,12 @@ use crate::{
     cal::atkcal::JpcgConfig,
     io::{data_dir, toml_input, TomlConfig},
     log::{error, success},
-    type_set::{hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
+    type_set::{buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
 };
 use serde::Serialize;
 
 /// 启动完整伤害计算
-/// 1. 定位可执行文件所在目录下的 data/pvp36500/{心法名}.toml
+/// 1. 定位可执行文件所在目录下的 data/shuxing/{心法名}.toml
 /// 2. 解析 TOML 获得技能列表
 /// 3. 对每个技能调用单技能伤害计算
 ///
@@ -34,6 +35,16 @@ pub fn start_calculation(
     player: PlayerConfig,
     hostilepile: HostilepileConfig,
     xinfa: XinfaConfig,
+) -> Result<Vec<CalculateResult>, Error> {
+    start_calculation_with_config(player, hostilepile, xinfa, &BuffConfig::default(), &CoefficientConfig::default())
+}
+
+pub fn start_calculation_with_config(
+    player: PlayerConfig,
+    hostilepile: HostilepileConfig,
+    xinfa: XinfaConfig,
+    buff: &BuffConfig,
+    coeff: &CoefficientConfig,
 ) -> Result<Vec<CalculateResult>, Error> {
     success("Calculation started!");
 
@@ -70,8 +81,7 @@ pub fn start_calculation(
     };
 
     // ---- 步骤4: 逐技能计算伤害 ----
-    // call_back 遍历 skill_table 中的每个技能调用 JpcgConfig 计算
-    Ok(call_back(skill_table, player, hostilepile))
+    Ok(call_back(skill_table, player, hostilepile, buff, coeff))
 }
 
 // ============================================================================
@@ -133,15 +143,18 @@ fn call_back(
     toml_config: TomlConfig,
     player: PlayerConfig,
     hostilepile: HostilepileConfig,
+    buff: &BuffConfig,
+    coeff: &CoefficientConfig,
 ) -> Vec<CalculateResult> {
     let mut results = Vec::new();
     for skill in toml_config.skill {
-        // 实例化单技能计算器，传入玩家/目标/技能/心法数据
-        let damage_result = JpcgConfig::new(
+        let damage_result = JpcgConfig::new_with_config(
             player.clone(),
             hostilepile.clone(),
             skill.clone(),
             toml_config.xinfa.clone(),
+            buff.clone(),
+            coeff.clone(),
         )
         .q_cal();
 

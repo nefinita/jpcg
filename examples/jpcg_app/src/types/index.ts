@@ -6,6 +6,7 @@ export interface PlayerConfigDTO {
   huixin_xiaoguo: number;
   pofang_dengji: number;
   wuqi_shanghai: number;
+  zuizhong_gongji?: number;
 }
 
 export interface HostileConfigDTO {
@@ -14,6 +15,26 @@ export interface HostileConfigDTO {
   yujin_dengji: number;
   huajin_dengji: number;
   jianshang_bili: number;
+  target_hp: number;
+}
+
+export interface BuffConfigDTO {
+  base_atk_pct: number;
+  huixin_pct: number;
+  huixiao_pct: number;
+  pofang_pct: number;
+  wushi_fangyu_pct: number;
+  shanghai_pct: number;
+  mode_is_point: boolean;
+}
+
+export interface CoefficientConfigDTO {
+  pofang_xishu: number;
+  huixin_xishu: number;
+  huixiao_xishu: number;
+  huajin_xishu: number;
+  fangyu_xishu: number;
+  pvp_global_jianshang: number;
 }
 
 export interface XinfaConfigDTO {
@@ -28,6 +49,8 @@ export interface CalculateRequest {
   player: PlayerConfigDTO;
   hostile: HostileConfigDTO;
   xinfa_config: XinfaConfigDTO;
+  buff: BuffConfigDTO;
+  coefficient: CoefficientConfigDTO;
 }
 
 export interface SkillResultDTO {
@@ -38,6 +61,59 @@ export interface SkillResultDTO {
   n: number;
   h: number;
   q: number;
+}
+
+export interface SkillPoolItemDTO {
+  skill_name: string;
+  skill_id: number;
+  base_damage1: number;
+  base_damage2: number;
+  atk_xishu: number;
+  watk_xishu: number;
+  hit_up: number;
+  huixin_up: number;
+  huixiao_up: number;
+  wushifangyu: number;
+  wushihuajin: number;
+  dot_flag: number;
+}
+
+export interface StepOverrideDTO {
+  base_damage_override: number | null;
+  atk_xishu_override: number | null;
+  jianshang_bili_override: number | null;
+  wushihuajin_override: number | null;
+  extra_atk_pct: number | null;
+  gain_override: number | null;
+  extra_crit_pct: number | null;
+  extra_crit_dmg_pct: number | null;
+}
+
+export interface ComboStepDTO {
+  skill: SkillPoolItemDTO;
+  overrides: StepOverrideDTO | null;
+}
+
+export interface ComboPresetDTO {
+  name: string;
+  steps: ComboStepDTO[];
+}
+
+export interface ComboStepResultDTO {
+  skill_name: string;
+  g_damage: number;
+  h_damage: number;
+  q_damage: number;
+  crit_rate: number;
+  cumulative_mean_wan: number;
+  kill_prob: number;
+}
+
+export interface ComboResultDTO {
+  steps: ComboStepResultDTO[];
+  total_expected_damage_wan: number;
+  final_kill_prob: number;
+  kill_prob_curve: [number, number][];
 }
 
 export interface UpdateCheckResult {
@@ -55,6 +131,13 @@ export interface UpdateProgressEvent {
   message: string;
   progress: number;
   file: string;
+}
+
+export interface XinfaSummaryDTO {
+  value: string;
+  label: string;
+  nom: string;
+  version_label: string | null;
 }
 
 export interface ForumFileInfo {
@@ -81,4 +164,6 @@ export interface FormData {
     pofang_up: number;
     huixin_up: number;
   };
+  buff: BuffConfigDTO;
+  coefficient: CoefficientConfigDTO;
 }

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -8,8 +9,12 @@ pub(crate) struct ForumFileInfo {
 }
 
 #[tauri::command]
-pub async fn forum_list_files(forum_url: String) -> Result<Vec<ForumFileInfo>, String> {
-    let url = format!("{}/api/files", forum_url.trim_end_matches('/'));
+pub async fn forum_list_files(
+    forum_url: String,
+    category: Option<String>,
+) -> Result<Vec<ForumFileInfo>, String> {
+    let cat = category.unwrap_or_else(|| "shuxing".to_string());
+    let url = format!("{}/api/files/{}", forum_url.trim_end_matches('/'), cat);
     let client = reqwest::Client::new();
     let resp = client
         .get(&url)
@@ -24,17 +29,36 @@ pub async fn forum_list_files(forum_url: String) -> Result<Vec<ForumFileInfo>, S
 }
 
 #[tauri::command]
+pub async fn forum_list_categories(forum_url: String) -> Result<Vec<String>, String> {
+    let url = format!("{}/api/categories", forum_url.trim_end_matches('/'));
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("连接论坛失败: {}", e))?;
+    let categories: Vec<String> = resp
+        .json()
+        .await
+        .map_err(|e| format!("解析分类列表失败: {}", e))?;
+    Ok(categories)
+}
+
+#[tauri::command]
 pub async fn forum_download_file(
     forum_url: String,
     filename: String,
+    category: Option<String>,
 ) -> Result<String, String> {
     if !filename.ends_with(".toml") {
         return Err("仅支持下载 .toml 文件".to_string());
     }
 
+    let cat = category.unwrap_or_else(|| "shuxing".to_string());
     let url = format!(
-        "{}/download/{}",
+        "{}/download/{}/{}",
         forum_url.trim_end_matches('/'),
+        cat,
         filename
     );
     let client = reqwest::Client::new();
@@ -53,11 +77,16 @@ pub async fn forum_download_file(
         .await
         .map_err(|e| format!("读取文件数据失败: {}", e))?;
 
-    let current_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_default();
-    let dest_dir = current_dir.join("data").join("pvp36500");
+    let exe = std::env::current_exe().ok();
+    let exe_dir = exe.as_ref().and_then(|p| p.parent());
+    let base_dir = exe_dir.map(|p| p.to_path_buf()).unwrap_or_default();
+
+    let dest_dir = if exe_dir.map_or(false, |d| d.ends_with("MacOS")) {
+        let home = std::env::var("HOME").unwrap_or_default();
+        PathBuf::from(home).join("Library").join("Application Support").join("com.qinthirteen.jpcg").join(&cat)
+    } else {
+        base_dir.join("data").join(&cat)
+    };
     std::fs::create_dir_all(&dest_dir)
         .map_err(|e| format!("创建目录失败: {}", e))?;
 

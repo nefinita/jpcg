@@ -1,0 +1,132 @@
+.page {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.header {
+  margin-bottom: var(--space-md);
+}
+
+.header h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, var(--primary-400), var(--accent-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.search {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-md);
+}
+
+.search:focus {
+  outline: none;
+  border-color: var(--primary-500);
+}
+
+.fileTable {
+  width: 100%;
+  font-size: 0.85rem;
+}
+
+.fileTable th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fileTable td {
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fileTable tr:hover {
+  background: var(--glass-highlight);
+}
+
+.downloadBtn {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-500);
+  color: white;
+  font-size: 0.75rem;
+  transition: background var(--duration-fast);
+}
+
+.downloadBtn:hover {
+  background: var(--primary-400);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+  font-size: 0.85rem;
+}
+
+.pagination button {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+}
+
+.pagination button:hover {
+  background: var(--glass-highlight);
+}
+
+.pagination button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.emptyHint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.tab {
+  padding: 4px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.tab:hover {
+  background: var(--glass-highlight);
+}
+
+.tabActive {
+  padding: 4px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-500);
+  border: 1px solid var(--primary-500);
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: #fff;
+}

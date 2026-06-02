@@ -1,19 +1,40 @@
 // ============================================================================
 // io — 文件 IO 模块
 // 负责 TOML 配置文件的读取、解析、保存。
-// 数据文件位于 {exe_dir}/data/pvp36500/{心法名}.toml，
+// 数据文件位于 {exe_dir}/data/shuxing/{心法名}.toml，
 // 保存文件位于工作目录下的 saved_config.toml。
 // ============================================================================
 
 use crate::log::{error, info, warn};
-use crate::type_set::skilltype::Skilltype;
-use crate::type_set::xinfa::XinfaConfig;
-use crate::type_set::{hostilepile, player, skilltype, xinfa};
+use crate::type_set::buff::BuffConfig;
+use crate::type_set::coefficient::CoefficientConfig;
+use crate::type_set::combo::ComboPreset;
+use crate::type_set::xinfa::{self, VersionInfo, XinfaSummary};
+use crate::type_set::{hostilepile, player, skilltype};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub fn data_dir() -> Option<PathBuf> {
-    std::env::current_exe().ok()?.parent().map(|p| p.join("data").join("pvp36500"))
+    let exe = std::env::current_exe().ok()?;
+    let exe_dir = exe.parent()?;
+
+    // 开发模式: exe_dir/data/shuxing
+    let dev = exe_dir.join("data").join("shuxing");
+    if dev.is_dir() {
+        return Some(dev);
+    }
+
+    // macOS .app bundle: exe 在 Contents/MacOS/，资源在 Contents/Resources/
+    if exe_dir.ends_with("MacOS") {
+        if let Some(contents) = exe_dir.parent() {
+            let bundle = contents.join("Resources").join("data").join("shuxing");
+            if bundle.is_dir() {
+                return Some(bundle);
+            }
+        }
+    }
+
+    None
 }
 
 // ============================================================================
@@ -38,7 +59,7 @@ pub fn toml_input(profession: &str) -> String {
 
 // ============================================================================
 // TomlConfig — TOML 配置顶层结构
-// 对应 data/pvp36500/{心法名}.toml 文件格式:
+// 对应 data/shuxing/{心法名}.toml 文件格式:
 //   [xinfa]
 //   xinfa_name = "莫问"
 //   xinfa_nom = "根骨"
@@ -50,9 +71,11 @@ pub fn toml_input(profession: &str) -> String {
 
 /// 心法技能配置（从 TOML 文件解析）
 #[derive(Default, Deserialize)]
+#[serde(default)]
 pub struct TomlConfig {
-    pub xinfa: xinfa::XinfaConfig,         // 心法基础配置
-    pub skill: Vec<skilltype::Skilltype>,   // 技能列表（每个技能一条 [[skill]]）
+    pub xinfa: xinfa::XinfaConfig,           // 心法基础配置
+    pub skill: Vec<skilltype::Skilltype>,     // 技能列表（每个技能一条 [[skill]]）
+    pub version: Option<VersionInfo>,         // 赛季版本信息（可选）
 }
 
 // ============================================================================
@@ -91,11 +114,15 @@ pub struct SaveConfig {
     pub xinfa: xinfa::XinfaConfig,                     // 心法配置
     pub player: player::PlayerConfig,                   // 玩家属性
     pub hostilepile: hostilepile::HostilepileConfig,     // 目标属性
+    #[serde(default)]
+    pub buff: BuffConfig,                               // 阵眼/奇穴增益
+    #[serde(default)]
+    pub coefficient: CoefficientConfig,                 // 系数设置
 }
 
 // ============================================================================
 // load_config — 按心法名加载技能配置表
-// 路径: {exe_dir}/data/pvp36500/{profession}.toml
+// 路径: {exe_dir}/data/shuxing/{profession}.toml
 // ============================================================================
 
 /// 按心法名称加载对应的技能 TOML 配置
@@ -138,6 +165,8 @@ pub fn save_config(
         player,
         hostilepile,
         xinfa,
+        buff: BuffConfig::default(),
+        coefficient: CoefficientConfig::default(),
     };
     // 序列化为 TOML 字符串
     match toml::to_string(&save_config) {
@@ -169,4 +198,170 @@ pub fn load_save_config() -> SaveConfig {
         }
     };
     config
+}
+
+/// 连招预设目录路径（开发模式: exe_dir/data/combo；.app bundle: 用户数据目录/combo）
+pub fn combo_presets_dir() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let exe_dir = exe.parent()?;
+
+    let dir = if exe_dir.ends_with("MacOS") {
+        // macOS .app bundle — 用用户数据目录（可写）
+        let home = std::env::var("HOME").ok()?;
+        PathBuf::from(home).join("Library").join("Application Support").join("com.qinthirteen.jpcg").join("combo")
+    } else {
+        // 开发模式: exe_dir/data/combo
+        exe_dir.join("data").join("combo")
+    };
+    Some(dir)
+}
+
+/// 列出所有连招预设文件（不含 .toml 后缀）
+pub fn list_combo_presets() -> Vec<String> {
+    let dir = match combo_presets_dir() {
+        Some(d) => d,
+        None => return vec![],
+    };
+    if !dir.exists() {
+        return vec![];
+    }
+    let mut presets = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("toml") {
+                if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                    presets.push(name.to_string());
+                }
+            }
+        }
+    }
+    presets.sort();
+    presets
+}
+
+/// 加载指定连招预设
+pub fn load_combo_preset(name: &str) -> Option<ComboPreset> {
+    let dir = combo_presets_dir()?;
+    let path = dir.join(format!("{}.toml", name));
+    let content = std::fs::read_to_string(path).ok()?;
+    toml::from_str(&content).ok()
+}
+
+/// 保存连招预设
+pub fn save_combo_preset(preset: &ComboPreset) -> Result<(), String> {
+    let dir = match combo_presets_dir() {
+        Some(d) => d,
+        None => return Err("无法获取连招预设目录".to_string()),
+    };
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败: {}", e))?;
+    let path = dir.join(format!("{}.toml", preset.name));
+    let content = toml::to_string_pretty(preset).map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {}", e))
+}
+
+/// 删除连招预设
+pub fn delete_combo_preset(name: &str) -> Result<(), String> {
+    let dir = match combo_presets_dir() {
+        Some(d) => d,
+        None => return Err("无法获取连招预设目录".to_string()),
+    };
+    let path = dir.join(format!("{}.toml", name));
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| format!("删除文件失败: {}", e))
+    } else {
+        Err("预设不存在".to_string())
+    }
+}
+
+/// 导出当前配置为 TOML 字符串（不含技能表）
+pub fn export_config_toml() -> Result<String, String> {
+    let config = load_save_config();
+    toml::to_string_pretty(&config).map_err(|e| format!("序列化失败: {}", e))
+}
+
+/// 导入配置 TOML 字符串并写入 saved_config.toml
+pub fn import_config_toml(toml_str: &str) -> Result<(), String> {
+    let config: SaveConfig = toml::from_str(toml_str)
+        .map_err(|e| format!("解析配置失败: {}", e))?;
+    let content = toml::to_string_pretty(&config)
+        .map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write("saved_config.toml", content)
+        .map_err(|e| format!("写入文件失败: {}", e))
+}
+
+fn group_key(filename: &str) -> Option<String> {
+    let stem = filename.strip_suffix(".toml")?;
+    if stem.starts_with('_') {
+        return None;
+    }
+    Some(stem.split('_').next().unwrap_or(stem).to_string())
+}
+
+pub fn list_available_professions() -> Vec<XinfaSummary> {
+    let dir = match data_dir() {
+        Some(d) => d,
+        None => return vec![],
+    };
+
+    let mut by_group: std::collections::HashMap<String, Vec<XinfaSummary>> =
+        std::collections::HashMap::new();
+
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return vec![],
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let fname = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        let key = match group_key(&fname) {
+            Some(k) => k,
+            None => continue,
+        };
+
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let cfg: TomlConfig = match toml::from_str(&content) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let ver = cfg.version.clone().unwrap_or_default();
+        let version_label = if ver.level > 0 {
+            Some(format!("{}级第{}赛季", ver.level, ver.season))
+        } else {
+            None
+        };
+
+        by_group.entry(key.clone()).or_default().push(XinfaSummary {
+            value: key.clone(),
+            label: cfg.xinfa.xinfa_name,
+            nom: cfg.xinfa.xinfa_nom,
+            version_label,
+            version: ver,
+        });
+    }
+
+    by_group
+        .into_values()
+        .filter_map(|mut list| {
+            list.sort_by(|a, b| {
+                b.version
+                    .level
+                    .cmp(&a.version.level)
+                    .then_with(|| b.version.season.cmp(&a.version.season))
+                    .then_with(|| b.version.modified.cmp(&a.version.modified))
+            });
+            list.into_iter().next()
+        })
+        .collect()
 }

@@ -13,3 +13,9 @@ pub mod player;
 pub mod skilltype;
 /// 心法配置
 pub mod xinfa;
+/// 阵眼/奇穴增益
+pub mod buff;
+/// 系数设置
+pub mod coefficient;
+/// 连招序列与预设
+pub mod combo;

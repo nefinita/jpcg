@@ -1,73 +1,154 @@
-// ============================================================================
-// types — 前端-后端通信的数据传输对象 (DTO)
-// 所有通过 Tauri invoke 传输的数据结构在此定义。
-// 包含配置类 DTO 和它们到核心库类型的转换实现。
-// ============================================================================
-
 use serde::{Deserialize, Serialize};
 
-// ============================================================================
-// 玩家配置 DTO（对应前端表单中的玩家属性输入）
-// ============================================================================
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct XinfaSummaryDTO {
+    pub value: String,
+    pub label: String,
+    pub nom: String,
+    pub version_label: Option<String>,
+}
 
-/// 玩家属性 DTO
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct PlayerConfigDTO {
-    pub jcsx: String,            // 基础属性类型（根骨/力道/身法/元气）
-    pub jichu_shuxing: u32,     // 基础属性值
-    pub jichu_gongji: u32,      // 基础攻击力
-    pub huixin_dengji: u32,     // 会心等级
-    pub huixin_xiaoguo: u32,    // 会心效果等级
-    pub pofang_dengji: u32,     // 破防等级
-    pub wuqi_shanghai: u32,     // 武器伤害
+    pub jcsx: String,
+    pub jichu_shuxing: u32,
+    pub jichu_gongji: u32,
+    pub huixin_dengji: u32,
+    pub huixin_xiaoguo: u32,
+    pub pofang_dengji: u32,
+    pub wuqi_shanghai: u32,
 }
 
-/// 目标（敌方）属性 DTO
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct HostileConfigDTO {
-    pub waigong_fangyu: u32, // 外功防御
-    pub neigong_fangyu: u32, // 内功防御
-    pub yujin_dengji: u32,   // 御劲等级
-    pub huajin_dengji: u32,  // 化劲等级
-    pub jianshang_bili: u32, // 减伤比例（百分比）
+    pub waigong_fangyu: u32,
+    pub neigong_fangyu: u32,
+    pub yujin_dengji: u32,
+    pub huajin_dengji: u32,
+    pub jianshang_bili: u32,
+    pub target_hp: u32,
 }
 
-/// 心法配置 DTO
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct BuffConfigDTO {
+    pub base_atk_pct: f32,
+    pub huixin_pct: f32,
+    pub huixiao_pct: f32,
+    pub pofang_pct: f32,
+    pub wushi_fangyu_pct: f32,
+    pub shanghai_pct: f32,
+    pub mode_is_point: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct CoefficientConfigDTO {
+    pub pofang_xishu: f32,
+    pub huixin_xishu: f32,
+    pub huixiao_xishu: f32,
+    pub huajin_xishu: f32,
+    pub fangyu_xishu: f32,
+    pub pvp_global_jianshang: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct XinfaConfigDTO {
-    pub xinfa_name: String,   // 心法名称
-    pub xinfa_nom: String,    // 基础属性类型
-    pub atk_up: f32,          // 攻击力加成
-    pub pofang_up: f32,       // 破防加成
-    pub huixin_up: f32,       // 会心加成
+    pub xinfa_name: String,
+    pub xinfa_nom: String,
+    pub atk_up: f32,
+    pub pofang_up: f32,
+    pub huixin_up: f32,
 }
 
-/// 计算请求（完整输入）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CalculateRequest {
-    pub player: PlayerConfigDTO,       // 玩家属性
-    pub hostile: HostileConfigDTO,     // 目标属性
-    pub xinfa_config: XinfaConfigDTO,  // 心法配置
+    pub player: PlayerConfigDTO,
+    pub hostile: HostileConfigDTO,
+    pub xinfa_config: XinfaConfigDTO,
+    pub buff: BuffConfigDTO,
+    pub coefficient: CoefficientConfigDTO,
 }
 
-/// 技能计算结果 DTO（对应前端表格的 7 列）
 #[derive(Debug, Serialize)]
 pub struct SkillResultDTO {
-    pub skill_name: String, // 技能名称
-    pub y: u32,             // 破防系数段
-    pub b: u32,             // 基础攻击段
-    pub i: u32,             // 技能基础段
-    pub n: u32,             // 普通命中段
-    pub h: u32,             // 会心段
-    pub q: u32,             // 期望值段
+    pub skill_name: String,
+    pub y: u32,
+    pub b: u32,
+    pub i: u32,
+    pub n: u32,
+    pub h: u32,
+    pub q: u32,
 }
 
-// ============================================================================
-// DTO → 核心库类型转换
-// ============================================================================
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SkillPoolItemDTO {
+    pub skill_name: String,
+    pub skill_id: u32,
+    pub base_damage1: u32,
+    pub base_damage2: u32,
+    pub atk_xishu: f32,
+    pub watk_xishu: u32,
+    pub hit_up: u32,
+    pub huixin_up: u32,
+    pub huixiao_up: u32,
+    pub wushifangyu: u32,
+    pub wushihuajin: u32,
+    pub dot_flag: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct StepOverrideDTO {
+    pub base_damage_override: Option<f32>,
+    pub atk_xishu_override: Option<f32>,
+    pub jianshang_bili_override: Option<f32>,
+    pub wushihuajin_override: Option<f32>,
+    pub extra_atk_pct: Option<f32>,
+    pub gain_override: Option<f32>,
+    pub extra_crit_pct: Option<f32>,
+    pub extra_crit_dmg_pct: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ComboStepDTO {
+    pub skill: SkillPoolItemDTO,
+    pub overrides: Option<StepOverrideDTO>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ComboPresetDTO {
+    pub name: String,
+    pub steps: Vec<ComboStepDTO>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ComboStepResultDTO {
+    pub skill_name: String,
+    pub g_damage: u32,
+    pub h_damage: u32,
+    pub q_damage: u32,
+    pub crit_rate: f32,
+    pub cumulative_mean_wan: f64,
+    pub kill_prob: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ComboResultDTO {
+    pub steps: Vec<ComboStepResultDTO>,
+    pub total_expected_damage_wan: f64,
+    pub final_kill_prob: f64,
+    pub kill_prob_curve: Vec<(usize, f64)>,
+}
 
 impl PlayerConfigDTO {
-    /// 将前端 DTO 转换为核心库的 PlayerConfig
     pub fn into_core(self) -> jpcg_core::type_set::player::PlayerConfig {
         jpcg_core::type_set::player::PlayerConfig::new(
             self.jcsx,
@@ -82,20 +163,19 @@ impl PlayerConfigDTO {
 }
 
 impl HostileConfigDTO {
-    /// 将前端 DTO 转换为核心库的 HostilepileConfig
     pub fn into_core(self) -> jpcg_core::type_set::hostilepile::HostilepileConfig {
-        jpcg_core::type_set::hostilepile::HostilepileConfig::new(
-            self.waigong_fangyu,
-            self.neigong_fangyu,
-            self.yujin_dengji,
-            self.huajin_dengji,
-            self.jianshang_bili,
-        )
+        jpcg_core::type_set::hostilepile::HostilepileConfig {
+            waigong_fangyu: self.waigong_fangyu,
+            neigong_fangyu: self.neigong_fangyu,
+            yujin_dengji: self.yujin_dengji,
+            huajin_dengji: self.huajin_dengji,
+            jianshang_bili: self.jianshang_bili,
+            target_hp: self.target_hp,
+        }
     }
 }
 
 impl XinfaConfigDTO {
-    /// 将前端 DTO 转换为核心库的 XinfaConfig
     pub fn into_core(self) -> jpcg_core::type_set::xinfa::XinfaConfig {
         jpcg_core::type_set::xinfa::XinfaConfig::new(
             self.xinfa_name,
@@ -107,7 +187,6 @@ impl XinfaConfigDTO {
     }
 }
 
-/// 核心库计算结果 → 前端 DTO
 impl From<jpcg_core::cal::CalculateResult> for SkillResultDTO {
     fn from(core: jpcg_core::cal::CalculateResult) -> Self {
         Self {
@@ -118,6 +197,62 @@ impl From<jpcg_core::cal::CalculateResult> for SkillResultDTO {
             h: core.h,
             q: core.q,
             y: core.y,
+        }
+    }
+}
+
+impl From<ComboStepDTO> for jpcg_core::type_set::combo::ComboStep {
+    fn from(dto: ComboStepDTO) -> Self {
+        jpcg_core::type_set::combo::ComboStep {
+            skill_id: dto.skill.skill_id,
+            skill_name: dto.skill.skill_name,
+            overrides: dto.overrides.map(|o| jpcg_core::type_set::combo::StepOverride {
+                base_damage_override: o.base_damage_override,
+                atk_xishu_override: o.atk_xishu_override,
+                jianshang_bili_override: o.jianshang_bili_override,
+                wushihuajin_override: o.wushihuajin_override,
+                extra_atk_pct: o.extra_atk_pct,
+                gain_override: o.gain_override,
+                extra_crit_pct: o.extra_crit_pct,
+                extra_crit_dmg_pct: o.extra_crit_dmg_pct,
+            }),
+        }
+    }
+}
+
+impl From<jpcg_core::type_set::combo::ComboPreset> for ComboPresetDTO {
+    fn from(core: jpcg_core::type_set::combo::ComboPreset) -> Self {
+        Self {
+            name: core.name,
+            steps: core.steps.into_iter().map(|s| {
+                let mut skill = SkillPoolItemDTO {
+                    skill_name: s.skill_name,
+                    skill_id: s.skill_id,
+                    ..Default::default()
+                };
+                if let Some(ref o) = s.overrides {
+                    if let Some(v) = o.base_damage_override {
+                        skill.base_damage1 = v as u32;
+                        skill.base_damage2 = v as u32;
+                    }
+                    if let Some(v) = o.atk_xishu_override {
+                        skill.atk_xishu = v;
+                    }
+                }
+                ComboStepDTO {
+                    skill,
+                    overrides: s.overrides.map(|o| StepOverrideDTO {
+                        base_damage_override: o.base_damage_override,
+                        atk_xishu_override: o.atk_xishu_override,
+                        jianshang_bili_override: o.jianshang_bili_override,
+                        wushihuajin_override: o.wushihuajin_override,
+                        extra_atk_pct: o.extra_atk_pct,
+                        gain_override: o.gain_override,
+                        extra_crit_pct: o.extra_crit_pct,
+                        extra_crit_dmg_pct: o.extra_crit_dmg_pct,
+                    }),
+                }
+            }).collect(),
         }
     }
 }

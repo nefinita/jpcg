@@ -40,7 +40,7 @@
   -webkit-text-fill-color: transparent;
 }
 
-.content {
+.calcLayout {
   display: flex;
   flex: 1;
   gap: var(--space-lg);
@@ -60,7 +60,7 @@
 }
 
 @media (max-width: 1100px) {
-  .content {
+  .calcLayout {
     flex-direction: column;
   }
   .configPanel {

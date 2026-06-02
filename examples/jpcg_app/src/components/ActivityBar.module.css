@@ -2,23 +2,30 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-sm);
-  width: 44px;
+  gap: var(--space-xs);
+  width: 48px;
   padding: var(--space-sm) 0;
   background: var(--glass-bg);
   border-right: 1px solid var(--border-subtle);
   backdrop-filter: var(--glass-blur);
+  transition: width var(--duration-fast) var(--ease-out);
+  overflow: hidden;
+}
+
+.bar.expanded {
+  width: 92px;
 }
 
 .btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: 6px var(--space-sm);
   border-radius: var(--radius-sm);
   font-size: 1rem;
   transition: all var(--duration-fast) var(--ease-out);
+  flex-shrink: 0;
 }
 
 .btn:hover {
@@ -28,4 +35,30 @@
 .active {
   background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
   box-shadow: var(--shadow-glow);
+}
+
+.icon {
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.label {
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.toggleBtn {
+  margin-top: auto;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  opacity: 0.4;
+  transition: opacity var(--duration-fast);
+  width: 100%;
+}
+
+.toggleBtn:hover {
+  opacity: 1;
+  background: var(--glass-highlight);
 }

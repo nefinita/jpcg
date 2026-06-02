@@ -1,14 +1,14 @@
 import { useState, useCallback } from "react";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
-import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import type { SkillResultDTO, FormData } from "./types";
 import * as api from "./api/commands";
 import ActivityBar from "./components/ActivityBar";
 import ThemeToggle from "./components/ThemeToggle";
 import ConfigPanel from "./components/ConfigPanel";
 import ResultTable from "./components/ResultTable";
-import Sidebar from "./components/Sidebar";
+import ForumPage from "./components/ForumPage";
+import ComboPage from "./components/ComboPage";
 import StatusBar from "./components/StatusBar";
 import Toast from "./components/Toast";
 import styles from "./App.module.css";
@@ -16,23 +16,16 @@ import styles from "./App.module.css";
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const { toasts, addToast, removeToast } = useToast();
-  const [sidebar, setSidebar] = useState<"forum" | "combo" | null>(null);
+  const [curPage, setCurPage] = useState<"calc" | "forum" | "combo">("calc");
   const [results, setResults] = useState<SkillResultDTO[] | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [status, setStatus] = useState("就绪");
-
-  const closeSidebar = useCallback(() => setSidebar(null), []);
-  const toggleSidebar = useCallback(
-    (panel: "forum" | "combo") => {
-      setSidebar((prev) => (prev === panel ? null : panel));
-    },
-    [],
-  );
-
-  useKeyboardShortcuts({ Escape: closeSidebar });
+  const [currentXinfa, setCurrentXinfa] = useState("mowen");
+  const [formData, setFormData] = useState<FormData | null>(null);
 
   const handleCalculate = useCallback(
     async (form: FormData) => {
+      setFormData(form);
       setCalculating(true);
       setStatus("计算中...");
       try {
@@ -52,8 +45,11 @@ export default function App() {
             yujin_dengji: form.hostile.yujin_dengji ?? 0,
             huajin_dengji: form.hostile.huajin_dengji ?? 0,
             jianshang_bili: form.hostile.jianshang_bili ?? 0,
+            target_hp: form.hostile.target_hp ?? 0,
           },
           xinfa_config: form.xinfa_config,
+          buff: form.buff,
+          coefficient: form.coefficient,
         };
         const data = await api.calculateDamage(req);
         setResults(data);
@@ -72,36 +68,33 @@ export default function App() {
   return (
     <div className={styles.container}>
       <div className={styles.body}>
-        <ActivityBar
-          activePanel={sidebar}
-          onToggle={toggleSidebar}
-        />
-        <Sidebar
-          panel={sidebar}
-          onClose={closeSidebar}
-          results={results}
-        />
+        <ActivityBar currentPage={curPage} onNavigate={setCurPage} />
         <div className={styles.main}>
           <header className={styles.header}>
             <div className={styles.logo}>剑心 PVP 计算器</div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </header>
-          <div className={styles.content}>
-            <div className={styles.configPanel}>
-              <ConfigPanel
-                onCalculate={handleCalculate}
-                calculating={calculating}
-                addToast={addToast}
-                setStatus={setStatus}
-              />
+          {curPage === "calc" && (
+            <div className={styles.calcLayout}>
+              <div className={styles.configPanel}>
+                <ConfigPanel
+                  onCalculate={handleCalculate}
+                  calculating={calculating}
+                  addToast={addToast}
+                  setStatus={setStatus}
+                  onXinfaChange={setCurrentXinfa}
+                />
+              </div>
+              <div className={styles.resultPanel}>
+                <ResultTable
+                  results={results}
+                  calculating={calculating}
+                />
+              </div>
             </div>
-            <div className={styles.resultPanel}>
-              <ResultTable
-                results={results}
-                calculating={calculating}
-              />
-            </div>
-          </div>
+          )}
+          {curPage === "forum" && <ForumPage />}
+          {curPage === "combo" && <ComboPage xinfaName={currentXinfa} formData={formData} />}
         </div>
       </div>
       <StatusBar message={status} />

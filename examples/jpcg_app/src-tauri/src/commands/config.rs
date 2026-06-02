@@ -30,6 +30,7 @@ pub fn load_config_cmd() -> Result<CalculateRequest, String> {
             yujin_dengji: saved.hostilepile.yujin_dengji,
             huajin_dengji: saved.hostilepile.huajin_dengji,
             jianshang_bili: saved.hostilepile.jianshang_bili,
+            target_hp: saved.hostilepile.target_hp,
         },
         xinfa_config: XinfaConfigDTO {
             xinfa_name: saved.xinfa.xinfa_name,
@@ -38,7 +39,35 @@ pub fn load_config_cmd() -> Result<CalculateRequest, String> {
             pofang_up: saved.xinfa.pofang_up,
             huixin_up: saved.xinfa.huixin_up,
         },
+        buff: BuffConfigDTO {
+            base_atk_pct: saved.buff.base_atk_pct,
+            huixin_pct: saved.buff.huixin_pct,
+            huixiao_pct: saved.buff.huixiao_pct,
+            pofang_pct: saved.buff.pofang_pct,
+            wushi_fangyu_pct: saved.buff.wushi_fangyu_pct,
+            shanghai_pct: saved.buff.shanghai_pct,
+            mode_is_point: saved.buff.mode_is_point,
+        },
+        coefficient: CoefficientConfigDTO {
+            pofang_xishu: saved.coefficient.pofang_xishu,
+            huixin_xishu: saved.coefficient.huixin_xishu,
+            huixiao_xishu: saved.coefficient.huixiao_xishu,
+            huajin_xishu: saved.coefficient.huajin_xishu,
+            fangyu_xishu: saved.coefficient.fangyu_xishu,
+            pvp_global_jianshang: saved.coefficient.pvp_global_jianshang,
+        },
     })
+}
+
+#[tauri::command]
+pub fn list_professions_cmd() -> Result<Vec<XinfaSummaryDTO>, String> {
+    let list = jpcg_core::profession_list::list_available();
+    Ok(list.into_iter().map(|s| XinfaSummaryDTO {
+        value: s.value,
+        label: s.label,
+        nom: s.nom,
+        version_label: s.version_label,
+    }).collect())
 }
 
 #[tauri::command]
