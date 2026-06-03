@@ -20,6 +20,7 @@ const defaultForm = (): FormData => ({
   player: Object.fromEntries(PLAYER_FIELDS.map((f) => [f.id, 0])) as Record<string, number>,
   hostile: Object.fromEntries(HOSTILE_FIELDS.map((f) => [f.id, 0])) as Record<string, number>,
   xinfa_config: {
+    profession: "mowen",
     xinfa_name: "莫问",
     xinfa_nom: "gengu",
     atk_up: 0,
@@ -37,7 +38,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       : null;
     const defaultXinfa = last || "mowen";
     const entry = XINFA_FALLBACK.find((x) => x.value === defaultXinfa) || XINFA_FALLBACK[0];
-    return { ...defaultForm(), xinfa: defaultXinfa, xinfa_config: { ...defaultForm().xinfa_config, xinfa_name: entry.label } };
+    return { ...defaultForm(), xinfa: defaultXinfa, xinfa_config: { ...defaultForm().xinfa_config, xinfa_name: entry.label, profession: defaultXinfa } };
   });
 
   const [professionOptions, setProfessionOptions] = useState<{value: string; label: string; nom: string; version_label: string | null}[]>(
@@ -62,7 +63,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     setForm((prev): FormData => ({
       ...prev,
       xinfa: value,
-      xinfa_config: { ...prev.xinfa_config, xinfa_name: entry?.label ?? defaultXinfa.label },
+      xinfa_config: { ...prev.xinfa_config, xinfa_name: entry?.label ?? defaultXinfa.label, profession: value },
     }));
     onXinfaChange?.(value);
     api.loadProfessionConfig(value).then((cfg) => {
@@ -70,6 +71,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         setForm((prev): FormData => ({
           ...prev,
           xinfa_config: {
+            profession: String(cfg.profession) || value,
             xinfa_name: String(cfg.xinfa_name),
             xinfa_nom: String(cfg.xinfa_nom),
             atk_up: Number(cfg.atk_up) || 0,
@@ -132,8 +134,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         addToast("没有已保存的配置", "warning");
         return;
       }
-      const entry = professionOptions.find((x) => x.label === cfg.xinfa_config.xinfa_name);
-      const xinfaVal = entry?.value || "mowen";
+      const xinfaVal = cfg.xinfa_config.profession || "mowen";
       localStorage.setItem(STORAGE_KEYS.lastXinfa, xinfaVal);
       setForm({
         xinfa: xinfaVal,

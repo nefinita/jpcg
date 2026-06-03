@@ -94,6 +94,35 @@
   cursor: not-allowed;
 }
 
+.actionCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+.downloadedBadge {
+  font-size: 0.7rem;
+  color: var(--success, #22c55e);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.deleteBtn {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--error, #ef4444);
+  color: var(--error, #ef4444);
+  font-size: 0.75rem;
+  transition: background var(--duration-fast);
+}
+
+.deleteBtn:hover {
+  background: var(--error, #ef4444);
+  color: #fff;
+}
+
 .emptyHint {
   color: var(--text-muted);
   font-size: 0.85rem;

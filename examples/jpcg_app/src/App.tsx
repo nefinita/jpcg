@@ -71,29 +71,27 @@ export default function App() {
         <ActivityBar currentPage={curPage} onNavigate={setCurPage} />
         <div className={styles.main}>
           <header className={styles.header}>
-            <div className={styles.logo}>剑心 PVP 计算器</div>
+            <div className={styles.logo}>剑网3PVP计算器（JPCG）</div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </header>
-          {curPage === "calc" && (
-            <div className={styles.calcLayout}>
-              <div className={styles.configPanel}>
-                <ConfigPanel
-                  onCalculate={handleCalculate}
-                  calculating={calculating}
-                  addToast={addToast}
-                  setStatus={setStatus}
-                  onXinfaChange={setCurrentXinfa}
-                />
-              </div>
-              <div className={styles.resultPanel}>
-                <ResultTable
-                  results={results}
-                  calculating={calculating}
-                />
-              </div>
+          <div className={styles.calcLayout} style={{ display: curPage === "calc" ? "" : "none" }}>
+            <div className={styles.configPanel}>
+              <ConfigPanel
+                onCalculate={handleCalculate}
+                calculating={calculating}
+                addToast={addToast}
+                setStatus={setStatus}
+                onXinfaChange={setCurrentXinfa}
+              />
             </div>
-          )}
-          {curPage === "forum" && <ForumPage />}
+            <div className={styles.resultPanel}>
+              <ResultTable
+                results={results}
+                calculating={calculating}
+              />
+            </div>
+          </div>
+          {curPage === "forum" && <ForumPage addToast={addToast} />}
           {curPage === "combo" && <ComboPage xinfaName={currentXinfa} formData={formData} />}
         </div>
       </div>

@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::io::toml_input;
-use crate::log::{error, info, warn};
+use crate::log::info;
 
 /// 从 data/atk_config.toml 加载属性映射数据（预留）
 fn data_load() {

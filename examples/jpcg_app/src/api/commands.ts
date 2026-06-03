@@ -63,7 +63,8 @@ export async function saveConfig(config: Record<string, unknown>): Promise<void>
     player: _sanitizeNumbers(config.player as Record<string, unknown>),
     hostile: _sanitizeNumbers(config.hostile as Record<string, unknown>),
     xinfa: {
-      xinfa_name: (config.xinfa_config as Record<string, unknown>).xinfa_name,
+      profession: (config.xinfa_config as Record<string, unknown>).profession as string,
+      xinfa_name: (config.xinfa_config as Record<string, unknown>).xinfa_name as string,
       xinfa_nom: (config.xinfa_config as Record<string, unknown>).xinfa_nom,
       atk_up: Number((config.xinfa_config as Record<string, unknown>).atk_up) || 0,
       pofang_up: Number((config.xinfa_config as Record<string, unknown>).pofang_up) || 0,
@@ -118,6 +119,18 @@ export async function forumDownloadFile(filename: string, forumUrl = "http://loc
   const args: Record<string, unknown> = { forumUrl, filename };
   if (category !== undefined) args.category = category;
   return invoke("forum_download_file", args);
+}
+
+export async function forumListDownloaded(category?: string): Promise<string[]> {
+  const args: Record<string, unknown> = {};
+  if (category !== undefined) args.category = category;
+  return invoke("forum_list_downloaded", args);
+}
+
+export async function forumDeleteDownloaded(filename: string, category?: string): Promise<string> {
+  const args: Record<string, unknown> = { filename };
+  if (category !== undefined) args.category = category;
+  return invoke("forum_delete_downloaded", args);
 }
 
 export async function forumListCategories(forumUrl = "http://localhost:8080"): Promise<string[]> {
@@ -245,6 +258,10 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       ];
     case "forum_download_file":
       return "下载成功（模拟）";
+    case "forum_list_downloaded":
+      return ["mowen.toml", "template.toml"];
+    case "forum_delete_downloaded":
+      return "删除成功（模拟）";
     case "forum_list_categories":
       return ["shuxing", "combo"];
     case "load_skill_pool":

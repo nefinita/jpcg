@@ -19,14 +19,14 @@ use crate::{
 use serde::Serialize;
 
 /// 启动完整伤害计算
-/// 1. 定位可执行文件所在目录下的 data/shuxing/{心法名}.toml
+/// 1. 定位可执行文件所在目录下的 data/shuxing/{profession}.toml
 /// 2. 解析 TOML 获得技能列表
 /// 3. 对每个技能调用单技能伤害计算
 ///
 /// # 参数
 /// - `player`: 玩家属性（基础属性、攻击、会心、破防、武器伤害）
 /// - `hostilepile`: 目标属性（外内防、御劲、化劲、减伤）
-/// - `xinfa`: 心法配置（心法名、根骨/元气、攻击/破防/会心加成）
+/// - `xinfa`: 心法配置（心法 key、心法名、根骨/元气、攻击/破防/会心加成）
 ///
 /// # 返回
 /// - `Ok(Vec<CalculateResult>)`: 每个技能的各段伤害结果
@@ -57,7 +57,7 @@ pub fn start_calculation_with_config(
         }
     };
 
-    let file_path = dir.join(xinfa.xinfa_name.clone());
+    let file_path = dir.join(xinfa.profession.clone());
     let file_path_str = match file_path.to_str() {
         Some(s) => s.to_string(),
         None => {

@@ -141,13 +141,15 @@ pub fn load_config(profession: &str) -> TomlConfig {
     }
     // 读取并解析
     let content = toml_input(&file_path_str);
-    match toml::from_str(&content) {
-        Ok(config) => config,
+    let mut config: TomlConfig = match toml::from_str(&content) {
+        Ok(c) => c,
         Err(e) => {
             error(&format!("解析心法 '{}' 的 TOML 配置失败: {}", profession, e));
-            TomlConfig::default()
+            return TomlConfig::default();
         }
-    }
+    };
+    config.xinfa.profession = profession.to_string();
+    config
 }
 
 // ============================================================================
@@ -330,7 +332,7 @@ pub fn list_available_professions() -> Vec<XinfaSummary> {
             Ok(c) => c,
             Err(_) => continue,
         };
-        let cfg: TomlConfig = match toml::from_str(&content) {
+        let mut cfg: TomlConfig = match toml::from_str(&content) {
             Ok(c) => c,
             Err(_) => continue,
         };
@@ -342,6 +344,7 @@ pub fn list_available_professions() -> Vec<XinfaSummary> {
             None
         };
 
+        cfg.xinfa.profession = key.clone();
         by_group.entry(key.clone()).or_default().push(XinfaSummary {
             value: key.clone(),
             label: cfg.xinfa.xinfa_name,

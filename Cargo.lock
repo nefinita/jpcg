@@ -1304,7 +1304,7 @@ dependencies = [
 
 [[package]]
 name = "forum"
-version = "2.0.0-alpha.0"
+version = "2.1.0-alpha.1"
 dependencies = [
  "axum",
  "futures-util",
@@ -2247,7 +2247,7 @@ dependencies = [
 
 [[package]]
 name = "jpcg_app"
-version = "0.1.0"
+version = "2.1.0-alpha.1"
 dependencies = [
  "jpcg_core",
  "jpcg_update",
@@ -2261,11 +2261,11 @@ dependencies = [
 
 [[package]]
 name = "jpcg_const"
-version = "2.0.0-alpha.0"
+version = "2.1.0-alpha.1"
 
 [[package]]
 name = "jpcg_core"
-version = "2.0.0-alpha.0"
+version = "2.1.0-alpha.1"
 dependencies = [
  "colorized",
  "serde",
@@ -2274,7 +2274,7 @@ dependencies = [
 
 [[package]]
 name = "jpcg_update"
-version = "2.0.0-alpha.0"
+version = "2.1.0-alpha.1"
 dependencies = [
  "clap",
  "flate2",
@@ -2438,7 +2438,7 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "manifest-gen"
-version = "2.0.0-alpha.0"
+version = "2.1.0-alpha.1"
 dependencies = [
  "clap",
  "hex",

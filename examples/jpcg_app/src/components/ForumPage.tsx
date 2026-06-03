@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ForumFileInfo } from "../types";
 import { FORUM_URL } from "../utils/constants";
 import * as api from "../api/commands";
@@ -6,10 +6,15 @@ import styles from "./ForumPage.module.css";
 
 const PAGE_SIZE = 10;
 
-export default function ForumPage() {
+interface Props {
+  addToast?: (msg: string, type?: "success" | "error" | "warning" | "info") => void;
+}
+
+export default function ForumPage({ addToast }: Props) {
   const [category, setCategory] = useState("shuxing");
   const [categories, setCategories] = useState<string[]>([]);
   const [files, setFiles] = useState<ForumFileInfo[]>([]);
+  const [downloadedFiles, setDownloadedFiles] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -18,11 +23,42 @@ export default function ForumPage() {
     api.forumListCategories(FORUM_URL).then(setCategories).catch(() => {});
   }, []);
 
+  const refreshDownloaded = useCallback(() => {
+    api.forumListDownloaded(category).then(setDownloadedFiles).catch(() => {});
+  }, [category]);
+
   useEffect(() => {
     setLoading(true);
     setPage(0);
-    api.forumListFiles(FORUM_URL, category).then(setFiles).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      api.forumListFiles(FORUM_URL, category),
+      api.forumListDownloaded(category).catch(() => [] as string[]),
+    ]).then(([fileList, downloaded]) => {
+      setFiles(fileList);
+      setDownloadedFiles(downloaded);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [category]);
+
+  const handleDownload = useCallback(async (filename: string) => {
+    try {
+      await api.forumDownloadFile(filename, FORUM_URL, category);
+      addToast?.("已下载: " + filename, "success");
+      refreshDownloaded();
+    } catch (err) {
+      addToast?.(String(err), "error");
+    }
+  }, [category, addToast, refreshDownloaded]);
+
+  const handleDelete = useCallback(async (filename: string) => {
+    if (!window.confirm(`确定删除 ${filename}？`)) return;
+    try {
+      await api.forumDeleteDownloaded(filename, category);
+      addToast?.("已删除: " + filename, "info");
+      refreshDownloaded();
+    } catch (err) {
+      addToast?.(String(err), "error");
+    }
+  }, [category, addToast, refreshDownloaded]);
 
   const filtered = files.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase()),
@@ -52,13 +88,25 @@ export default function ForumPage() {
           <table className={styles.fileTable}>
             <thead><tr><th>文件名</th><th>大小</th><th></th></tr></thead>
             <tbody>
-              {pageFiles.map((f) => (
-                <tr key={f.name}>
-                  <td>{f.name}</td>
-                  <td>{f.size > 1024 ? `${(f.size / 1024).toFixed(0)}KB` : `${f.size}B`}</td>
-                  <td><button className={styles.downloadBtn} onClick={async () => { try { await api.forumDownloadFile(f.name, FORUM_URL, category); } catch {} }}>下载</button></td>
-                </tr>
-              ))}
+              {pageFiles.map((f) => {
+                const isDownloaded = downloadedFiles.includes(f.name);
+                return (
+                  <tr key={f.name}>
+                    <td>{f.name}</td>
+                    <td>{f.size > 1024 ? `${(f.size / 1024).toFixed(0)}KB` : `${f.size}B`}</td>
+                    <td className={styles.actionCell}>
+                      {isDownloaded ? (
+                        <>
+                          <span className={styles.downloadedBadge}>已下载</span>
+                          <button className={styles.deleteBtn} onClick={() => handleDelete(f.name)}>删除</button>
+                        </>
+                      ) : (
+                        <button className={styles.downloadBtn} onClick={() => handleDownload(f.name)}>下载</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {totalPages > 1 && (

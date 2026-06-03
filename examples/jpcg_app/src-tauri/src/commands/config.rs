@@ -33,6 +33,7 @@ pub fn load_config_cmd() -> Result<CalculateRequest, String> {
             target_hp: saved.hostilepile.target_hp,
         },
         xinfa_config: XinfaConfigDTO {
+            profession: saved.xinfa.profession,
             xinfa_name: saved.xinfa.xinfa_name,
             xinfa_nom: saved.xinfa.xinfa_nom,
             atk_up: saved.xinfa.atk_up,
@@ -75,6 +76,7 @@ pub fn load_profession_config(profession: String) -> Result<XinfaConfigDTO, Stri
     let toml_cfg = jpcg_core::load_config::show_config(&profession);
 
     Ok(XinfaConfigDTO {
+        profession: toml_cfg.xinfa.profession,
         xinfa_name: toml_cfg.xinfa.xinfa_name,
         xinfa_nom: toml_cfg.xinfa.xinfa_nom,
         atk_up: toml_cfg.xinfa.atk_up,

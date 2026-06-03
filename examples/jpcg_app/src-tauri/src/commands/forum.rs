@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::fs;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -6,6 +7,23 @@ pub(crate) struct ForumFileInfo {
     name: String,
     size: u64,
     modified: String,
+}
+
+fn download_dir(category: &str) -> PathBuf {
+    let exe = std::env::current_exe().ok();
+    let exe_dir = exe.as_ref().and_then(|p| p.parent());
+    let base_dir = exe_dir.map(|p| p.to_path_buf()).unwrap_or_default();
+
+    if exe_dir.map_or(false, |d| d.ends_with("MacOS")) {
+        let home = std::env::var("HOME").unwrap_or_default();
+        PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("com.qinthirteen.jpcg")
+            .join(category)
+    } else {
+        base_dir.join("data").join(category)
+    }
 }
 
 #[tauri::command]
@@ -77,16 +95,7 @@ pub async fn forum_download_file(
         .await
         .map_err(|e| format!("读取文件数据失败: {}", e))?;
 
-    let exe = std::env::current_exe().ok();
-    let exe_dir = exe.as_ref().and_then(|p| p.parent());
-    let base_dir = exe_dir.map(|p| p.to_path_buf()).unwrap_or_default();
-
-    let dest_dir = if exe_dir.map_or(false, |d| d.ends_with("MacOS")) {
-        let home = std::env::var("HOME").unwrap_or_default();
-        PathBuf::from(home).join("Library").join("Application Support").join("com.qinthirteen.jpcg").join(&cat)
-    } else {
-        base_dir.join("data").join(&cat)
-    };
+    let dest_dir = download_dir(&cat);
     std::fs::create_dir_all(&dest_dir)
         .map_err(|e| format!("创建目录失败: {}", e))?;
 
@@ -95,4 +104,44 @@ pub async fn forum_download_file(
         .map_err(|e| format!("保存文件失败: {}", e))?;
 
     Ok(format!("已下载: {}", filename))
+}
+
+#[tauri::command]
+pub fn forum_list_downloaded(category: Option<String>) -> Result<Vec<String>, String> {
+    let cat = category.unwrap_or_else(|| "shuxing".to_string());
+    let dir = download_dir(&cat);
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut files = Vec::new();
+    let entries = fs::read_dir(&dir).map_err(|e| format!("读取目录失败: {}", e))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
+        if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.ends_with(".toml") {
+                    files.push(name.to_string());
+                }
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+#[tauri::command]
+pub fn forum_delete_downloaded(
+    filename: String,
+    category: Option<String>,
+) -> Result<String, String> {
+    if !filename.ends_with(".toml") {
+        return Err("仅支持删除 .toml 文件".to_string());
+    }
+    let cat = category.unwrap_or_else(|| "shuxing".to_string());
+    let path = download_dir(&cat).join(&filename);
+    if !path.exists() {
+        return Err(format!("文件不存在: {}", filename));
+    }
+    fs::remove_file(&path).map_err(|e| format!("删除文件失败: {}", e))?;
+    Ok(format!("已删除: {}", filename))
 }

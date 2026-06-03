@@ -38,6 +38,7 @@ export interface CoefficientConfigDTO {
 }
 
 export interface XinfaConfigDTO {
+  profession: string;
   xinfa_name: string;
   xinfa_nom: string;
   atk_up: number;
@@ -158,6 +159,7 @@ export interface FormData {
   player: Record<string, number>;
   hostile: Record<string, number>;
   xinfa_config: {
+    profession: string;
     xinfa_name: string;
     xinfa_nom: string;
     atk_up: number;

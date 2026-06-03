@@ -58,6 +58,7 @@ pub struct CoefficientConfigDTO {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct XinfaConfigDTO {
+    pub profession: String,
     pub xinfa_name: String,
     pub xinfa_nom: String,
     pub atk_up: f32,
@@ -178,6 +179,7 @@ impl HostileConfigDTO {
 impl XinfaConfigDTO {
     pub fn into_core(self) -> jpcg_core::type_set::xinfa::XinfaConfig {
         jpcg_core::type_set::xinfa::XinfaConfig::new(
+            self.profession,
             self.xinfa_name,
             self.xinfa_nom,
             self.atk_up,

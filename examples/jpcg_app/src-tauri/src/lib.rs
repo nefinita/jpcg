@@ -15,6 +15,8 @@ pub fn run() {
             commands::forum::forum_list_files,
             commands::forum::forum_list_categories,
             commands::forum::forum_download_file,
+            commands::forum::forum_list_downloaded,
+            commands::forum::forum_delete_downloaded,
             commands::data::load_skill_pool,
             commands::combo::calculate_combo_cmd,
             commands::combo::save_combo_preset,
