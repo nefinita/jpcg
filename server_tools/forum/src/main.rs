@@ -29,7 +29,7 @@ const INDEX_HTML: &str = r#"<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>剑网3PVP数据分享论坛</title>
+<title>JX3 PVP 数据分享论坛</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
@@ -70,7 +70,7 @@ tr:hover td { background: #f8f9fa; }
 <body>
 <div class="container">
 <div class="header">
-<h1>剑网3PVP数据分享论坛</h1>
+ <h1>JX3 PVP 数据分享论坛</h1>
 <p>上传和分享剑网3 PVP 计算器数据文件（.toml）</p>
 </div>
 

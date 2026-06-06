@@ -1,4 +1,4 @@
-# JPCG — 剑心PVP计算器
+# JPCG - JX3 PVP 计算器
 
 Rust workspace for a 剑网3 damage calculator. Edition 2024 (requires rustc >= 1.85).
 
