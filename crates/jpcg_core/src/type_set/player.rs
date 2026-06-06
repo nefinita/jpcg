@@ -64,25 +64,13 @@ impl PlayerConfig {
 
     /// 计算实际攻击力
     /// 公式: (基础攻击+基础属性) × (1 + 心法攻击加成)
-    /// - `atk_up`: 心法等提供的额外攻击百分比加成
+    /// - `shuxing_atk_up`: 基础属性提供的攻击加成
     /// - 返回: AtkConfig，分离基础攻击和武器伤害
-    pub fn atk(&self, atk_up: f32) -> AtkConfig {
-        let base = self.jichu_gongji as f32 + self.jichu_shuxing as f32 * atk_up;
+    pub fn atk(&self, shuxing_atk_up: f32) -> AtkConfig {
+        let base = self.jichu_gongji as f32 + self.jichu_shuxing as f32 * shuxing_atk_up;
         AtkConfig {
             base: base as u32,
             extra: self.wuqi_shanghai,
-        }
-    }
-
-    /// 根据基础属性类型计算攻击加成（预留公式）
-    /// 当前统一返回 jichu_shuxing × 2
-    fn jcsx_to_atk(&self) -> u32 {
-        match self.jcsx.as_str() {
-            "gengu" | "yuanqi" | "lidao" | "shenfa" => self.jichu_shuxing * 2,
-            _ => {
-                error(format!("未知的基础属性类型: {}", self.jcsx).as_str());
-                0
-            }
         }
     }
 
@@ -122,8 +110,8 @@ impl PlayerConfig {
     }
 
     /// 计算最终攻击力（含心法加成 + 阵眼增益）
-    pub fn atk_with_buff(&self, atk_up: f32, buff_atk_pct: f32) -> AtkConfig {
-        let base = (self.jichu_gongji as f32 + self.jichu_shuxing as f32 * atk_up)
+    pub fn atk_with_buff(&self, shuxing_atk_up: f32, buff_atk_pct: f32) -> AtkConfig {
+        let base = (self.jichu_gongji as f32 + self.jichu_shuxing as f32 * shuxing_atk_up)
             * (1.0 + buff_atk_pct / 100.0);
         AtkConfig {
             base: base as u32,
