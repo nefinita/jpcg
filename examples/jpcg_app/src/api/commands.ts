@@ -11,6 +11,7 @@ import type {
   ComboPresetDTO,
   ComboResultDTO,
   XinfaSummaryDTO,
+  AttributeConfigDocumentDTO,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -148,6 +149,14 @@ export function listenUpdateProgress(callback: (event: UpdateProgressEvent) => v
 
 export async function loadSkillPool(profession: string): Promise<SkillPoolItemDTO[]> {
   return invoke("load_skill_pool", { profession });
+}
+
+export async function loadAttributeConfig(profession: string): Promise<AttributeConfigDocumentDTO> {
+  return invoke("load_attribute_config", { profession });
+}
+
+export async function saveAttributeConfig(profession: string, content: string): Promise<string> {
+  return invoke("save_attribute_config", { profession, content });
 }
 
 export async function calculateCombo(
@@ -297,6 +306,14 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       return { name: args?.name || "预设", steps: [] };
     case "list_professions_cmd":
       return XINFA_LIST_MOCK;
+    case "load_attribute_config":
+      return {
+        profession: String(args?.profession || "mowen"),
+        file_name: `${String(args?.profession || "mowen")}.toml`,
+        content: `[xinfa]\nxinfa_name = "莫问"\nxinfa_nom = "根骨"\natk_up = 1.96\npofang_up = 2.0\nhuixin_up = 0.0\n\n[version]\nlevel = 130\nseason = 3\nmodified = 20260602\n\n[[skill]]\nskill_name = "宫"\nskill_id = 10447\nsub_id = 14474\ngroup = 1\nweapon_request = 0\ndesign_effect = 0\nkind_type = 0\ncast_mode = 0\nguaranteed_hit = false\nhas_critical_strike = true\neffect_type = 0\njihuoqixue = ""\nbase_damage1 = 160\nbase_damage2 = 200\natk_xishu = 2.609375\nwatk_xishu = 0\nhit_up = 0\nhuixin_up = 0\nhuixiao_up = 0\nwushifangyu = 0\nwushihuajin = 0\nwushijianshang = 0\nzhenshishanghai = 0\ndot_flag = 0\n`,
+      };
+    case "save_attribute_config":
+      return `${String(args?.profession || "mowen")}.toml`;
     case "export_config_cmd":
       return "# 模拟导出配置\n[xinfa]\nxinfa_name = \"莫问\"\n";
     case "import_config_cmd":

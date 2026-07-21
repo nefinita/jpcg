@@ -68,6 +68,16 @@ pub mod config_io {
     }
 }
 
+pub mod attribute_config_io {
+    pub fn read(profession: &str) -> Result<String, String> {
+        crate::io::read_attribute_config(profession)
+    }
+
+    pub fn write(profession: &str, content: &str) -> Result<(), String> {
+        crate::io::write_attribute_config(profession, content)
+    }
+}
+
 pub mod profession_list {
     use crate::type_set::xinfa::XinfaSummary;
 

@@ -141,6 +141,12 @@ export interface XinfaSummaryDTO {
   version_label: string | null;
 }
 
+export interface AttributeConfigDocumentDTO {
+  profession: string;
+  file_name: string;
+  content: string;
+}
+
 export interface ForumFileInfo {
   name: string;
   size: number;

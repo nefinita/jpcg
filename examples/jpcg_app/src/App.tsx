@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import { lazy, Suspense, useState, useCallback } from "react";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
 import type { SkillResultDTO, FormData } from "./types";
 import * as api from "./api/commands";
 import ActivityBar from "./components/ActivityBar";
+import type { AppPage } from "./components/ActivityBar";
 import ThemeToggle from "./components/ThemeToggle";
 import ConfigPanel from "./components/ConfigPanel";
 import ResultTable from "./components/ResultTable";
@@ -13,10 +14,12 @@ import StatusBar from "./components/StatusBar";
 import Toast from "./components/Toast";
 import styles from "./App.module.css";
 
+const AttributeEditorPage = lazy(() => import("./components/AttributeEditorPage"));
+
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const { toasts, addToast, removeToast } = useToast();
-  const [curPage, setCurPage] = useState<"calc" | "forum" | "combo">("calc");
+  const [curPage, setCurPage] = useState<AppPage>("calc");
   const [results, setResults] = useState<SkillResultDTO[] | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [status, setStatus] = useState("就绪");
@@ -93,6 +96,15 @@ export default function App() {
           </div>
           {curPage === "forum" && <ForumPage addToast={addToast} />}
           {curPage === "combo" && <ComboPage xinfaName={currentXinfa} formData={formData} />}
+          {curPage === "attribute" && (
+            <Suspense fallback={<div className={styles.pageLoading}>正在加载属性编辑器...</div>}>
+              <AttributeEditorPage
+                addToast={addToast}
+                setStatus={setStatus}
+                currentXinfa={currentXinfa}
+              />
+            </Suspense>
+          )}
         </div>
       </div>
       <StatusBar message={status} />

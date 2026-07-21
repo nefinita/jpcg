@@ -38,8 +38,11 @@
 }
 
 .icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  line-height: 1;
+  place-items: center;
 }
 
 .label {
@@ -49,6 +52,7 @@
 }
 
 .toggleBtn {
+  display: grid;
   margin-top: auto;
   padding: 6px;
   border-radius: var(--radius-sm);
@@ -56,6 +60,7 @@
   opacity: 0.4;
   transition: opacity var(--duration-fast);
   width: 100%;
+  place-items: center;
 }
 
 .toggleBtn:hover {

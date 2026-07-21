@@ -18,6 +18,8 @@ pub fn run() {
             commands::forum::forum_list_downloaded,
             commands::forum::forum_delete_downloaded,
             commands::data::load_skill_pool,
+            commands::data::load_attribute_config,
+            commands::data::save_attribute_config,
             commands::combo::calculate_combo_cmd,
             commands::combo::save_combo_preset,
             commands::combo::list_combo_presets,

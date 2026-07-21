@@ -8,6 +8,7 @@
   --primary-500: #6366f1;
   --primary-600: #4f46e5;
   --primary-700: #4338ca;
+  --primary-soft: rgba(99, 102, 241, 0.14);
   --accent-400: #c084fc;
   --accent-500: #a855f7;
   --accent-600: #9333ea;
@@ -59,6 +60,7 @@
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.9);
+  --primary-soft: rgba(99, 102, 241, 0.1);
 
   --bg-base: #f8fafc;
   --bg-surface: #ffffff;

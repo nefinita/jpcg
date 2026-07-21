@@ -152,6 +152,47 @@ pub fn load_config(profession: &str) -> TomlConfig {
     config
 }
 
+fn validate_profession_name(profession: &str) -> Result<(), String> {
+    if profession.is_empty()
+        || profession.starts_with('_')
+        || profession == "."
+        || profession == ".."
+        || profession.chars().any(|ch| !(ch.is_ascii_alphanumeric() || ch == '_' || ch == '-'))
+    {
+        return Err("心法文件名无效".to_string());
+    }
+    Ok(())
+}
+
+/// 读取属性编辑器使用的心法 TOML 原文。
+pub fn read_attribute_config(profession: &str) -> Result<String, String> {
+    validate_profession_name(profession)?;
+    let dir = data_dir().ok_or_else(|| "无法定位应用数据目录".to_string())?;
+    let path = dir.join(format!("{}.toml", profession));
+    std::fs::read_to_string(&path).map_err(|e| format!("读取配置文件失败: {}", e))
+}
+
+/// 将属性编辑器内容保存回现有心法文件。
+/// 只允许覆盖已有文件，避免编辑器无意中创建无法被心法列表识别的新配置。
+pub fn write_attribute_config(profession: &str, content: &str) -> Result<(), String> {
+    validate_profession_name(profession)?;
+    let config: TomlConfig = toml::from_str(content).map_err(|e| format!("配置格式无效: {}", e))?;
+    if config.xinfa.xinfa_name.trim().is_empty() || config.xinfa.xinfa_nom.trim().is_empty() {
+        return Err("配置缺少 [xinfa] 心法信息".to_string());
+    }
+    if config.skill.is_empty() {
+        return Err("配置至少需要一个 [[skill]] 技能条目".to_string());
+    }
+
+    let dir = data_dir().ok_or_else(|| "无法定位应用数据目录".to_string())?;
+    let path = dir.join(format!("{}.toml", profession));
+    if !path.is_file() {
+        return Err("只能保存已有心法配置".to_string());
+    }
+
+    std::fs::write(&path, content).map_err(|e| format!("写入配置文件失败: {}", e))
+}
+
 // ============================================================================
 // save_config — 保存玩家配置到本地文件
 // 输出文件: 工作目录下的 saved_config.toml
