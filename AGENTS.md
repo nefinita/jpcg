@@ -9,6 +9,7 @@ Rust workspace for a 剑网3 damage calculator. Edition 2024 (requires rustc >= 
 | `crates/jpcg_core/` | Core calculation engine + FFI exports (`extern "C"`) |
 | `crates/jpcg_const/` | Drug/food buff constants (unused by other crates) |
 | `crates/jpcg_update/` | App + data auto-update (fetches from `nefinita-ai.com`) |
+| `crates/jpcg_updater/` | Standalone updater binary — replaces main exe & relaunches |
 | `examples/jpcg_app/src-tauri/` | Tauri v2 desktop app (this IS the app, not a mere example) |
 | `server_tools/manifest-gen/` | CLI to generate `data_manifest.toml` from `./data/` |
 | `server_tools/forum/` | Web forum for uploading/downloading `.toml` data files |
@@ -27,6 +28,15 @@ cargo run -p forum                   # start forum (port 8080 by default)
 # npm install && npx tauri dev    (requires @tauri-apps/cli, frontendDist: ../dist)
 # For Vite dev server only: npm run dev (port 1420)
 # Frontend build only: npm run build
+
+# Before Tauri build, compile & copy updater (see server_manifest.md for details):
+# cargo build -p jpcg_updater
+# cp target/debug/jpcg_updater examples/jpcg_app/src-tauri/binaries/jpcg_updater-$(rustc -vV | grep host | cut -d' ' -f2)
+
+# Update server manifest generation (参考 server_manifest.md):
+# 1. 将 app binary + manifest.toml 放到对应版本目录
+# 2. 更新 update.toml
+# 3. 将 updater binary 放到所有版本目录的公共位置
 ```
 
 No CI, test suites, or formatter config exist.
