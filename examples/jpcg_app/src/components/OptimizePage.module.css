@@ -1,0 +1,258 @@
+.page {
+  flex: 1;
+  padding: var(--space-lg) var(--space-xl);
+  overflow-y: auto;
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: 1rem;
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.header {
+  margin-bottom: var(--space-lg);
+}
+
+.header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.controls {
+  margin-bottom: var(--space-lg);
+}
+
+.primaryBtn {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  background: var(--primary-500);
+  color: #fff;
+}
+
+.primaryBtn:hover {
+  background: var(--primary-600);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  font-size: 0.85rem;
+}
+
+.section {
+  margin-bottom: var(--space-xl);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.closeBtn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 推荐 */
+.recommendCard {
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  font-size: 0.9rem;
+}
+
+.recommendRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.better {
+  color: var(--primary-500);
+  font-size: 1rem;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.topChip {
+  background: var(--glass-highlight);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 0.85rem;
+}
+
+/* 表格 */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 2px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.attrName {
+  font-weight: 500;
+}
+
+.benefitCell {
+  font-weight: 600;
+  color: var(--primary-500);
+}
+
+.expandBtn {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.expandBtn:hover {
+  background: var(--glass-highlight);
+}
+
+/* 各技能导数列表 */
+.skillDerivList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+}
+
+.skillDerivItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.skillDerivItem:hover {
+  background: var(--glass-highlight);
+  border-color: var(--primary-500);
+}
+
+.skillName {
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.skillDeriv {
+  font-size: 0.8rem;
+  color: var(--primary-500);
+}
+
+/* 柱状图 */
+.barChart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--glass-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.barLabel {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barTrack {
+  flex: 1;
+  height: 20px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width var(--duration-fast) var(--ease-out);
+  min-width: 2px;
+}
+
+.barPositive {
+  background: linear-gradient(90deg, var(--primary-400), var(--primary-500));
+}
+
+.barNegative {
+  background: linear-gradient(90deg, var(--danger-bg, #ef4444), var(--danger-text, #dc2626));
+}
+
+.barValue {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary);
+}

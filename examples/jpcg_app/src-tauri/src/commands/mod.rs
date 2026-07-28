@@ -3,5 +3,7 @@ pub mod combo;
 pub mod config;
 pub mod data;
 pub mod forum;
+pub mod optimize;
+pub mod skill_editor;
 pub mod types;
 pub mod update;

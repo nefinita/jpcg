@@ -149,6 +149,243 @@ pub struct ComboResultDTO {
     pub kill_prob_curve: Vec<(usize, f64)>,
 }
 
+// ============ 自动求导 DTO ============
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillDerivativeDTO {
+    pub skill_name: String,
+    pub derivative: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DerivativeEntryDTO {
+    pub attr_name: String,
+    pub attr_id: String,
+    pub current_value: f32,
+    pub total_derivative: f32,
+    pub per_skill: Vec<SkillDerivativeDTO>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CritVsPofangDTO {
+    pub better: String,
+    pub huixin_total: f32,
+    pub pofang_total: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopAttrDTO {
+    pub attr_name: String,
+    pub attr_id: String,
+    pub total_derivative: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OptimizeRecommendationDTO {
+    pub crit_vs_pofang: CritVsPofangDTO,
+    pub top3: Vec<TopAttrDTO>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DerivativesOutputDTO {
+    pub derivatives: Vec<DerivativeEntryDTO>,
+    pub recommendation: OptimizeRecommendationDTO,
+}
+
+impl From<jpcg_core::cal::derivatives::SkillDerivative> for SkillDerivativeDTO {
+    fn from(d: jpcg_core::cal::derivatives::SkillDerivative) -> Self {
+        SkillDerivativeDTO {
+            skill_name: d.skill_name,
+            derivative: d.derivative,
+        }
+    }
+}
+
+impl From<jpcg_core::cal::derivatives::DerivativeEntry> for DerivativeEntryDTO {
+    fn from(d: jpcg_core::cal::derivatives::DerivativeEntry) -> Self {
+        DerivativeEntryDTO {
+            attr_name: d.attr_name,
+            attr_id: d.attr_id,
+            current_value: d.current_value,
+            total_derivative: d.total_derivative,
+            per_skill: d.per_skill.into_iter().map(SkillDerivativeDTO::from).collect(),
+        }
+    }
+}
+
+impl From<jpcg_core::cal::derivatives::CritVsPofang> for CritVsPofangDTO {
+    fn from(c: jpcg_core::cal::derivatives::CritVsPofang) -> Self {
+        CritVsPofangDTO {
+            better: c.better,
+            huixin_total: c.huixin_total,
+            pofang_total: c.pofang_total,
+        }
+    }
+}
+
+impl From<jpcg_core::cal::derivatives::TopAttr> for TopAttrDTO {
+    fn from(t: jpcg_core::cal::derivatives::TopAttr) -> Self {
+        TopAttrDTO {
+            attr_name: t.attr_name,
+            attr_id: t.attr_id,
+            total_derivative: t.total_derivative,
+        }
+    }
+}
+
+impl From<jpcg_core::cal::derivatives::OptimizeRecommendation> for OptimizeRecommendationDTO {
+    fn from(r: jpcg_core::cal::derivatives::OptimizeRecommendation) -> Self {
+        OptimizeRecommendationDTO {
+            crit_vs_pofang: CritVsPofangDTO::from(r.crit_vs_pofang),
+            top3: r.top3.into_iter().map(TopAttrDTO::from).collect(),
+        }
+    }
+}
+
+impl From<jpcg_core::cal::derivatives::DerivativesOutput> for DerivativesOutputDTO {
+    fn from(o: jpcg_core::cal::derivatives::DerivativesOutput) -> Self {
+        DerivativesOutputDTO {
+            derivatives: o.derivatives.into_iter().map(DerivativeEntryDTO::from).collect(),
+            recommendation: OptimizeRecommendationDTO::from(o.recommendation),
+        }
+    }
+}
+
+// ============ 技能编辑器 DTO ============
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SkillEditorItemDTO {
+    pub skill_name: String,
+    pub skill_id: u32,
+    pub sub_id: u32,
+    pub group: u8,
+    pub weapon_request: u8,
+    pub design_effect: u8,
+    pub kind_type: u8,
+    pub cast_mode: u8,
+    pub guaranteed_hit: bool,
+    pub has_critical_strike: bool,
+    pub effect_type: u8,
+    pub jihuoqixue: String,
+    pub base_damage1: u32,
+    pub base_damage2: u32,
+    pub atk_xishu: f32,
+    pub watk_xishu: u32,
+    pub hit_up: u32,
+    pub huixin_up: u32,
+    pub huixiao_up: u32,
+    pub wushifangyu: u32,
+    pub wushihuajin: u32,
+    pub wushijianshang: u32,
+    pub zhenshishanghai: u32,
+    pub dot_flag: u8,
+    pub dot_num: u8,
+    pub dot_up: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct VersionInfoDTO {
+    pub level: u32,
+    pub season: u32,
+    pub modified: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SkillEditorDataDTO {
+    pub xinfa: XinfaConfigDTO,
+    pub version: Option<VersionInfoDTO>,
+    pub skills: Vec<SkillEditorItemDTO>,
+}
+
+impl From<SkillEditorItemDTO> for jpcg_core::type_set::skilltype::Skilltype {
+    fn from(dto: SkillEditorItemDTO) -> Self {
+        jpcg_core::type_set::skilltype::Skilltype {
+            skill_name: dto.skill_name,
+            skill_id: dto.skill_id,
+            sub_id: dto.sub_id,
+            group: dto.group,
+            weapon_request: dto.weapon_request,
+            design_effect: dto.design_effect,
+            kind_type: dto.kind_type,
+            cast_mode: dto.cast_mode,
+            guaranteed_hit: dto.guaranteed_hit,
+            has_critical_strike: dto.has_critical_strike,
+            effect_type: dto.effect_type,
+            jihuoqixue: dto.jihuoqixue,
+            base_damage1: dto.base_damage1,
+            base_damage2: dto.base_damage2,
+            atk_xishu: dto.atk_xishu,
+            watk_xishu: dto.watk_xishu,
+            hit_up: dto.hit_up,
+            huixin_up: dto.huixin_up,
+            huixiao_up: dto.huixiao_up,
+            wushifangyu: dto.wushifangyu,
+            wushihuajin: dto.wushihuajin,
+            wushijianshang: dto.wushijianshang,
+            zhenshishanghai: dto.zhenshishanghai,
+            dot_flag: dto.dot_flag,
+            dot_num: dto.dot_num,
+            dot_up: dto.dot_up,
+        }
+    }
+}
+
+impl From<jpcg_core::type_set::skilltype::Skilltype> for SkillEditorItemDTO {
+    fn from(core: jpcg_core::type_set::skilltype::Skilltype) -> Self {
+        SkillEditorItemDTO {
+            skill_name: core.skill_name,
+            skill_id: core.skill_id,
+            sub_id: core.sub_id,
+            group: core.group,
+            weapon_request: core.weapon_request,
+            design_effect: core.design_effect,
+            kind_type: core.kind_type,
+            cast_mode: core.cast_mode,
+            guaranteed_hit: core.guaranteed_hit,
+            has_critical_strike: core.has_critical_strike,
+            effect_type: core.effect_type,
+            jihuoqixue: core.jihuoqixue,
+            base_damage1: core.base_damage1,
+            base_damage2: core.base_damage2,
+            atk_xishu: core.atk_xishu,
+            watk_xishu: core.watk_xishu,
+            hit_up: core.hit_up,
+            huixin_up: core.huixin_up,
+            huixiao_up: core.huixiao_up,
+            wushifangyu: core.wushifangyu,
+            wushihuajin: core.wushihuajin,
+            wushijianshang: core.wushijianshang,
+            zhenshishanghai: core.zhenshishanghai,
+            dot_flag: core.dot_flag,
+            dot_num: core.dot_num,
+            dot_up: core.dot_up,
+        }
+    }
+}
+
+impl From<VersionInfoDTO> for jpcg_core::type_set::xinfa::VersionInfo {
+    fn from(dto: VersionInfoDTO) -> Self {
+        jpcg_core::type_set::xinfa::VersionInfo {
+            level: dto.level,
+            season: dto.season,
+            modified: dto.modified,
+        }
+    }
+}
+
+impl From<jpcg_core::type_set::xinfa::VersionInfo> for VersionInfoDTO {
+    fn from(core: jpcg_core::type_set::xinfa::VersionInfo) -> Self {
+        VersionInfoDTO {
+            level: core.level,
+            season: core.season,
+            modified: core.modified,
+        }
+    }
+}
+
 impl PlayerConfigDTO {
     pub fn into_core(self) -> jpcg_core::type_set::player::PlayerConfig {
         jpcg_core::type_set::player::PlayerConfig::new(

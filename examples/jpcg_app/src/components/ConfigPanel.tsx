@@ -48,6 +48,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [updateProgress, setUpdateProgress] = useState(0);
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
+  const [betaChannel, setBetaChannel] = useState(() => localStorage.getItem(STORAGE_KEYS.betaChannel) === "true");
 
   useEffect(() => {
     api.listProfessions().then((list) => {
@@ -204,13 +205,21 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     input.click();
   }, [addToast, handleLoad]);
 
+  const handleBetaToggle = useCallback(() => {
+    setBetaChannel((prev) => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEYS.betaChannel, String(next));
+      return next;
+    });
+  }, []);
+
   const handleUpdateClick = useCallback(async () => {
     if (updating) return;
     setUpdating(true);
     setUpdateProgress(0);
     setUpdateMessage("正在检查更新...");
     try {
-      const result = await api.checkUpdate(false, false);
+      const result = await api.checkUpdate(betaChannel, false);
       setUpdateCheckResult(result);
       if (!result.has_data_update && !result.has_app_update) {
         setUpdateMessage("已是最新版本");
@@ -218,13 +227,43 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         setUpdating(false);
         return;
       }
+
+      // 处理应用更新
+      if (result.has_app_update && result.latest_app_version) {
+        const ok = window.confirm(
+          `发现新版本 ${result.latest_app_version}，是否下载并重启应用？`
+        );
+        if (!ok) {
+          setUpdateMessage("已取消");
+          setUpdating(false);
+          return;
+        }
+        setUpdateMessage("正在下载更新...");
+        addToast(`开始更新到 ${result.latest_app_version}`, "info");
+        const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
+          setUpdateProgress(evt.progress);
+          setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
+        });
+        try {
+          await api.performAppUpdate(betaChannel);
+        } finally {
+          unlisten();
+        }
+        // 执行到这里说明重启失败
+        setUpdateMessage("重启失败");
+        addToast("重启失败，请手动重启应用", "error");
+        setUpdating(false);
+        return;
+      }
+
+      // 仅数据更新
       setUpdateMessage(`发现 ${result.data_files_to_update.length} 个文件需要更新`);
       addToast("发现更新", "info");
       const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
         setUpdateProgress(evt.progress);
         setUpdateMessage(`正在下载: ${evt.file || evt.message}`);
       });
-      await api.performUpdate(false, result);
+      await api.performUpdate(betaChannel, result);
       unlisten();
       setUpdateProgress(1);
       setUpdateMessage("更新完成");
@@ -235,7 +274,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     } finally {
       setUpdating(false);
     }
-  }, [updating, addToast]);
+  }, [updating, betaChannel, addToast]);
 
   useEffect(() => {
     handleXinfaChange(form.xinfa);
@@ -340,6 +379,10 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleClear}>清空</button>
           <button className={styles.btn} onClick={handleExport}>导出</button>
           <button className={styles.btn} onClick={handleImport}>导入</button>
+          <label className={styles.betaToggle}>
+            <input type="checkbox" checked={betaChannel} onChange={handleBetaToggle} />
+            Beta 版本
+          </label>
           <button className={styles.btn} onClick={handleUpdateClick} disabled={updating}>
             {updating ? "更新中..." : "检查更新"}
           </button>

@@ -12,11 +12,13 @@ pub fn run() {
             commands::config::load_profession_config,
             commands::update::check_update,
             commands::update::perform_update,
+            commands::update::perform_app_update,
             commands::forum::forum_list_files,
             commands::forum::forum_list_categories,
             commands::forum::forum_download_file,
             commands::forum::forum_list_downloaded,
             commands::forum::forum_delete_downloaded,
+            commands::optimize::compute_derivatives,
             commands::data::load_skill_pool,
             commands::combo::calculate_combo_cmd,
             commands::combo::save_combo_preset,
@@ -25,6 +27,8 @@ pub fn run() {
             commands::combo::delete_combo_preset,
             commands::combo::export_config_cmd,
             commands::combo::import_config_cmd,
+            commands::skill_editor::load_skill_data,
+            commands::skill_editor::save_skill_data,
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用程序时发生错误");

@@ -2,15 +2,19 @@ import { useState } from "react";
 import clsx from "../utils/clsx";
 import styles from "./ActivityBar.module.css";
 
+export type Page = "calc" | "forum" | "combo" | "editor" | "optimize";
+
 interface Props {
-  currentPage: "calc" | "forum" | "combo";
-  onNavigate: (page: "calc" | "forum" | "combo") => void;
+  currentPage: Page;
+  onNavigate: (page: Page) => void;
 }
 
 const ITEMS = [
   { page: "calc" as const, icon: "📊", label: "计算" },
   { page: "forum" as const, icon: "🌐", label: "论坛" },
   { page: "combo" as const, icon: "🔗", label: "排轴器" },
+  { page: "optimize" as const, icon: "📈", label: "加点优化" },
+  { page: "editor" as const, icon: "✏️", label: "技能编辑" },
 ];
 
 export default function ActivityBar({ currentPage, onNavigate }: Props) {
