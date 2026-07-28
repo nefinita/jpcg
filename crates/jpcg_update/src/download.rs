@@ -152,6 +152,15 @@ pub struct UpdateCheckResult {
     pub data_files_to_update: Vec<String>,       // 需要更新的数据文件列表
 }
 
+/// 应用更新信息（由 fetch_app_update_info 返回）
+#[derive(Debug, Clone, Serialize)]
+pub struct AppUpdateInfo {
+    pub download_url: String,         // 二进制文件下载 URL
+    pub expected_hash: String,        // 期望的 SHA256 哈希
+    pub binary_path: String,          // manifest 中的 relative path
+    pub version: String,              // 目标版本号（如 "v2.1.0"）
+}
+
 /// 版本目录信息
 /// 由服务器目录列表解析得出（每个版本号对应一个目录，内含 manifest.toml）
 #[derive(Debug)]
@@ -273,14 +282,12 @@ pub async fn check_binary_update_needed(
 
     // 本地文件不存在，需要下载
     if !local_binary_path.exists() {
-        println!("本地可执行文件 {} 不存在，需要下载。", local_binary_path.display());
         return Ok(true);
     }
 
     // 本地文件存在但哈希不匹配，需要更新
     let local_hash = calculate_file_sha256(&local_binary_path).await?;
     if local_hash != target_binary_entry.hash {
-        println!("本地可执行文件 {} 哈希值不匹配，需要更新。", local_binary_path.display());
         Ok(true)
     } else {
         Ok(false)
@@ -298,22 +305,13 @@ pub async fn determine_other_updates_by_hash(
         for file_entry in files_list {
             let local_file_path = base_path.join(&file_entry.path);
 
-            // 文件不存在，需要下载
             if !local_file_path.exists() {
-                println!("本地文件 {} 不存在，添加到更新列表。", local_file_path.display());
                 updates_needed.insert(file_entry.path.clone(), file_entry.hash.clone());
                 continue;
             }
 
-            // 文件存在但哈希不匹配，需要更新
             let local_hash = calculate_file_sha256(&local_file_path).await?;
             if local_hash != file_entry.hash {
-                println!(
-                    "文件 {} 哈希值不匹配。本地: {}, 期望: {}。添加到更新列表。",
-                    local_file_path.display(),
-                    local_hash,
-                    file_entry.hash
-                );
                 updates_needed.insert(file_entry.path.clone(), file_entry.hash.clone());
             }
         }
@@ -334,14 +332,12 @@ pub async fn check_data_updates(
         let local_path = data_dir.join(&file_entry.path);
 
         if !local_path.exists() {
-            println!("数据文件 {} 不存在，需要下载。", file_entry.path);
             needed.push(file_entry.clone());
             continue;
         }
 
         let local_hash = calculate_file_sha256(&local_path).await?;
         if local_hash != file_entry.hash {
-            println!("数据文件 {} 哈希不匹配，需要更新。", file_entry.path);
             needed.push(file_entry.clone());
         }
     }
@@ -488,6 +484,7 @@ pub async fn replace_file_or_prompt(
     from: &Path,
     to: &Path,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    #[cfg(debug_assertions)]
     if to.exists() {
         println!("正在替换现有文件: {}", to.display());
     } else {
@@ -506,6 +503,7 @@ pub async fn replace_file_or_prompt(
         .await
         .map_err(|e| format!("复制文件 '{}' 到 '{}' 失败: {}", from.display(), to.display(), e))?;
 
+    #[cfg(debug_assertions)]
     println!("文件已复制/替换: {}", to.display());
     Ok(())
 }
@@ -543,29 +541,32 @@ pub async fn download_and_parse_manifest(
     let manifest: Manifest = toml::from_str(&toml_text)?;
 
     // 验证所有哈希类型是否均为 SHA256
-    if let Some(pkg) = &manifest.compressed_package
-        && pkg.hash_type != "SHA256"
+    #[cfg(debug_assertions)]
     {
-        eprintln!(
-            "警告: 压缩包 '{}' 的哈希类型 '{}' 不受支持。期望 SHA256。",
-            pkg.path, pkg.hash_type
-        );
-    }
-    for binary_entry in &manifest.binaries {
-        if binary_entry.hash_type != "SHA256" {
+        if let Some(pkg) = &manifest.compressed_package
+            && pkg.hash_type != "SHA256"
+        {
             eprintln!(
-                "警告: 二进制文件 '{}' 的哈希类型 '{}' 不受支持。期望 SHA256。",
-                binary_entry.path, binary_entry.hash_type
+                "警告: 压缩包 '{}' 的哈希类型 '{}' 不受支持。期望 SHA256。",
+                pkg.path, pkg.hash_type
             );
         }
-    }
-    if let Some(files_list) = &manifest.files {
-        for file_entry in files_list {
-            if file_entry.hash_type != "SHA256" {
+        for binary_entry in &manifest.binaries {
+            if binary_entry.hash_type != "SHA256" {
                 eprintln!(
-                    "警告: 文件 '{}' 的哈希类型 '{}' 不受支持。期望 SHA256。",
-                    file_entry.path, file_entry.hash_type
+                    "警告: 二进制文件 '{}' 的哈希类型 '{}' 不受支持。期望 SHA256。",
+                    binary_entry.path, binary_entry.hash_type
                 );
+            }
+        }
+        if let Some(files_list) = &manifest.files {
+            for file_entry in files_list {
+                if file_entry.hash_type != "SHA256" {
+                    eprintln!(
+                        "警告: 文件 '{}' 的哈希类型 '{}' 不受支持。期望 SHA256。",
+                        file_entry.path, file_entry.hash_type
+                    );
+                }
             }
         }
     }
@@ -978,12 +979,6 @@ async fn decompress_package_with_external_tool(
     package_path: &Path,
     target_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    println!(
-        "正在使用外部工具 7z 解压 {} 到 {}...",
-        package_path.display(),
-        target_dir.display()
-    );
-
     let output = Command::new("7z")
         .arg("x")
         .arg("-y")
@@ -997,6 +992,5 @@ async fn decompress_package_with_external_tool(
         return Err(format!("解压命令失败: {}", stderr_str).into());
     }
 
-    println!("解压成功完成。");
     Ok(())
 }

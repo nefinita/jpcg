@@ -109,6 +109,101 @@ pub async fn check_updates(
 }
 
 // ============================================================================
+// fetch_app_update_info — 获取应用二进制更新信息
+// 返回下载 URL、哈希值、二进制路径等，供 Tauri 命令下载后启动更新器。
+// ============================================================================
+
+/// 获取应用二进制更新的详细信息
+/// - `base_path`: 应用根目录路径（用于检测本地是否需要更新）
+/// - `beta`: 是否使用 Beta 通道
+/// - `force`: 强制返回信息（即使本地已是最新）
+/// - 返回: Option<AppUpdateInfo>，如果无需更新或获取失败则返回 None
+pub async fn fetch_app_update_info(
+    _base_path: &Path,
+    beta: bool,
+    force: bool,
+) -> Result<Option<AppUpdateInfo>, Box<dyn std::error::Error + Send + Sync>> {
+    let local_info = load_local_version_info()?;
+    let use_beta = beta || local_info.channel == "beta";
+    let base_url = if use_beta { BETA_BASE_URL } else { UPDATE_BASE_URL };
+    let _channel = if use_beta { "beta" } else { "stable" };
+
+    let latest = fetch_latest_version_info(base_url).await?;
+    let latest_info = match latest {
+        Some(info) => info,
+        None => return Ok(None),
+    };
+
+    // 如果无需更新且未指定 force，跳过
+    if !force && local_info.version.as_deref() == Some(&latest_info.version) {
+        return Ok(None);
+    }
+
+    // 获取版本目录
+    let version_dirs = if use_beta {
+        // Beta 版: manifest 直接位于根目录
+        let manifest_url = format!("{}{}", base_url.trim_end_matches('/'), "/manifest.toml");
+        match download::download_and_parse_manifest(&manifest_url).await {
+            Ok(manifest) => {
+                vec![VersionDirectory {
+                    dir_name: manifest.version.clone().unwrap_or_else(|| "beta".to_string()),
+                    manifest,
+                }]
+            }
+            Err(e) => {
+                eprintln!("获取 Beta 清单失败: {}", e);
+                return Ok(None);
+            }
+        }
+    } else {
+        // 稳定版: 从版本目录列表中选择
+        let dirs = fetch_all_version_directories(base_url).await?;
+        let target = if let Some(major) = latest_info.major_version {
+            find_latest_version_in_major(&dirs, major)?
+        } else {
+            dirs.first()
+        };
+        match target {
+            Some(dir) => vec![VersionDirectory {
+                dir_name: dir.dir_name.clone(),
+                manifest: dir.manifest.clone(),
+            }],
+            None => return Ok(None),
+        }
+    };
+
+    let target_dir = match version_dirs.first() {
+        Some(d) => d,
+        None => return Ok(None),
+    };
+
+    let target_binary = select_target_binary(
+        &target_dir.manifest.binaries,
+        env::consts::OS,
+        env::consts::ARCH,
+    )?;
+
+    // 计算下载 URL
+    let download_url = if use_beta {
+        format!("{}{}", base_url.trim_end_matches('/'), target_binary.path)
+    } else {
+        format!(
+            "{}{}/{}",
+            base_url.trim_end_matches('/'),
+            target_dir.dir_name,
+            target_binary.path
+        )
+    };
+
+    Ok(Some(AppUpdateInfo {
+        download_url,
+        expected_hash: target_binary.hash.clone(),
+        binary_path: target_binary.path.clone(),
+        version: target_dir.dir_name.clone(),
+    }))
+}
+
+// ============================================================================
 // download_updates — 根据检查结果执行下载和安装
 // 接收 check_updates 返回的检查结果，遍历需要更新的文件逐一下载。
 // 通过 ProgressCallback 回调向前端/CLI 报告进度。

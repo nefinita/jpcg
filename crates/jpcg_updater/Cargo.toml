@@ -1,0 +1,7 @@
+[package]
+name = "jpcg_updater"
+version = "2.1.0"
+edition = "2024"
+description = "JPCG 自动更新器 — 替换主程序二进制并重新启动"
+
+[dependencies]
