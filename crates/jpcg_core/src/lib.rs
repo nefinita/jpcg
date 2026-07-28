@@ -76,6 +76,46 @@ pub mod profession_list {
     }
 }
 
+pub mod skill_editor {
+    use crate::io::{self, TomlConfig};
+    use crate::type_set::skilltype::Skilltype;
+    use crate::type_set::xinfa::{VersionInfo, XinfaConfig};
+
+    pub fn load_skills(profession: &str) -> TomlConfig {
+        io::load_config(profession)
+    }
+
+    pub fn save_skills(
+        profession: &str,
+        xinfa: XinfaConfig,
+        skills: Vec<Skilltype>,
+        version: Option<VersionInfo>,
+    ) -> Result<(), String> {
+        let config = TomlConfig { xinfa, skill: skills, version };
+        io::save_skill_toml(profession, config)
+    }
+}
+
+pub mod derivatives {
+    use crate::cal;
+    use crate::type_set::{
+        buff::BuffConfig, coefficient::CoefficientConfig,
+        hostilepile::HostilepileConfig, player::PlayerConfig, skilltype::Skilltype,
+        xinfa::XinfaConfig,
+    };
+
+    pub fn compute_derivatives(
+        player: &PlayerConfig,
+        hostile: &HostilepileConfig,
+        buff: &BuffConfig,
+        coeff: &CoefficientConfig,
+        xinfa: &XinfaConfig,
+        skills: &[Skilltype],
+    ) -> cal::derivatives::DerivativesOutput {
+        cal::derivatives::compute_derivatives(player, hostile, buff, coeff, xinfa, skills)
+    }
+}
+
 pub mod calculate {
     use std::io::Error;
 

@@ -69,8 +69,8 @@ pub fn toml_input(profession: &str) -> String {
 //   ...
 // ============================================================================
 
-/// 心法技能配置（从 TOML 文件解析）
-#[derive(Default, Deserialize)]
+/// 心法技能配置（从 TOML 文件解析/写入）
+#[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct TomlConfig {
     pub xinfa: xinfa::XinfaConfig,           // 心法基础配置
@@ -290,6 +290,16 @@ pub fn import_config_toml(toml_str: &str) -> Result<(), String> {
         .map_err(|e| format!("序列化失败: {}", e))?;
     std::fs::write("saved_config.toml", content)
         .map_err(|e| format!("写入文件失败: {}", e))
+}
+
+/// 保存技能配置到心法数据文件
+pub fn save_skill_toml(profession: &str, config: TomlConfig) -> Result<(), String> {
+    let dir = data_dir().ok_or("无法获取数据目录")?;
+    let file_path = dir.join(format!("{}.toml", profession));
+    let content = toml::to_string_pretty(&config).map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(&file_path, &content).map_err(|e| format!("写入文件失败: {}", e))?;
+    info(&format!("技能数据已保存到: {:?}", file_path));
+    Ok(())
 }
 
 fn group_key(filename: &str) -> Option<String> {

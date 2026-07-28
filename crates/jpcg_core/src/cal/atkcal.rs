@@ -1,10 +1,3 @@
-// ============================================================================
-// atkcal — 单技能伤害计算器
-// 实现剑网3 伤害计算的核心公式链:
-//   Y(破防系数) → B(基础攻击) → I(技能基础) → G(普通命中) → H(会心) → Q(期望)
-// 每一段计算依赖前一段的结果，最终输出 5 段伤害。
-// ============================================================================
-
 use crate::type_set::buff::BuffConfig;
 use crate::type_set::coefficient::CoefficientConfig;
 use crate::type_set::hostilepile::HostilepileConfig;
@@ -13,19 +6,16 @@ use crate::type_set::skilltype::Skilltype;
 use crate::type_set::xinfa::XinfaConfig;
 
 /// 单技能伤害计算器
-/// 聚合玩家属性、目标防御、技能数据、心法加成四个维度的输入，
-/// 通过链式调用逐步计算各段伤害。
 pub struct JpcgConfig {
-    player: PlayerConfig,           // 玩家属性（攻击、会心、破防等）
-    hostilepile: HostilepileConfig, // 目标属性（防御、御劲、化劲、减伤）
-    skilltype: Skilltype,           // 当前技能数据（系数、增伤等）
-    xinfa: XinfaConfig,             // 心法加成（根骨/元气、破防/会心百分比）
-    buff: BuffConfig,               // 阵眼/奇穴增益
-    coeff: CoefficientConfig,       // 可配置系数
+    player: PlayerConfig,
+    hostilepile: HostilepileConfig,
+    skilltype: Skilltype,
+    xinfa: XinfaConfig,
+    buff: BuffConfig,
+    coeff: CoefficientConfig,
 }
 
 impl JpcgConfig {
-    /// 创建单技能计算器实例
     pub fn new(
         playerdata: PlayerConfig,
         hostilepiledata: HostilepileConfig,
@@ -42,7 +32,6 @@ impl JpcgConfig {
         }
     }
 
-    /// 创建带增益和系数配置的计算器实例
     pub fn new_with_config(
         playerdata: PlayerConfig,
         hostilepiledata: HostilepileConfig,
@@ -57,7 +46,6 @@ impl JpcgConfig {
         config
     }
 
-    /// 计算目标的实际防御系数（含无视防御 + 增益无视防御）
     fn guo_fangyu(&self) -> u32 {
         let wushifangyu_total = self.skilltype.wushifangyu
             + (self.buff.wushi_fangyu_pct * 1024.0 / 100.0) as u32;
@@ -67,7 +55,6 @@ impl JpcgConfig {
         }
     }
 
-    /// 计算实际会心率（玩家会心率 - 目标御劲会心减免 + 增益会心）
     pub fn guo_huixin(&self) -> f32 {
         let player_crit = self.player.guo_huixin_with(&self.coeff) + self.buff.huixin_pct / 100.0;
         let enemy_crit_reduce = self.hostilepile.guo_yujin_huixin_with(&self.coeff);
@@ -78,21 +65,16 @@ impl JpcgConfig {
         }
     }
 
-    /// Y 段: 破防系数
     fn y_cal(&self) -> u32 {
         let pofang = self.player.guo_pofang_with(&self.coeff)
             + (self.buff.pofang_pct * 1024.0 / 100.0) as u32;
         1024 + pofang - ((1024.0 + pofang as f32) * (self.guo_fangyu() as f32 / 1024.0)) as u32
     }
 
-    /// B 段: 基础攻击力（含阵眼增益）
     fn b_cal(&self) -> u32 {
         self.player.atk_with_buff(self.xinfa.atk_up, self.buff.base_atk_pct).total()
     }
 
-    /// I 段: 技能基础伤害
-    /// = 技能基础攻击 + B段 × 技能伤害系数 + 武器伤害 × 武器系数 / 100
-    /// 输出 [0, atk_sum, skill_damage, 0, 0] 原始面板伤害
     fn i_cal(&self) -> [u32; 5] {
         let atk = self.b_cal();
         let x = self.skilltype.base_atk()
@@ -101,7 +83,6 @@ impl JpcgConfig {
         [0, atk, x, 0, 0]
     }
 
-    /// G 段: 普通命中伤害
     fn g_cal(&self) -> [u32; 5] {
         let i = self.i_cal();
         let y = self.y_cal();
@@ -118,7 +99,6 @@ impl JpcgConfig {
         [y, i[1], i[2], x, 0]
     }
 
-    /// H 段: 会心伤害
     fn h_cal(&self) -> [u32; 5] {
         let i = self.g_cal();
         let g_damage = i[3];
@@ -136,34 +116,127 @@ impl JpcgConfig {
     }
 
     /// Q 段: 期望伤害（最终结果）
+    /// crit_rate = 自身会心率 - 目标御劲减免 + 技能增益
+    /// buff.huixin_pct 已在 guo_huixin() 中计入，此处不再重复
     pub fn q_cal(&self) -> DamageResult {
         let i = self.h_cal();
-        let crit_rate = self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0
-            + self.buff.huixin_pct / 100.0;
+        let crit_rate = self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0;
         let x = (i[3] as f32 * (1.0 - crit_rate) + i[4] as f32 * crit_rate) as u32;
         DamageResult::new(i, x)
+    }
+
+    /// 正向计算伤害 + 反向求导（链式法则）
+    /// 对 6 个玩家属性分别计算 ∂Q/∂attr，忽略中间 as u32 截断（连续近似）
+    pub fn q_cal_with_derivatives(&self) -> DamageResultWithDerivatives {
+        // ---- forward ----
+        let y = self.y_cal();
+        let i_arr = self.i_cal();
+        let g_arr = self.g_cal();
+        let h_arr = self.h_cal();
+        let result = self.q_cal();
+
+        // ---- intermediates (f32, 连续) ----
+        let i_hit = i_arr[2] as f32;
+        let g_damage = g_arr[3] as f32;
+        let h_damage = h_arr[4] as f32;
+        let y_val = y as f32;
+
+        let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
+        let hit_up = self.skilltype.hit_up as f32 / 100.0;
+        let huajin = self.hostilepile.guo_huajin_with(&self.coeff) as f32;
+        let pvp = self.coeff.pvp_global_jianshang;
+        let jianshang_bili = self.hostilepile.jianshang_bili as f32 / 100.0;
+        let crit_rate = self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0;
+
+        let huixiao = self.player.guo_huixinxiaoguo_with(&self.coeff) as f32;
+        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(&self.coeff) as f32;
+        let buff_huixiao_f = self.buff.huixiao_pct * 1024.0 / 100.0;
+
+        // ---- 公共导数因子 ----
+        // dG/dI2（无截断连续近似）
+        let dg_di2 = (1.0 + hit_up) * shanghai_buff
+            * (y_val / 1024.0)
+            * (1.0 - huajin / 1024.0)
+            * pvp
+            * (1.0 - jianshang_bili);
+
+        // H = G + G * h_factor * yujin_factor
+        let h_factor = 0.75 + (huixiao + buff_huixiao_f) / 1024.0
+            + self.skilltype.huixiao_up as f32 / 100.0;
+        let yujin_factor = 1.0 - yujin_huixiao / 1024.0;
+        let dh_dg = 1.0 + h_factor * yujin_factor;
+
+        // dQ/dG = (1-crit) + crit * dH/dG
+        let dq_dg = (1.0 - crit_rate) + crit_rate * dh_dg;
+        let dq_dh = crit_rate;
+        let dq_di2 = dg_di2 * dq_dg;
+
+        // ---- 各属性求导 ----
+
+        // 1. jichu_gongji: B = (jg + js * atk_up) * (1+buff%) + wuqi
+        //    dB/d(jg) = 1 + buff%
+        let db_d_jg = 1.0 + self.buff.base_atk_pct / 100.0;
+        let d_jichu_gongji = dq_di2 * self.skilltype.atk_xishu * db_d_jg;
+
+        // 2. jichu_shuxing: dB/d(js) = atk_up * (1+buff%)
+        let db_d_js = self.xinfa.atk_up * (1.0 + self.buff.base_atk_pct / 100.0);
+        let d_jichu_shuxing = dq_di2 * self.skilltype.atk_xishu * db_d_js;
+
+        // 3. huixin_dengji: 仅影响会心率
+        //    dQ/d(crit) = H - G, d(crit)/d(hd) = 1/huixin_xishu
+        let dcrit_d_hd = 1.0 / self.coeff.huixin_xishu;
+        let d_huixin_dengji = (h_damage - g_damage) * dcrit_d_hd;
+
+        // 4. huixin_xiaoguo: 仅影响 H 段
+        //    huixiao = hx * 1024 / huixiao_xishu
+        //    dH/dhuixiao = G * yujin_factor * (1/1024)
+        let dhuixiao_d_hx = 1024.0 / self.coeff.huixiao_xishu;
+        let dh_dhuixiao = g_damage * yujin_factor / 1024.0;
+        let d_huixin_xiaoguo = dq_dh * dh_dhuixiao * dhuixiao_d_hx;
+
+        // 5. pofang_dengji: Y → G → Q
+        //    dY/dpofang = 1 - fangyu/1024
+        //    dG/dY = I2 * (1+hit_up) * sh_buff / 1024 * ...
+        let dpofang_d_pd = 1024.0 / self.coeff.pofang_xishu;
+        let fangyu = self.guo_fangyu() as f32;
+        let dy_dpofang = 1.0 - fangyu / 1024.0;
+        let dg_dy = i_hit * (1.0 + hit_up) * shanghai_buff / 1024.0
+            * (1.0 - huajin / 1024.0) * pvp * (1.0 - jianshang_bili);
+        let d_pofang_dengji = dq_dg * dg_dy * dy_dpofang * dpofang_d_pd;
+
+        // 6. wuqi_shanghai: 仅走 watk_xishu 路径
+        //    I2 += wuqi * watk_xishu / 100
+        let di2_d_wq = self.skilltype.watk_xishu as f32 / 100.0;
+        let d_wuqi_shanghai = dq_di2 * di2_d_wq;
+
+        DamageResultWithDerivatives {
+            result,
+            derivatives: DerivativeSet {
+                d_jichu_shuxing,
+                d_jichu_gongji,
+                d_huixin_dengji,
+                d_huixin_xiaoguo,
+                d_pofang_dengji,
+                d_wuqi_shanghai,
+            },
+        }
     }
 }
 
 // ============================================================================
-// DamageResult — 五段伤害结果结构
-// 将 [Y, atk, base_damage, G_damage, H_damage] 数组映射为具名字段。
+// DamageResult — 五段伤害结果
 // ============================================================================
 
-/// 五段伤害输出结果
 pub struct DamageResult {
-    pub y: u32,        // Y: 破防系数
-    pub i: u32,        // I: 基础攻击总计
-    pub b: u32,        // B: 技能基础伤害
-    pub g_damage: u32, // G: 普通命中伤害（经过防御、化劲、减伤衰减后）
-    pub h_damage: u32, // H: 会心伤害（包含会效加成）
-    pub q_damage: u32, // Q: 期望伤害（会心与非会心的加权平均）
+    pub y: u32,
+    pub i: u32,
+    pub b: u32,
+    pub g_damage: u32,
+    pub h_damage: u32,
+    pub q_damage: u32,
 }
 
 impl DamageResult {
-    /// 从 5 段计算数组构造结果
-    /// `i` 数组结构: [破防系数, 攻击力合计, 技能基础伤害, 普通命中伤害, 会心伤害]
-    /// `x`: 最终期望伤害
     pub fn new(i: [u32; 5], x: u32) -> DamageResult {
         DamageResult {
             y: i[0],
@@ -174,4 +247,25 @@ impl DamageResult {
             q_damage: x,
         }
     }
+}
+
+// ============================================================================
+// DerivativeSet — 6 属性导数
+// ============================================================================
+
+/// 单技能对 6 个玩家属性的偏导 ∂Q/∂attr
+#[derive(Debug, Clone)]
+pub struct DerivativeSet {
+    pub d_jichu_shuxing: f32,
+    pub d_jichu_gongji: f32,
+    pub d_huixin_dengji: f32,
+    pub d_huixin_xiaoguo: f32,
+    pub d_pofang_dengji: f32,
+    pub d_wuqi_shanghai: f32,
+}
+
+/// 带导数的伤害计算结果
+pub struct DamageResultWithDerivatives {
+    pub result: DamageResult,
+    pub derivatives: DerivativeSet,
 }
