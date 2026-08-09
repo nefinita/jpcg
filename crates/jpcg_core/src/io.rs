@@ -39,20 +39,20 @@ pub fn data_dir() -> Option<PathBuf> {
 
 // ============================================================================
 // toml_input — 读取 .toml 文件内容为字符串
-// 若文件不存在或读取失败，返回 "none" 以示区分（而非 panic）。
+// 文件不存在或读取失败时返回 None（而非哨兵字符串）。
 // ============================================================================
 
 /// 读取 TOML 文件内容
 /// - `profession`: 不带扩展名的文件路径（函数内部追加 .toml）
-/// - 返回: 文件内容字符串，若文件不存在则返回 "none"
-pub fn toml_input(profession: &str) -> String {
+/// - 返回: 文件内容字符串；文件不存在或读取失败时返回 None
+pub fn toml_input(profession: &str) -> Option<String> {
     let file_path = format!("{}.toml", profession);
     info(&format!("正在加载配置文件: {}", file_path));
     match std::fs::read_to_string(file_path) {
-        Ok(content) => content,
+        Ok(content) => Some(content),
         Err(e) => {
             error(&format!("读取配置文件失败: {}", e));
-            "none".into()
+            None
         }
     }
 }
@@ -134,13 +134,18 @@ pub fn load_config(profession: &str) -> TomlConfig {
         None => return TomlConfig::default(),
     };
     let file_path = dir.join(profession);
-    let file_path_str = file_path.to_str().unwrap_or("").to_string();
-    if file_path_str.is_empty() {
-        error("配置文件路径包含非法 UTF-8 字符");
-        return TomlConfig::default();
-    }
+    let file_path_str = match file_path.to_str() {
+        Some(s) => s.to_string(),
+        None => {
+            error("配置文件路径包含非法 UTF-8 字符");
+            return TomlConfig::default();
+        }
+    };
     // 读取并解析
-    let content = toml_input(&file_path_str);
+    let content = match toml_input(&file_path_str) {
+        Some(c) => c,
+        None => return TomlConfig::default(),
+    };
     let mut config: TomlConfig = match toml::from_str(&content) {
         Ok(c) => c,
         Err(e) => {
@@ -191,7 +196,13 @@ pub fn save_config(
 
 /// 加载已持久化的配置，若未找到则返回默认值
 pub fn load_save_config() -> SaveConfig {
-    let content = toml_input("saved_config");
+    let content = match toml_input("saved_config") {
+        Some(c) => c,
+        None => {
+            warn("未找到已保存的配置，使用默认值。");
+            return SaveConfig::default();
+        }
+    };
     let config: SaveConfig = match toml::from_str(&content) {
         Ok(data) => data,
         Err(_) => {

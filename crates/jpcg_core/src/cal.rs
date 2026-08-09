@@ -68,11 +68,10 @@ pub fn start_calculation_with_config(
     };
 
     // ---- 步骤3: 读取 TOML 内容并解析 ----
-    let content = toml_input(&file_path_str);
-    let skill_table: TomlConfig = match content.as_str() {
-        // 文件不存在时 toml_input 返回 "none"，使用默认空技能表
-        "none" => TomlConfig::default(),
-        _ => match toml::from_str(content.as_str()) {
+    let skill_table: TomlConfig = match toml_input(&file_path_str) {
+        // 文件不存在时返回 None，使用默认空技能表
+        None => TomlConfig::default(),
+        Some(content) => match toml::from_str(content.as_str()) {
             Ok(config) => config,
             Err(e) => {
                 error(format!("心法技能 TOML 解析失败: {}", e).as_str());

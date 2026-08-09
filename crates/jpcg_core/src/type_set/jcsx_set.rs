@@ -11,7 +11,7 @@ use crate::log::info;
 
 /// 从 data/atk_config.toml 加载属性映射数据（预留）
 fn data_load() {
-    let content = toml_input("data/atk_config");
+    let content = toml_input("data/atk_config").unwrap_or_default();
     info(format!("已加载属性映射配置:\n{}", content).as_str());
 }
 
