@@ -274,3 +274,300 @@ pub struct DamageResultWithDerivatives {
     pub result: DamageResult,
     pub derivatives: DerivativeSet,
 }
+
+// ============================================================================
+// 金标准基准测试
+// 数值取自 2026-08-09 重构前（jpcg_core cd5b694 时代代码）在相同输入下的输出，
+// 用于锁定「P1 引用化/P2 截断显式化」前后行为逐位一致。
+// ============================================================================
+#[cfg(test)]
+mod golden_tests {
+    use crate::cal::atkcal::JpcgConfig;
+    use crate::type_set::buff::BuffConfig;
+    use crate::type_set::coefficient::CoefficientConfig;
+    use crate::type_set::hostilepile::HostilepileConfig;
+    use crate::type_set::player::PlayerConfig;
+    use crate::type_set::skilltype::Skilltype;
+    use crate::type_set::xinfa::XinfaConfig;
+
+    fn skill(
+        name: &str,
+        b1: u32,
+        b2: u32,
+        atk_xishu: f32,
+        hit_up: u32,
+        watk_xishu: u32,
+        wushifangyu: u32,
+    ) -> Skilltype {
+        Skilltype {
+            skill_name: name.to_string(),
+            base_damage1: b1,
+            base_damage2: b2,
+            atk_xishu,
+            hit_up,
+            watk_xishu,
+            wushifangyu,
+            ..Skilltype::default()
+        }
+    }
+
+    fn player() -> PlayerConfig {
+        PlayerConfig {
+            jcsx: "gengu".into(),
+            jichu_shuxing: 18888,
+            jichu_gongji: 4666,
+            huixin_dengji: 33000,
+            huixin_xiaoguo: 22000,
+            pofang_dengji: 25000,
+            wuqi_shanghai: 2800,
+            zuizhong_gongji: 0,
+        }
+    }
+
+    fn hostile() -> HostilepileConfig {
+        HostilepileConfig {
+            waigong_fangyu: 21000,
+            neigong_fangyu: 21000,
+            yujin_dengji: 8500,
+            huajin_dengji: 35000,
+            jianshang_bili: 35,
+            target_hp: 200,
+        }
+    }
+
+    fn xinfa() -> XinfaConfig {
+        XinfaConfig {
+            profession: "mowen".into(),
+            xinfa_name: "莫问".into(),
+            xinfa_nom: "根骨".into(),
+            atk_up: 1.96,
+            pofang_up: 2.0,
+            huixin_up: 0.0,
+        }
+    }
+
+    fn buff_full() -> BuffConfig {
+        BuffConfig {
+            base_atk_pct: 10.0,
+            huixin_pct: 5.0,
+            huixiao_pct: 8.0,
+            pofang_pct: 3.0,
+            wushi_fangyu_pct: 0.0,
+            shanghai_pct: 6.0,
+            mode_is_point: false,
+        }
+    }
+
+    struct Golden {
+        y: u32,
+        b: u32,
+        i: u32,
+        n: u32,
+        h: u32,
+        q: u32,
+        d_js: f32,
+        d_jg: f32,
+        d_hxd: f32,
+        d_hxg: f32,
+        d_pf: f32,
+        d_wq: f32,
+    }
+
+    fn assert_golden(tag: &str, sk: &Skilltype, buff: &BuffConfig, g: Golden) {
+        let p = player();
+        let h = hostile();
+        let x = xinfa();
+        let c = CoefficientConfig::default();
+        let cfg = JpcgConfig::new_with_config(&p, &h, sk, &x, buff, &c);
+        let d = cfg.q_cal();
+        assert_eq!(d.y, g.y, "{tag}: Y 段不匹配");
+        assert_eq!(d.b, g.b, "{tag}: B 段不匹配");
+        assert_eq!(d.i, g.i, "{tag}: I 段不匹配");
+        assert_eq!(d.g_damage, g.n, "{tag}: N 段不匹配");
+        assert_eq!(d.h_damage, g.h, "{tag}: H 段不匹配");
+        assert_eq!(d.q_damage, g.q, "{tag}: Q 段不匹配");
+
+        let dr = cfg.q_cal_with_derivatives().derivatives;
+        let eps = 1e-6;
+        assert!(
+            (dr.d_jichu_shuxing - g.d_js).abs() < eps,
+            "{tag}: dJS 不匹配: got {} want {}",
+            dr.d_jichu_shuxing,
+            g.d_js
+        );
+        assert!(
+            (dr.d_jichu_gongji - g.d_jg).abs() < eps,
+            "{tag}: dJG 不匹配: got {} want {}",
+            dr.d_jichu_gongji,
+            g.d_jg
+        );
+        assert!(
+            (dr.d_huixin_dengji - g.d_hxd).abs() < eps,
+            "{tag}: dHXD 不匹配: got {} want {}",
+            dr.d_huixin_dengji,
+            g.d_hxd
+        );
+        assert!(
+            (dr.d_huixin_xiaoguo - g.d_hxg).abs() < eps,
+            "{tag}: dHXG 不匹配: got {} want {}",
+            dr.d_huixin_xiaoguo,
+            g.d_hxg
+        );
+        assert!(
+            (dr.d_pofang_dengji - g.d_pf).abs() < eps,
+            "{tag}: dPF 不匹配: got {} want {}",
+            dr.d_pofang_dengji,
+            g.d_pf
+        );
+        assert!(
+            (dr.d_wuqi_shanghai - g.d_wq).abs() < eps,
+            "{tag}: dWQ 不匹配: got {} want {}",
+            dr.d_wuqi_shanghai,
+            g.d_wq
+        );
+    }
+
+    #[test]
+    fn golden_gong_default() {
+        let sk = skill("宫", 160, 200, 2.609375, 0, 0, 0);
+        assert_golden(
+            "gong_default",
+            &sk,
+            &BuffConfig::default(),
+            Golden {
+                y: 975,
+                b: 116260,
+                i: 44486,
+                n: 23524,
+                h: 47202,
+                q: 26458,
+                d_js: 1.163984,
+                d_jg: 0.593869,
+                d_hxd: 0.119766,
+                d_hxg: 0.038300,
+                d_pf: 0.105450,
+                d_wq: 0.000000,
+            },
+        );
+    }
+
+    #[test]
+    fn golden_gong_buff() {
+        let sk = skill("宫", 160, 200, 2.609375, 0, 0, 0);
+        assert_golden(
+            "gong_buff",
+            &sk,
+            &buff_full(),
+            Golden {
+                y: 1001,
+                b: 127139,
+                i: 48655,
+                n: 27996,
+                h: 58319,
+                q: 33269,
+                d_js: 1.472244,
+                d_jg: 0.751145,
+                d_hxd: 0.153377,
+                d_hxg: 0.063971,
+                d_pf: 0.129154,
+                d_wq: 0.000000,
+            },
+        );
+    }
+
+    #[test]
+    fn golden_zheng_default() {
+        let sk = skill("徵(豪情)", 190, 210, 1.7760416666666667, 20, 0, 0);
+        assert_golden(
+            "zheng_default",
+            &sk,
+            &BuffConfig::default(),
+            Golden {
+                y: 975,
+                b: 79208,
+                i: 44486,
+                n: 19233,
+                h: 38592,
+                q: 21632,
+                d_js: 0.950703,
+                d_jg: 0.485052,
+                d_hxd: 0.097920,
+                d_hxg: 0.031313,
+                d_pf: 0.086212,
+                d_wq: 0.000000,
+            },
+        );
+    }
+
+    #[test]
+    fn golden_zheng_buff() {
+        let sk = skill("徵(豪情)", 190, 210, 1.7760416666666667, 20, 0, 0);
+        assert_golden(
+            "zheng_buff",
+            &sk,
+            &buff_full(),
+            Golden {
+                y: 1001,
+                b: 86613,
+                i: 48655,
+                n: 22887,
+                h: 47676,
+                q: 27198,
+                d_js: 1.202480,
+                d_jg: 0.613510,
+                d_hxd: 0.125385,
+                d_hxg: 0.052297,
+                d_pf: 0.105583,
+                d_wq: 0.000000,
+            },
+        );
+    }
+
+    #[test]
+    fn golden_wei_default() {
+        let sk = skill("剑·徵(削竹)", 330, 350, 3.15625, 0, 100, 90);
+        assert_golden(
+            "wei_default",
+            &sk,
+            &BuffConfig::default(),
+            Golden {
+                y: 988,
+                b: 143548,
+                i: 44486,
+                n: 29433,
+                h: 59059,
+                q: 33104,
+                d_js: 1.426705,
+                d_jg: 0.727911,
+                d_hxd: 0.149851,
+                d_hxg: 0.047920,
+                d_pf: 0.131832,
+                d_wq: 0.230625,
+            },
+        );
+    }
+
+    #[test]
+    fn golden_wei_buff() {
+        let sk = skill("剑·徵(削竹)", 330, 350, 3.15625, 0, 100, 90);
+        assert_golden(
+            "wei_buff",
+            &sk,
+            &buff_full(),
+            Golden {
+                y: 1014,
+                b: 156707,
+                i: 48655,
+                n: 34956,
+                h: 72817,
+                q: 41540,
+                d_js: 1.803926,
+                d_jg: 0.920370,
+                d_hxd: 0.191504,
+                d_hxg: 0.079875,
+                d_pf: 0.161185,
+                d_wq: 0.265093,
+            },
+        );
+    }
+}
