@@ -6,44 +6,34 @@ use crate::type_set::skilltype::Skilltype;
 use crate::type_set::xinfa::XinfaConfig;
 
 /// 单技能伤害计算器
-pub struct JpcgConfig {
-    player: PlayerConfig,
-    hostilepile: HostilepileConfig,
-    skilltype: Skilltype,
-    xinfa: XinfaConfig,
-    buff: BuffConfig,
-    coeff: CoefficientConfig,
+/// 所有配置均以引用持有，避免逐技能全量 clone（热路径优化）。
+pub struct JpcgConfig<'a> {
+    player: &'a PlayerConfig,
+    hostilepile: &'a HostilepileConfig,
+    skilltype: &'a Skilltype,
+    xinfa: &'a XinfaConfig,
+    buff: &'a BuffConfig,
+    coeff: &'a CoefficientConfig,
 }
 
-impl JpcgConfig {
-    pub fn new(
-        playerdata: PlayerConfig,
-        hostilepiledata: HostilepileConfig,
-        skilltypedata: Skilltype,
-        xinfadata: XinfaConfig,
-    ) -> JpcgConfig {
+impl<'a> JpcgConfig<'a> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_config(
+        playerdata: &'a PlayerConfig,
+        hostilepiledata: &'a HostilepileConfig,
+        skilltypedata: &'a Skilltype,
+        xinfadata: &'a XinfaConfig,
+        buff: &'a BuffConfig,
+        coeff: &'a CoefficientConfig,
+    ) -> JpcgConfig<'a> {
         JpcgConfig {
             player: playerdata,
             hostilepile: hostilepiledata,
             skilltype: skilltypedata,
             xinfa: xinfadata,
-            buff: BuffConfig::default(),
-            coeff: CoefficientConfig::default(),
+            buff,
+            coeff,
         }
-    }
-
-    pub fn new_with_config(
-        playerdata: PlayerConfig,
-        hostilepiledata: HostilepileConfig,
-        skilltypedata: Skilltype,
-        xinfadata: XinfaConfig,
-        buff: BuffConfig,
-        coeff: CoefficientConfig,
-    ) -> JpcgConfig {
-        let mut config = Self::new(playerdata, hostilepiledata, skilltypedata, xinfadata);
-        config.buff = buff;
-        config.coeff = coeff;
-        config
     }
 
     fn guo_fangyu(&self) -> u32 {
@@ -128,12 +118,16 @@ impl JpcgConfig {
     /// 正向计算伤害 + 反向求导（链式法则）
     /// 对 6 个玩家属性分别计算 ∂Q/∂attr，忽略中间 as u32 截断（连续近似）
     pub fn q_cal_with_derivatives(&self) -> DamageResultWithDerivatives {
-        // ---- forward ----
+        // ---- forward：一次计算全程，复用各段中间结果，避免二次走链 ----
         let y = self.y_cal();
         let i_arr = self.i_cal();
         let g_arr = self.g_cal();
         let h_arr = self.h_cal();
-        let result = self.q_cal();
+        let crit_rate = self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0;
+
+        // 与 q_cal() 完全等价的 Q 段计算（不重复调用全链）
+        let q = (g_arr[3] as f32 * (1.0 - crit_rate) + h_arr[4] as f32 * crit_rate) as u32;
+        let result = DamageResult::new([y, i_arr[1], i_arr[2], g_arr[3], h_arr[4]], q);
 
         // ---- intermediates (f32, 连续) ----
         let i_hit = i_arr[2] as f32;
@@ -146,7 +140,6 @@ impl JpcgConfig {
         let huajin = self.hostilepile.guo_huajin_with(&self.coeff) as f32;
         let pvp = self.coeff.pvp_global_jianshang;
         let jianshang_bili = self.hostilepile.jianshang_bili as f32 / 100.0;
-        let crit_rate = self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0;
 
         let huixiao = self.player.guo_huixinxiaoguo_with(&self.coeff) as f32;
         let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(&self.coeff) as f32;

@@ -71,14 +71,7 @@ pub fn compute_derivatives(
     let mut attr_totals = [0.0f32; 6];
 
     for skill in skills {
-        let config = JpcgConfig::new_with_config(
-            player.clone(),
-            hostile.clone(),
-            skill.clone(),
-            xinfa.clone(),
-            buff.clone(),
-            coeff.clone(),
-        );
+        let config = JpcgConfig::new_with_config(player, hostile, skill, xinfa, buff, coeff);
         let dwd = config.q_cal_with_derivatives();
 
         for i in 0..6 {

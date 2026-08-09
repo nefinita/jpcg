@@ -6,7 +6,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::log::error;
 use crate::type_set::coefficient::CoefficientConfig;
 
 /// 玩家属性配置

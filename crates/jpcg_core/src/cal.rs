@@ -82,7 +82,7 @@ pub fn start_calculation_with_config(
     };
 
     // ---- 步骤4: 逐技能计算伤害 ----
-    Ok(call_back(skill_table, player, hostilepile, buff, coeff))
+    Ok(call_back(&skill_table, &player, &hostilepile, buff, coeff))
 }
 
 // ============================================================================
@@ -141,27 +141,27 @@ impl CalculateResult {
 /// # 返回
 /// 所有技能的伤害结果列表
 fn call_back(
-    toml_config: TomlConfig,
-    player: PlayerConfig,
-    hostilepile: HostilepileConfig,
+    toml_config: &TomlConfig,
+    player: &PlayerConfig,
+    hostilepile: &HostilepileConfig,
     buff: &BuffConfig,
     coeff: &CoefficientConfig,
 ) -> Vec<CalculateResult> {
     let mut results = Vec::new();
-    for skill in toml_config.skill {
+    for skill in &toml_config.skill {
         let damage_result = JpcgConfig::new_with_config(
-            player.clone(),
-            hostilepile.clone(),
-            skill.clone(),
-            toml_config.xinfa.clone(),
-            buff.clone(),
-            coeff.clone(),
+            player,
+            hostilepile,
+            skill,
+            &toml_config.xinfa,
+            buff,
+            coeff,
         )
         .q_cal();
 
         // 将 5 段伤害数组映射为 CalculateResult
         let calculate_result = CalculateResult::new(
-            skill.skill_name,
+            skill.skill_name.clone(),
             damage_result.y,      // Y: 破防系数段
             damage_result.b,      // B: 基础攻击段
             damage_result.i,      // I: 技能基础段

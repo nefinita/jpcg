@@ -40,14 +40,7 @@ pub fn calculate_combo(
     let target_hp = (hostilepile.target_hp as f64) * 10000.0;
 
     for skill in skills {
-        let calc = JpcgConfig::new_with_config(
-            player.clone(),
-            hostilepile.clone(),
-            skill.clone(),
-            xinfa.clone(),
-            buff.clone(),
-            coeff.clone(),
-        );
+        let calc = JpcgConfig::new_with_config(player, hostilepile, skill, xinfa, buff, coeff);
         let damage = calc.q_cal();
         let crit_rate = calc.guo_huixin() + skill.huixin_up as f32 / 100.0
             + buff.huixin_pct / 100.0;
