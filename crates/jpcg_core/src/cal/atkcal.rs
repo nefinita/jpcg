@@ -5,6 +5,12 @@ use crate::type_set::player::PlayerConfig;
 use crate::type_set::skilltype::Skilltype;
 use crate::type_set::xinfa::XinfaConfig;
 
+/// 游戏内向下取整（抢实检测基准）。
+/// 正数域内与 `v as u32` 截断语义一致，显式命名以固定各计算步的取整点。
+fn truncate(v: f32) -> f32 {
+    v as u32 as f32
+}
+
 /// 单技能伤害计算器
 /// 所有配置均以引用持有，避免逐技能全量 clone（热路径优化）。
 pub struct JpcgConfig<'a> {
@@ -80,12 +86,18 @@ impl<'a> JpcgConfig<'a> {
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
         let huajin = self.hostilepile.guo_huajin_with(&self.coeff);
         let pvp = self.coeff.pvp_global_jianshang;
-        let x = (((((i_hit as f32 * (1.0 + self.skilltype.hit_up as f32 / 100.0) * shanghai_buff)
-            * (y as f32 / 1024.0)) as u32 as f32
-            * (1.0 - (huajin as f32 / 1024.0))) as u32
-            as f32
-            * pvp)
-            * (1.0 - self.hostilepile.jianshang_bili as f32 / 100.0)) as u32;
+
+        // 游戏实测截断点（顺序与取整策略源自实际检测结果，勿改动逻辑）
+        // ① 技能伤害系数×命中加成×伤害增益 → ×破防系数 → 截断
+        let mut x = truncate(
+            i_hit as f32 * (1.0 + self.skilltype.hit_up as f32 / 100.0) * shanghai_buff
+                * (y as f32 / 1024.0),
+        );
+        // ② × 化劲减免 → 截断
+        x = truncate(x * (1.0 - huajin as f32 / 1024.0));
+        // ③ × 全局 PVP 减伤 × (1 - 目标减伤比) → 截断输出
+        x = x * pvp * (1.0 - self.hostilepile.jianshang_bili as f32 / 100.0);
+        let x = x as u32;
         [y, i[1], i[2], x, 0]
     }
 
