@@ -28,6 +28,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Tauri v2 Linux 系统依赖（构建 jpcg_app 需要）
+      - name: 安装 Tauri Linux 依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libssl-dev liblzma-dev
+
       - name: 格式检查 (rustfmt)
         run: cargo fmt --all -- --check
 
