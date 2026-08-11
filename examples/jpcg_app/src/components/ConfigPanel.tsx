@@ -221,7 +221,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     try {
       const result = await api.checkUpdate(betaChannel, false);
       setUpdateCheckResult(result);
-      if (!result.has_data_update && !result.has_app_update) {
+      if (!result.has_data_update && !result.has_app_update && !result.has_modules_update) {
         setUpdateMessage("已是最新版本");
         addToast("已是最新版本", "info");
         setUpdating(false);
@@ -250,6 +250,31 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           unlisten();
         }
         // 执行到这里说明重启失败
+        setUpdateMessage("重启失败");
+        addToast("重启失败，请手动重启应用", "error");
+        setUpdating(false);
+        return;
+      }
+
+      // 模块库（dll）增量更新
+      if (result.has_modules_update && result.modules_files_to_update?.length) {
+        const names = result.modules_files_to_update.map((f) => f.name).join(", ");
+        const ok = window.confirm(`发现 ${names} 需要更新，是否下载并重启应用？`);
+        if (!ok) {
+          setUpdateMessage("已取消");
+          setUpdating(false);
+          return;
+        }
+        setUpdateMessage("正在更新模块库...");
+        const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
+          setUpdateProgress(evt.progress);
+          setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
+        });
+        try {
+          await api.performModulesUpdate(betaChannel, result);
+        } finally {
+          unlisten();
+        }
         setUpdateMessage("重启失败");
         addToast("重启失败，请手动重启应用", "error");
         setUpdating(false);

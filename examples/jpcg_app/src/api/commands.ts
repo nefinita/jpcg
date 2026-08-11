@@ -111,6 +111,17 @@ export async function performUpdate(
   });
 }
 
+export async function performModulesUpdate(
+  beta: boolean,
+  checkResult: UpdateCheckResult,
+): Promise<string> {
+  return invoke("perform_modules_update", {
+    beta,
+    modulesVersion: checkResult.modules_version,
+    modulesFilesToUpdate: checkResult.modules_files_to_update,
+  });
+}
+
 export async function forumListFiles(forumUrl = "http://localhost:8080", category?: string): Promise<ForumFileInfo[]> {
   const args: Record<string, unknown> = { forumUrl };
   if (category !== undefined) args.category = category;
@@ -384,7 +395,22 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         },
       };
     }
+    case "check_update":
+      return {
+        current_app_version: "v2.1.0-alpha.1",
+        latest_app_version: "v2.1.0-alpha.1",
+        has_app_update: false,
+        current_data_version: null,
+        latest_data_version: null,
+        has_data_update: false,
+        data_files_to_update: [],
+        has_modules_update: false,
+        modules_version: null,
+        modules_files_to_update: [],
+      };
     case "perform_app_update":
+      return "重启中...（模拟）";
+    case "perform_modules_update":
       return "重启中...（模拟）";
     case "save_skill_data":
       return null;
