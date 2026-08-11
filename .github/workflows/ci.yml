@@ -36,6 +36,19 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
             librsvg2-dev patchelf libgtk-3-dev libxdo-dev libssl-dev liblzma-dev
 
+      # tauri-build 校验 frontendDist 存在，须先构建前端 dist
+      - name: 构建前端 (tauri frontendDist)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: examples/jpcg_app/package-lock.json
+      - name: npm ci + build
+        working-directory: examples/jpcg_app
+        run: |
+          npm ci
+          npm run build
+
       - name: 格式检查 (rustfmt)
         run: cargo fmt --all -- --check
 
