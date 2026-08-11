@@ -1,4 +1,4 @@
-use crate::cal::atkcal::JpcgConfig;
+use crate::engine::atkcal::JpcgConfig;
 use crate::type_set::buff::BuffConfig;
 use crate::type_set::coefficient::CoefficientConfig;
 use crate::type_set::hostilepile::HostilepileConfig;
@@ -40,17 +40,10 @@ pub fn calculate_combo(
     let target_hp = (hostilepile.target_hp as f64) * 10000.0;
 
     for skill in skills {
-        let calc = JpcgConfig::new_with_config(
-            player.clone(),
-            hostilepile.clone(),
-            skill.clone(),
-            xinfa.clone(),
-            buff.clone(),
-            coeff.clone(),
-        );
+        let calc = JpcgConfig::new_with_config(player, hostilepile, skill, xinfa, buff, coeff);
         let damage = calc.q_cal();
-        let crit_rate = calc.guo_huixin() + skill.huixin_up as f32 / 100.0
-            + buff.huixin_pct / 100.0;
+        let crit_rate =
+            calc.guo_huixin() + skill.huixin_up as f32 / 100.0 + buff.huixin_pct / 100.0;
 
         let g = damage.g_damage as f64;
         let h = damage.h_damage as f64;
@@ -87,7 +80,9 @@ pub fn calculate_combo(
     let final_kill_prob = steps.last().map(|s| s.kill_prob).unwrap_or(0.0);
     let total_expected_damage = cum_mean;
     let total_expected_damage_wan = cum_mean / 10000.0;
-    let kill_prob_curve: Vec<(usize, f64)> = steps.iter().enumerate()
+    let kill_prob_curve: Vec<(usize, f64)> = steps
+        .iter()
+        .enumerate()
         .map(|(i, s)| (i + 1, (s.kill_prob * 100.0 * 100.0).round() / 100.0))
         .collect();
 

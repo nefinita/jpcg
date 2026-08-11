@@ -1,21 +1,24 @@
 // ============================================================================
-// cal — 剑网3 伤害计算引擎
+// engine — 剑网3 伤害计算引擎
 // 根据玩家属性、目标防御属性、心法配置、技能数据，
 // 逐一计算每个技能的多段伤害（Y/B/I/N/H/Q）。
 // 核心公式参考剑网3 现行版本伤害机制。
 // ============================================================================
 
-mod atkcal;
+pub mod atkcal;
 pub mod derivatives;
 pub mod kill_prob;
 
 use std::io::Error;
 
 use crate::{
-    cal::atkcal::JpcgConfig,
-    io::{data_dir, toml_input, TomlConfig},
+    engine::atkcal::JpcgConfig,
     log::{error, success},
-    type_set::{buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
+    store::{TomlConfig, data_dir, toml_input},
+    type_set::{
+        buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
+        player::PlayerConfig, xinfa::XinfaConfig,
+    },
 };
 use serde::Serialize;
 
@@ -37,7 +40,13 @@ pub fn start_calculation(
     hostilepile: HostilepileConfig,
     xinfa: XinfaConfig,
 ) -> Result<Vec<CalculateResult>, Error> {
-    start_calculation_with_config(player, hostilepile, xinfa, &BuffConfig::default(), &CoefficientConfig::default())
+    start_calculation_with_config(
+        player,
+        hostilepile,
+        xinfa,
+        &BuffConfig::default(),
+        &CoefficientConfig::default(),
+    )
 }
 
 pub fn start_calculation_with_config(
@@ -68,11 +77,10 @@ pub fn start_calculation_with_config(
     };
 
     // ---- 步骤3: 读取 TOML 内容并解析 ----
-    let content = toml_input(&file_path_str);
-    let skill_table: TomlConfig = match content.as_str() {
-        // 文件不存在时 toml_input 返回 "none"，使用默认空技能表
-        "none" => TomlConfig::default(),
-        _ => match toml::from_str(content.as_str()) {
+    let skill_table: TomlConfig = match toml_input(&file_path_str) {
+        // 文件不存在时返回 None，使用默认空技能表
+        None => TomlConfig::default(),
+        Some(content) => match toml::from_str(content.as_str()) {
             Ok(config) => config,
             Err(e) => {
                 error(format!("心法技能 TOML 解析失败: {}", e).as_str());
@@ -82,7 +90,7 @@ pub fn start_calculation_with_config(
     };
 
     // ---- 步骤4: 逐技能计算伤害 ----
-    Ok(call_back(skill_table, player, hostilepile, buff, coeff))
+    Ok(call_back(&skill_table, &player, &hostilepile, buff, coeff))
 }
 
 // ============================================================================
@@ -141,30 +149,30 @@ impl CalculateResult {
 /// # 返回
 /// 所有技能的伤害结果列表
 fn call_back(
-    toml_config: TomlConfig,
-    player: PlayerConfig,
-    hostilepile: HostilepileConfig,
+    toml_config: &TomlConfig,
+    player: &PlayerConfig,
+    hostilepile: &HostilepileConfig,
     buff: &BuffConfig,
     coeff: &CoefficientConfig,
 ) -> Vec<CalculateResult> {
     let mut results = Vec::new();
-    for skill in toml_config.skill {
+    for skill in &toml_config.skill {
         let damage_result = JpcgConfig::new_with_config(
-            player.clone(),
-            hostilepile.clone(),
-            skill.clone(),
-            toml_config.xinfa.clone(),
-            buff.clone(),
-            coeff.clone(),
+            player,
+            hostilepile,
+            skill,
+            &toml_config.xinfa,
+            buff,
+            coeff,
         )
         .q_cal();
 
         // 将 5 段伤害数组映射为 CalculateResult
         let calculate_result = CalculateResult::new(
-            skill.skill_name,
-            damage_result.y,      // Y: 破防系数段
-            damage_result.b,      // B: 基础攻击段
-            damage_result.i,      // I: 技能基础段
+            skill.skill_name.clone(),
+            damage_result.y,        // Y: 破防系数段
+            damage_result.b,        // B: 基础攻击段
+            damage_result.i,        // I: 技能基础段
             damage_result.g_damage, // N: 普通命中段
             damage_result.h_damage, // H: 会心段
             damage_result.q_damage, // Q: 期望值段

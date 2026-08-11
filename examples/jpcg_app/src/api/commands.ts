@@ -13,6 +13,7 @@ import type {
   XinfaSummaryDTO,
   SkillEditorDataDTO,
   DerivativesOutputDTO,
+  ModuleVersions,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -99,6 +100,10 @@ export async function checkUpdate(beta = false, force = false): Promise<UpdateCh
   return invoke("check_update", { beta, force });
 }
 
+export async function getModuleVersions(): Promise<ModuleVersions> {
+  return invoke("get_module_versions");
+}
+
 export async function performUpdate(
   beta: boolean,
   checkResult: UpdateCheckResult,
@@ -108,6 +113,17 @@ export async function performUpdate(
     hasDataUpdate: checkResult.has_data_update,
     latestDataVersion: checkResult.latest_data_version,
     dataFilesToUpdate: checkResult.data_files_to_update,
+  });
+}
+
+export async function performModulesUpdate(
+  beta: boolean,
+  checkResult: UpdateCheckResult,
+): Promise<string> {
+  return invoke("perform_modules_update", {
+    beta,
+    modulesVersion: checkResult.modules_version,
+    modulesFilesToUpdate: checkResult.modules_files_to_update,
   });
 }
 
@@ -384,7 +400,29 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         },
       };
     }
+    case "check_update":
+      return {
+        current_app_version: "v2.1.0-alpha.1",
+        latest_app_version: "v2.1.0-alpha.1",
+        has_app_update: false,
+        current_data_version: null,
+        latest_data_version: null,
+        has_data_update: false,
+        data_files_to_update: [],
+        has_modules_update: false,
+        modules_version: null,
+        modules_files_to_update: [],
+      };
+    case "get_module_versions":
+      return {
+        core: "2.1.0-alpha.1",
+        update: "2.1.0-alpha.1",
+        const: "130.3.20260602",
+        app: "2.1.0-alpha.1",
+      };
     case "perform_app_update":
+      return "重启中...（模拟）";
+    case "perform_modules_update":
       return "重启中...（模拟）";
     case "save_skill_data":
       return null;

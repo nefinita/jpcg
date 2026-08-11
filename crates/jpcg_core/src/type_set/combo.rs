@@ -21,7 +21,6 @@ pub struct StepOverride {
     pub extra_crit_dmg_pct: Option<f32>,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComboPreset {
     pub name: String,

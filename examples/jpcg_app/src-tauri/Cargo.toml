@@ -1,6 +1,6 @@
 [package]
 name = "jpcg_app"
-version = "2.1.0-alpha.1"
+version.workspace = true
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
@@ -23,5 +23,17 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { workspace = true }
-jpcg_core = { workspace = true }
+jpcg_api = { workspace = true }
+jpcg_const = { workspace = true }
+# 双模式：
+#   static  （默认）— 编译期链接 core，Rust 直调 host 模块
+#   dynamic        — dlopen libjpcg_core.{dylib,so,dll}，经 jpcg_call JSON 调用
+# jpcg_update 两模式均依赖（命令签名与进度事件 DTO 需要；计算逻辑在 core）
+jpcg_core = { workspace = true, optional = true }
 jpcg_update = { workspace = true }
+libloading = { version = "0.8", optional = true }
+
+[features]
+default = ["static"]
+static = ["dep:jpcg_core"]
+dynamic = ["dep:libloading"]

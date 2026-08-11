@@ -1,10 +1,10 @@
 use axum::{
+    Router,
     body::Body,
     extract::{Multipart, Path, State},
-    http::{header, Response, StatusCode},
+    http::{Response, StatusCode, header},
     response::{Html, Json},
     routing::{get, post},
-    Router,
 };
 use serde::Serialize;
 use std::fs;
@@ -177,9 +177,8 @@ loadFiles();
 #[tokio::main]
 async fn main() {
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
-    let data_dir = PathBuf::from(
-        std::env::var("FORUM_DATA_DIR").unwrap_or_else(|_| "forum_data".to_string()),
-    );
+    let data_dir =
+        PathBuf::from(std::env::var("FORUM_DATA_DIR").unwrap_or_else(|_| "forum_data".to_string()));
     fs::create_dir_all(&data_dir).expect("无法创建数据目录");
 
     let data_dir_display = data_dir.display().to_string();
@@ -209,9 +208,7 @@ async fn index_handler() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
-async fn categories_handler(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<String>> {
+async fn categories_handler(State(state): State<Arc<AppState>>) -> Json<Vec<String>> {
     let mut cats = Vec::new();
     if let Ok(entries) = fs::read_dir(&state.data_dir) {
         for entry in entries.flatten() {
@@ -242,9 +239,11 @@ async fn list_files_handler(
         Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     };
 
-    while let Some(entry) = entries.next().transpose().map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    })? {
+    while let Some(entry) = entries
+        .next()
+        .transpose()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -389,7 +388,10 @@ async fn download_handler(
     }
 
     let data = fs::read(&path).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("读取文件失败: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("读取文件失败: {}", e),
+        )
     })?;
 
     Response::builder()

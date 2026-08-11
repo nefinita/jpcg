@@ -170,6 +170,16 @@
   text-overflow: ellipsis;
 }
 
+.moduleVersions {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+
 .details {
   padding: var(--space-lg);
   border-bottom: 1px solid var(--border-subtle);

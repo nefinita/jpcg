@@ -5,6 +5,11 @@
 // ============================================================================
 
 mod download;
+pub mod ffi;
+pub mod modules;
+
+/// 本 update 模块库版本（供宿主 UI 展示，与 FFI jpcg_update_version 一致）
+pub const UPDATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// 更新检查服务器基础 URL（稳定版）
 const UPDATE_BASE_URL: &str = "https://nefinita-ai.com/updates/JPCG/";
@@ -41,7 +46,11 @@ pub async fn check_updates(
     let local_info = load_local_version_info()?;
     // 判断更新通道：参数指定优先，否则使用上次记录的通道
     let use_beta = beta || local_info.channel == "beta";
-    let base_url = if use_beta { BETA_BASE_URL } else { UPDATE_BASE_URL };
+    let base_url = if use_beta {
+        BETA_BASE_URL
+    } else {
+        UPDATE_BASE_URL
+    };
     let channel = if use_beta { "beta" } else { "stable" };
 
     // 从服务器获取最新版本信息
@@ -58,13 +67,15 @@ pub async fn check_updates(
                 latest_data_version: None,
                 has_data_update: false,
                 data_files_to_update: vec![],
+                has_modules_update: false,
+                modules_version: None,
+                modules_files_to_update: vec![],
             });
         }
     };
 
     // 判断应用是否有新版本
-    let has_app_update = force
-        || local_info.version.as_deref() != Some(&latest_info.version);
+    let has_app_update = force || local_info.version.as_deref() != Some(&latest_info.version);
 
     // ---- 检查 data 文件更新 ----
     let mut has_data_update = false;
@@ -97,14 +108,37 @@ pub async fn check_updates(
         }
     }
 
+    // ---- 检查模块库（dll）更新 ----
+    let mut has_modules_update = false;
+    let mut modules_files_to_update = vec![];
+    if force || has_app_update {
+        match crate::modules::check_modules_update(use_beta, force).await {
+            Ok(m) => {
+                has_modules_update = m.has_modules_update;
+                modules_files_to_update = m.modules_files_to_update;
+                // 服务器模块版本（复用 app 版本目录）
+            }
+            Err(e) => {
+                eprintln!("获取模块清单失败: {}", e);
+            }
+        }
+    }
+
     Ok(UpdateCheckResult {
         current_app_version: local_info.version,
-        latest_app_version: Some(latest_info.version),
+        latest_app_version: Some(latest_info.version.clone()),
         has_app_update,
         current_data_version: local_info.data_version,
         latest_data_version: latest_info.data_version,
         has_data_update,
         data_files_to_update,
+        has_modules_update,
+        modules_version: if has_modules_update {
+            Some(latest_info.version)
+        } else {
+            None
+        },
+        modules_files_to_update,
     })
 }
 
@@ -125,7 +159,11 @@ pub async fn fetch_app_update_info(
 ) -> Result<Option<AppUpdateInfo>, Box<dyn std::error::Error + Send + Sync>> {
     let local_info = load_local_version_info()?;
     let use_beta = beta || local_info.channel == "beta";
-    let base_url = if use_beta { BETA_BASE_URL } else { UPDATE_BASE_URL };
+    let base_url = if use_beta {
+        BETA_BASE_URL
+    } else {
+        UPDATE_BASE_URL
+    };
     let _channel = if use_beta { "beta" } else { "stable" };
 
     let latest = fetch_latest_version_info(base_url).await?;
@@ -146,7 +184,10 @@ pub async fn fetch_app_update_info(
         match download::download_and_parse_manifest(&manifest_url).await {
             Ok(manifest) => {
                 vec![VersionDirectory {
-                    dir_name: manifest.version.clone().unwrap_or_else(|| "beta".to_string()),
+                    dir_name: manifest
+                        .version
+                        .clone()
+                        .unwrap_or_else(|| "beta".to_string()),
                     manifest,
                 }]
             }
@@ -236,7 +277,15 @@ pub async fn download_updates(
             let needed = check_data_updates(base_path, &manifest).await?;
             if !needed.is_empty() {
                 // 下载并安装所有需要更新的 data 文件
-                download_and_install_data(&needed, base_path, data_ver, &file_base_url, channel, progress).await?;
+                download_and_install_data(
+                    &needed,
+                    base_path,
+                    data_ver,
+                    &file_base_url,
+                    channel,
+                    progress,
+                )
+                .await?;
             }
         }
     }
@@ -260,13 +309,13 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
     #[command(author, version, about)]
     struct Args {
         #[arg(long)]
-        force_check: bool,          // 强制检查（忽略本地版本记录）
+        force_check: bool, // 强制检查（忽略本地版本记录）
         #[arg(long)]
-        target_os: Option<String>,  // 指定目标操作系统
+        target_os: Option<String>, // 指定目标操作系统
         #[arg(long)]
-        target_arch: Option<String>,// 指定目标架构
+        target_arch: Option<String>, // 指定目标架构
         #[arg(short = 'b', long = "beta")]
-        beta: bool,                 // 使用 Beta 通道
+        beta: bool, // 使用 Beta 通道
     }
 
     let args = Args::parse();
@@ -278,7 +327,11 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
     let local_info = load_local_version_info()?;
     let use_beta = args.beta || local_info.channel == "beta";
-    let base_url = if use_beta { BETA_BASE_URL } else { UPDATE_BASE_URL };
+    let base_url = if use_beta {
+        BETA_BASE_URL
+    } else {
+        UPDATE_BASE_URL
+    };
     let channel = if use_beta { "beta" } else { "stable" };
 
     let latest = fetch_latest_version_info(base_url).await?;
@@ -290,7 +343,10 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
         }
     };
 
-    println!("当前版本: {:?}, 最新版本: {}", local_info.version, latest_info.version);
+    println!(
+        "当前版本: {:?}, 最新版本: {}",
+        local_info.version, latest_info.version
+    );
 
     // ---- 第一阶段: 应用二进制更新 ----
     if !args.force_check && local_info.version.as_deref() == Some(&latest_info.version) {
@@ -334,8 +390,7 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
         }
 
         if !all_updates_needed.is_empty() {
-            let version_url =
-                format!("{}{}/", base_url.trim_end_matches('/'), target_version_str);
+            let version_url = format!("{}{}/", base_url.trim_end_matches('/'), target_version_str);
             let file_base_url = if use_beta {
                 "https://nefinita-ai.com/files/JPCG_beta/".to_string()
             } else {
@@ -375,17 +430,33 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
                 Ok(manifest) => {
                     let needed = check_data_updates(&base_path, &manifest).await?;
                     if !needed.is_empty() {
-                        println!("\n检测到数据更新 (版本: {}), 共 {} 个文件需要更新。", remote_data_ver, needed.len());
+                        println!(
+                            "\n检测到数据更新 (版本: {}), 共 {} 个文件需要更新。",
+                            remote_data_ver,
+                            needed.len()
+                        );
                         // CLI 模式下使用简化的控制台进度回调
                         struct CliProgress;
                         impl ProgressCallback for CliProgress {
                             fn on_progress(&self, event: &UpdateProgressEvent) {
                                 if event.stage == "downloading" {
-                                    println!("  [{:.0}%] {}", event.progress * 100.0, event.message);
+                                    println!(
+                                        "  [{:.0}%] {}",
+                                        event.progress * 100.0,
+                                        event.message
+                                    );
                                 }
                             }
                         }
-                        download_and_install_data(&needed, &base_path, remote_data_ver, &file_base_url, channel, &CliProgress).await?;
+                        download_and_install_data(
+                            &needed,
+                            &base_path,
+                            remote_data_ver,
+                            &file_base_url,
+                            channel,
+                            &CliProgress,
+                        )
+                        .await?;
                     }
                 }
                 Err(e) => {
@@ -400,8 +471,6 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn it_works() {
         let result = 2 + 2;
