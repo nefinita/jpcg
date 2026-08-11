@@ -80,6 +80,8 @@ export const STORAGE_KEYS = {
   config: "jpcg_user_config",
   theme: "jpcg_theme",
   lastXinfa: "jpcg_last_xinfa",
+  betaChannel: "jpcg_beta_channel",
 };
 
 export const FORUM_URL = "https://forum.nefinita-ai.com";
+export const GITHUB_ISSUES_URL = "https://github.com/nefinita/JPCG/issues/new";

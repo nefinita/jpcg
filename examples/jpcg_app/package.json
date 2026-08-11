@@ -10,11 +10,9 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
-    "lucide-react": "0.468.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "recharts": "^3.8.1",
-    "smol-toml": "1.7.0"
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.5.0",

@@ -1,28 +1,20 @@
 import { useState } from "react";
-import {
-  Calculator,
-  ChevronLeft,
-  ChevronRight,
-  Globe2,
-  SlidersHorizontal,
-  Waypoints,
-  type LucideIcon,
-} from "lucide-react";
 import clsx from "../utils/clsx";
 import styles from "./ActivityBar.module.css";
 
-export type AppPage = "calc" | "forum" | "combo" | "attribute";
+export type Page = "calc" | "forum" | "combo" | "editor" | "optimize";
 
 interface Props {
-  currentPage: AppPage;
-  onNavigate: (page: AppPage) => void;
+  currentPage: Page;
+  onNavigate: (page: Page) => void;
 }
 
-const ITEMS: ReadonlyArray<{ page: AppPage; icon: LucideIcon; label: string }> = [
-  { page: "calc", icon: Calculator, label: "计算" },
-  { page: "forum", icon: Globe2, label: "论坛" },
-  { page: "combo", icon: Waypoints, label: "排轴器" },
-  { page: "attribute", icon: SlidersHorizontal, label: "属性配置" },
+const ITEMS = [
+  { page: "calc" as const, icon: "📊", label: "计算" },
+  { page: "forum" as const, icon: "🌐", label: "论坛" },
+  { page: "combo" as const, icon: "🔗", label: "排轴器" },
+  { page: "optimize" as const, icon: "📈", label: "加点优化" },
+  { page: "editor" as const, icon: "✏️", label: "技能编辑" },
 ];
 
 export default function ActivityBar({ currentPage, onNavigate }: Props) {
@@ -30,14 +22,14 @@ export default function ActivityBar({ currentPage, onNavigate }: Props) {
 
   return (
     <div className={clsx(styles.bar, expanded && styles.expanded)}>
-      {ITEMS.map(({ page, icon: Icon, label }) => (
+      {ITEMS.map(({ page, icon, label }) => (
         <button
           key={page}
           className={clsx(styles.btn, currentPage === page && styles.active)}
           onClick={() => onNavigate(page)}
           title={label}
         >
-          <span className={styles.icon}><Icon size={18} strokeWidth={1.8} /></span>
+          <span className={styles.icon}>{icon}</span>
           {expanded && <span className={styles.label}>{label}</span>}
         </button>
       ))}
@@ -46,7 +38,7 @@ export default function ActivityBar({ currentPage, onNavigate }: Props) {
         onClick={() => setExpanded((v) => !v)}
         title={expanded ? "收起" : "展开"}
       >
-        {expanded ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+        {expanded ? "◀" : "▶"}
       </button>
     </div>
   );

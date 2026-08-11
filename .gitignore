@@ -3,3 +3,5 @@ node_modules/
 examples/jpcg_app/dist/
 *.tsbuildinfo
 *.rlib
+examples/jpcg_app/src-tauri/binaries/
+examples/jpcg_app/src-tauri/saved_config.toml

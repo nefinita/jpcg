@@ -141,12 +141,6 @@ export interface XinfaSummaryDTO {
   version_label: string | null;
 }
 
-export interface AttributeConfigDocumentDTO {
-  profession: string;
-  file_name: string;
-  content: string;
-}
-
 export interface ForumFileInfo {
   name: string;
   size: number;
@@ -158,6 +152,89 @@ export interface XinfaEntry {
   label: string;
   icon: string;
   default?: boolean;
+}
+
+export interface SkillEditorItemDTO {
+  skill_name: string;
+  skill_id: number;
+  sub_id: number;
+  group: number;
+  weapon_request: number;
+  design_effect: number;
+  kind_type: number;
+  cast_mode: number;
+  guaranteed_hit: boolean;
+  has_critical_strike: boolean;
+  effect_type: number;
+  jihuoqixue: string;
+  base_damage1: number;
+  base_damage2: number;
+  atk_xishu: number;
+  watk_xishu: number;
+  hit_up: number;
+  huixin_up: number;
+  huixiao_up: number;
+  wushifangyu: number;
+  wushihuajin: number;
+  wushijianshang: number;
+  zhenshishanghai: number;
+  dot_flag: number;
+  dot_num: number;
+  dot_up: number;
+}
+
+export interface VersionInfoDTO {
+  level: number;
+  season: number;
+  modified: number;
+}
+
+export interface SkillEditorDataDTO {
+  xinfa: {
+    profession: string;
+    xinfa_name: string;
+    xinfa_nom: string;
+    atk_up: number;
+    pofang_up: number;
+    huixin_up: number;
+  };
+  version: VersionInfoDTO | null;
+  skills: SkillEditorItemDTO[];
+}
+
+export interface SkillDerivativeDTO {
+  skill_name: string;
+  derivative: number;
+}
+
+export interface DerivativeEntryDTO {
+  attr_name: string;
+  attr_id: string;
+  current_value: number;
+  total_derivative: number;
+  per_skill: SkillDerivativeDTO[];
+}
+
+export interface CritVsPofangDTO {
+  better: string;
+  huixin_total: number;
+  pofang_total: number;
+}
+
+export interface TopAttrDTO {
+  attr_name: string;
+  attr_id: string;
+  total_derivative: number;
+}
+
+export interface OptimizeRecommendationDTO {
+  crit_vs_pofang: CritVsPofangDTO;
+  top3: TopAttrDTO[];
+}
+
+export interface DerivativesOutputDTO {
+  derivatives: DerivativeEntryDTO[];
+  recommendation: OptimizeRecommendationDTO;
 }
 
 export interface FormData {

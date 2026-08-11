@@ -2292,6 +2292,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "jpcg_updater"
+version = "2.1.0"
+
+[[package]]
 name = "js-sys"
 version = "0.3.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"

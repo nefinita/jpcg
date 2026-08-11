@@ -128,6 +128,20 @@
   color: var(--error);
 }
 
+.betaToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.betaToggle input {
+  cursor: pointer;
+}
+
 .progress {
   margin-top: var(--space-sm);
   width: 100%;

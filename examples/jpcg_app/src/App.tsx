@@ -1,25 +1,25 @@
-import { lazy, Suspense, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
 import type { SkillResultDTO, FormData } from "./types";
 import * as api from "./api/commands";
 import ActivityBar from "./components/ActivityBar";
-import type { AppPage } from "./components/ActivityBar";
 import ThemeToggle from "./components/ThemeToggle";
+import { GITHUB_ISSUES_URL } from "./utils/constants";
 import ConfigPanel from "./components/ConfigPanel";
 import ResultTable from "./components/ResultTable";
 import ForumPage from "./components/ForumPage";
 import ComboPage from "./components/ComboPage";
+import OptimizePage from "./components/OptimizePage";
+import SkillEditorPage from "./components/SkillEditorPage";
 import StatusBar from "./components/StatusBar";
 import Toast from "./components/Toast";
 import styles from "./App.module.css";
 
-const AttributeEditorPage = lazy(() => import("./components/AttributeEditorPage"));
-
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const { toasts, addToast, removeToast } = useToast();
-  const [curPage, setCurPage] = useState<AppPage>("calc");
+  const [curPage, setCurPage] = useState<"calc" | "forum" | "combo" | "editor" | "optimize">("calc");
   const [results, setResults] = useState<SkillResultDTO[] | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [status, setStatus] = useState("就绪");
@@ -75,7 +75,16 @@ export default function App() {
         <div className={styles.main}>
           <header className={styles.header}>
             <div className={styles.logo}>剑网3PVP计算器（JPCG）</div>
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <div className={styles.headerActions}>
+              <button
+                className={styles.headerBtn}
+                onClick={() => window.open(GITHUB_ISSUES_URL, "_blank")}
+                title="反馈 / Issues"
+              >
+                🐛
+              </button>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            </div>
           </header>
           <div className={styles.calcLayout} style={{ display: curPage === "calc" ? "" : "none" }}>
             <div className={styles.configPanel}>
@@ -96,15 +105,8 @@ export default function App() {
           </div>
           {curPage === "forum" && <ForumPage addToast={addToast} />}
           {curPage === "combo" && <ComboPage xinfaName={currentXinfa} formData={formData} />}
-          {curPage === "attribute" && (
-            <Suspense fallback={<div className={styles.pageLoading}>正在加载属性编辑器...</div>}>
-              <AttributeEditorPage
-                addToast={addToast}
-                setStatus={setStatus}
-                currentXinfa={currentXinfa}
-              />
-            </Suspense>
-          )}
+          {curPage === "optimize" && <OptimizePage formData={formData} />}
+          {curPage === "editor" && <SkillEditorPage addToast={addToast} />}
         </div>
       </div>
       <StatusBar message={status} />

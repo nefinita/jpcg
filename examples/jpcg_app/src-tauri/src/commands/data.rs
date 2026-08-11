@@ -1,12 +1,4 @@
 use crate::commands::types::SkillPoolItemDTO;
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct AttributeConfigDocumentDTO {
-    pub profession: String,
-    pub file_name: String,
-    pub content: String,
-}
 
 #[tauri::command]
 pub fn load_skill_pool(profession: String) -> Vec<SkillPoolItemDTO> {
@@ -25,20 +17,4 @@ pub fn load_skill_pool(profession: String) -> Vec<SkillPoolItemDTO> {
         wushihuajin: s.wushihuajin,
         dot_flag: s.dot_flag,
     }).collect()
-}
-
-#[tauri::command]
-pub fn load_attribute_config(profession: String) -> Result<AttributeConfigDocumentDTO, String> {
-    let content = jpcg_core::attribute_config_io::read(&profession)?;
-    Ok(AttributeConfigDocumentDTO {
-        file_name: format!("{}.toml", profession),
-        profession,
-        content,
-    })
-}
-
-#[tauri::command]
-pub fn save_attribute_config(profession: String, content: String) -> Result<String, String> {
-    jpcg_core::attribute_config_io::write(&profession, &content)?;
-    Ok(format!("{}.toml", profession))
 }

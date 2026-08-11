@@ -68,21 +68,51 @@ pub mod config_io {
     }
 }
 
-pub mod attribute_config_io {
-    pub fn read(profession: &str) -> Result<String, String> {
-        crate::io::read_attribute_config(profession)
-    }
-
-    pub fn write(profession: &str, content: &str) -> Result<(), String> {
-        crate::io::write_attribute_config(profession, content)
-    }
-}
-
 pub mod profession_list {
     use crate::type_set::xinfa::XinfaSummary;
 
     pub fn list_available() -> Vec<XinfaSummary> {
         crate::io::list_available_professions()
+    }
+}
+
+pub mod skill_editor {
+    use crate::io::{self, TomlConfig};
+    use crate::type_set::skilltype::Skilltype;
+    use crate::type_set::xinfa::{VersionInfo, XinfaConfig};
+
+    pub fn load_skills(profession: &str) -> TomlConfig {
+        io::load_config(profession)
+    }
+
+    pub fn save_skills(
+        profession: &str,
+        xinfa: XinfaConfig,
+        skills: Vec<Skilltype>,
+        version: Option<VersionInfo>,
+    ) -> Result<(), String> {
+        let config = TomlConfig { xinfa, skill: skills, version };
+        io::save_skill_toml(profession, config)
+    }
+}
+
+pub mod derivatives {
+    use crate::cal;
+    use crate::type_set::{
+        buff::BuffConfig, coefficient::CoefficientConfig,
+        hostilepile::HostilepileConfig, player::PlayerConfig, skilltype::Skilltype,
+        xinfa::XinfaConfig,
+    };
+
+    pub fn compute_derivatives(
+        player: &PlayerConfig,
+        hostile: &HostilepileConfig,
+        buff: &BuffConfig,
+        coeff: &CoefficientConfig,
+        xinfa: &XinfaConfig,
+        skills: &[Skilltype],
+    ) -> cal::derivatives::DerivativesOutput {
+        cal::derivatives::compute_derivatives(player, hostile, buff, coeff, xinfa, skills)
     }
 }
 

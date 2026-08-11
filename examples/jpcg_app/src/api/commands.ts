@@ -11,7 +11,8 @@ import type {
   ComboPresetDTO,
   ComboResultDTO,
   XinfaSummaryDTO,
-  AttributeConfigDocumentDTO,
+  SkillEditorDataDTO,
+  DerivativesOutputDTO,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -151,14 +152,6 @@ export async function loadSkillPool(profession: string): Promise<SkillPoolItemDT
   return invoke("load_skill_pool", { profession });
 }
 
-export async function loadAttributeConfig(profession: string): Promise<AttributeConfigDocumentDTO> {
-  return invoke("load_attribute_config", { profession });
-}
-
-export async function saveAttributeConfig(profession: string, content: string): Promise<string> {
-  return invoke("save_attribute_config", { profession, content });
-}
-
 export async function calculateCombo(
   steps: ComboStepDTO[],
   player: Record<string, unknown>,
@@ -191,6 +184,22 @@ export async function loadComboPreset(name: string): Promise<ComboPresetDTO> {
 
 export async function deleteComboPreset(name: string): Promise<void> {
   return invoke("delete_combo_preset", { name });
+}
+
+export async function loadSkillData(profession: string): Promise<SkillEditorDataDTO> {
+  return invoke("load_skill_data", { profession });
+}
+
+export async function saveSkillData(profession: string, data: SkillEditorDataDTO): Promise<void> {
+  return invoke("save_skill_data", { profession, data });
+}
+
+export async function performAppUpdate(beta: boolean): Promise<string> {
+  return invoke("perform_app_update", { beta });
+}
+
+export async function computeDerivatives(req: CalculateRequest): Promise<DerivativesOutputDTO> {
+  return invoke("compute_derivatives", { req });
 }
 
 export async function exportConfig(): Promise<string> {
@@ -306,17 +315,78 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       return { name: args?.name || "预设", steps: [] };
     case "list_professions_cmd":
       return XINFA_LIST_MOCK;
-    case "load_attribute_config":
-      return {
-        profession: String(args?.profession || "mowen"),
-        file_name: `${String(args?.profession || "mowen")}.toml`,
-        content: `[xinfa]\nxinfa_name = "莫问"\nxinfa_nom = "根骨"\natk_up = 1.96\npofang_up = 2.0\nhuixin_up = 0.0\n\n[version]\nlevel = 130\nseason = 3\nmodified = 20260602\n\n[[skill]]\nskill_name = "宫"\nskill_id = 10447\nsub_id = 14474\ngroup = 1\nweapon_request = 0\ndesign_effect = 0\nkind_type = 0\ncast_mode = 0\nguaranteed_hit = false\nhas_critical_strike = true\neffect_type = 0\njihuoqixue = ""\nbase_damage1 = 160\nbase_damage2 = 200\natk_xishu = 2.609375\nwatk_xishu = 0\nhit_up = 0\nhuixin_up = 0\nhuixiao_up = 0\nwushifangyu = 0\nwushihuajin = 0\nwushijianshang = 0\nzhenshishanghai = 0\ndot_flag = 0\n`,
-      };
-    case "save_attribute_config":
-      return `${String(args?.profession || "mowen")}.toml`;
     case "export_config_cmd":
       return "# 模拟导出配置\n[xinfa]\nxinfa_name = \"莫问\"\n";
-    case "import_config_cmd":
+    case "load_skill_data": {
+      const prof = (args?.profession as string) || "mowen";
+      return {
+        xinfa: { profession: prof, xinfa_name: "莫问", xinfa_nom: "根骨", atk_up: 1.96, pofang_up: 2.0, huixin_up: 0 },
+        version: { level: 130, season: 3, modified: 20260602 },
+        skills: [
+          { skill_name: "宫", skill_id: 10447, base_damage1: 160, base_damage2: 200, atk_xishu: 2.609375 },
+          { skill_name: "商", skill_id: 10448, base_damage1: 14, base_damage2: 19, atk_xishu: 2.447916 },
+          { skill_name: "角", skill_id: 10449, base_damage1: 14, base_damage2: 19, atk_xishu: 2.447916 },
+        ].map((s) => ({
+          ...s,
+          sub_id: 0, group: 0, weapon_request: 0, design_effect: 0,
+          kind_type: 0, cast_mode: 0, guaranteed_hit: false, has_critical_strike: false,
+          effect_type: 0, jihuoqixue: "", watk_xishu: 0, hit_up: 0,
+          huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0,
+          wushijianshang: 0, zhenshishanghai: 0, dot_flag: 0, dot_num: 0, dot_up: 0,
+        })),
+      };
+    }
+    case "compute_derivatives": {
+      const req = args?.req as CalculateRequest | undefined;
+      const skills = ["宫", "商", "角", "徵", "羽"];
+      const baseVal = (idx: number) => {
+        const vals = [15000, 55000, 15000, 1200, 11000, 0];
+        return vals[idx] || 0;
+      };
+      const baseDer = (idx: number) => {
+        const ders = [87.17, 44.48, 11.97, 11.14, 16.13, 44.49];
+        return ders[idx] || 0;
+      };
+      const attrs = [
+        { attr_name: "基础属性", attr_id: "jichu_shuxing" },
+        { attr_name: "基础攻击", attr_id: "jichu_gongji" },
+        { attr_name: "会心等级", attr_id: "huixin_dengji" },
+        { attr_name: "会心效果", attr_id: "huixin_xiaoguo" },
+        { attr_name: "破防等级", attr_id: "pofang_dengji" },
+        { attr_name: "武器伤害", attr_id: "wuqi_shanghai" },
+      ];
+      const ders = attrs.map((a, ai) => ({
+        attr_name: a.attr_name,
+        attr_id: a.attr_id,
+        current_value: baseVal(ai),
+        total_derivative: baseDer(ai) * skills.length + (Math.random() - 0.5) * 10,
+        per_skill: skills.map((sn) => ({
+          skill_name: sn,
+          derivative: baseDer(ai) * (0.8 + Math.random() * 0.4),
+        })),
+      }));
+      const sorted = [...ders].sort((a, b) => b.total_derivative - a.total_derivative);
+      return {
+        derivatives: sorted,
+        recommendation: {
+          crit_vs_pofang: {
+            better: ders.find((d) => d.attr_id === "pofang_dengji")!.total_derivative >
+              ders.find((d) => d.attr_id === "huixin_dengji")!.total_derivative
+              ? "破防等级" : "会心等级",
+            huixin_total: ders.find((d) => d.attr_id === "huixin_dengji")!.total_derivative,
+            pofang_total: ders.find((d) => d.attr_id === "pofang_dengji")!.total_derivative,
+          },
+          top3: sorted.slice(0, 3).map((d) => ({
+            attr_name: d.attr_name,
+            attr_id: d.attr_id,
+            total_derivative: d.total_derivative,
+          })),
+        },
+      };
+    }
+    case "perform_app_update":
+      return "重启中...（模拟）";
+    case "save_skill_data":
       return null;
     default:
       return { success: true };
