@@ -56,9 +56,70 @@ struct ModulesManifest {
 #[derive(Serialize)]
 struct ModulesFileEntry {
     name: String,
+    /// 产生该 dll 的 crate 版本（如 core="2.1.0"、const="130.3.20260602"）
+    version: String,
     hash: String,
     hash_type: String,
     size: u64,
+}
+
+/// 从 dll 文件名推断对应 crate 名：libjpcg_core.dylib → jpcg_core
+fn crate_name_from_lib(name: &str) -> Option<String> {
+    for suffix in [".dylib", ".so", ".dll"] {
+        if let Some(stem) = name.strip_suffix(suffix) {
+            let s = stem.strip_prefix("lib").unwrap_or(stem);
+            return Some(s.to_string());
+        }
+    }
+    None
+}
+
+/// 读取工作区 crates/{name}/Cargo.toml 的 version（不含 v 前缀）
+/// 支持 version.workspace = true（从根 workspace.package.version 继承）
+fn crate_version(crate_name: &str) -> Option<String> {
+    let path = PathBuf::from("crates").join(crate_name).join("Cargo.toml");
+    let content = fs::read_to_string(&path).ok()?;
+    for line in content.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("version") {
+            // version.workspace = true（继承根 workspace.package.version）
+            if rest.trim_start().starts_with(".workspace") {
+                return workspace_version();
+            }
+            let v = rest.trim_start_matches([' ', '=']);
+            let v = v.trim_matches([' ', '"']);
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// 读取根 Cargo.toml 的 [workspace.package] version
+fn workspace_version() -> Option<String> {
+    let content = fs::read_to_string("Cargo.toml").ok()?;
+    let mut in_workspace_package = false;
+    for line in content.lines() {
+        let t = line.trim();
+        if t.starts_with("[workspace.package]") {
+            in_workspace_package = true;
+            continue;
+        }
+        if t.starts_with('[') {
+            in_workspace_package = false;
+        }
+        if in_workspace_package {
+            if let Some(rest) = t.strip_prefix("version") {
+                let v = rest.trim_start_matches([' ', '=']);
+                let v = v.trim_matches([' ', '"']);
+                if !v.is_empty() {
+                    return Some(v.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 fn detect_platform() -> &'static str {
@@ -73,7 +134,10 @@ fn detect_platform() -> &'static str {
 fn main() {
     let args = Args::parse();
 
-    let platform = args.platform.clone().unwrap_or_else(|| detect_platform().to_string());
+    let platform = args
+        .platform
+        .clone()
+        .unwrap_or_else(|| detect_platform().to_string());
 
     if !args.data_dir.is_dir() {
         eprintln!("错误: '{}' 不是有效的目录", args.data_dir.display());
@@ -134,7 +198,11 @@ fn main() {
         });
 
         fs::write(&args.modules_output, &modules_toml).unwrap_or_else(|e| {
-            eprintln!("写入输出文件 '{}' 失败: {}", args.modules_output.display(), e);
+            eprintln!(
+                "写入输出文件 '{}' 失败: {}",
+                args.modules_output.display(),
+                e
+            );
             std::process::exit(1);
         });
 
@@ -189,10 +257,17 @@ fn walk_modules_dir(
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
+        // 跳过非 dll 文件（如 manifest 本身）
+        let Some(crate_name) = crate_name_from_lib(&name) else {
+            continue;
+        };
         let hash = calc_sha256(&path)?;
         let size = fs::metadata(&path)?.len();
+        // 从 dll 文件名推断 crate 版本
+        let version = crate_version(&crate_name).unwrap_or_default();
         files.push(ModulesFileEntry {
             name,
+            version,
             hash,
             hash_type: "SHA256".to_string(),
             size,

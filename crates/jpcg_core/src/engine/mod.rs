@@ -13,8 +13,8 @@ use std::io::Error;
 
 use crate::{
     engine::atkcal::JpcgConfig,
-    store::{TomlConfig, data_dir, toml_input},
     log::{error, success},
+    store::{TomlConfig, data_dir, toml_input},
     type_set::{
         buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
         player::PlayerConfig, xinfa::XinfaConfig,

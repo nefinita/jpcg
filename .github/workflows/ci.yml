@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master, develop]
+  push:
+    branches: [develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  rust-checks:
+    name: Rust 构建 + 测试 + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 格式检查 (rustfmt)
+        run: cargo fmt --all -- --check
+
+      - name: 静态检查 (clippy)
+        # 既有技术债告警众多，暂以「不产生编译错误」为门禁；新代码应避免新增警告
+        run: cargo clippy --workspace --all-targets
+
+      - name: 构建 + 测试（含双模式）
+        run: |
+          cargo build --workspace
+          cargo test --workspace
+          cargo test -p jpcg_app --lib --no-default-features --features dynamic
+
+  golden-regression:
+    name: 金标准回归（计算数值）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: 金标准测试
+        run: cargo test -p jpcg_core -- golden
+
+  frontend:
+    name: 前端构建 (tsc + vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/jpcg_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: examples/jpcg_app/package-lock.json
+      - run: npm ci
+      - run: npm run build

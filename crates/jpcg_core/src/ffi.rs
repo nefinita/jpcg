@@ -135,7 +135,10 @@ unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
         return None;
     }
-    unsafe { CStr::from_ptr(ptr) }.to_str().ok().map(|s| s.to_string())
+    unsafe { CStr::from_ptr(ptr) }
+        .to_str()
+        .ok()
+        .map(|s| s.to_string())
 }
 
 /// 业务方法分发：method + request_json → response_json
@@ -435,6 +438,13 @@ pub unsafe extern "C" fn jpcg_last_error() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn jpcg_abi_version() -> u32 {
     ABI_VERSION
+}
+
+/// 返回本 core 模块库版本号（如 "2.1.0"），返回字符串需 jpcg_free_string 释放
+/// 供宿主 UI 展示各 dll 版本。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn jpcg_core_version() -> *mut c_char {
+    cstring_out(crate::CORE_VERSION)
 }
 
 // ============================================================================

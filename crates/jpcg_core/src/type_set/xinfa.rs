@@ -50,6 +50,43 @@ pub struct VersionInfo {
     pub modified: u32,
 }
 
+impl VersionInfo {
+    /// 数据版本号（紧凑格式，合法 semver）：等级.赛季.日期
+    /// 例：level=130, season=3, modified=20260602 → "130.3.20260602"
+    pub fn compact(&self) -> String {
+        format!("{}.{}.{}", self.level, self.season, self.modified)
+    }
+
+    /// 数据版本号（带 v 前缀，供 update.toml / URL 使用）：v130.3.20260602
+    pub fn compact_v(&self) -> String {
+        format!("v{}.{}.{}", self.level, self.season, self.modified)
+    }
+
+    /// 日期展示：20260602 → "2026-06-02"
+    fn modified_date_pretty(&self) -> String {
+        let m = format!("{:08}", self.modified);
+        if m.len() == 8 {
+            format!("{}-{}-{}", &m[0..4], &m[4..6], &m[6..8])
+        } else {
+            m
+        }
+    }
+
+    /// UI 美化展示：130级第3赛季 (2026-06-02)
+    pub fn label(&self) -> Option<String> {
+        if self.level > 0 {
+            Some(format!(
+                "{}级第{}赛季 ({})",
+                self.level,
+                self.season,
+                self.modified_date_pretty()
+            ))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct XinfaSummary {
     pub value: String,

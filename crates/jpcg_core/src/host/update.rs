@@ -40,10 +40,7 @@ fn base_path() -> Result<std::path::PathBuf, String> {
 }
 
 /// 检查更新（应用 + 数据）
-pub fn check_update(
-    beta: bool,
-    force: bool,
-) -> Result<jpcg_update::UpdateCheckResult, String> {
+pub fn check_update(beta: bool, force: bool) -> Result<jpcg_update::UpdateCheckResult, String> {
     let base_path = base_path()?;
     block_on(jpcg_update::check_updates(&base_path, beta, force)).map_err(|e| e.to_string())
 }
@@ -81,7 +78,10 @@ pub fn perform_modules_update(
     let module_dir = jpcg_update::modules::modules_dir();
     progress.on_progress(&UpdateProgressEvent::new(
         "done",
-        &format!("模块更新完成，正在重启以加载新模块（{}）", module_dir.display()),
+        &format!(
+            "模块更新完成，正在重启以加载新模块（{}）",
+            module_dir.display()
+        ),
         1.0,
         None,
     ));
@@ -115,8 +115,13 @@ pub fn perform_update(
             modules_version: None,
             modules_files_to_update: vec![],
         };
-        block_on(jpcg_update::download_updates(&base_path, beta, &check_result, &progress))
-            .map_err(|e| e.to_string())?;
+        block_on(jpcg_update::download_updates(
+            &base_path,
+            beta,
+            &check_result,
+            &progress,
+        ))
+        .map_err(|e| e.to_string())?;
     }
 
     Ok("更新完成".to_string())
@@ -177,9 +182,12 @@ pub fn perform_app_update(events: &dyn HostEvents, beta: bool) -> Result<String,
         0.1,
         Some(&info.binary_path),
     ));
-    let temp_path =
-        block_on(jpcg_update::download_file_with_progress(&info.download_url, &info.binary_path, &progress))
-            .map_err(|e| format!("下载失败: {}", e))?;
+    let temp_path = block_on(jpcg_update::download_file_with_progress(
+        &info.download_url,
+        &info.binary_path,
+        &progress,
+    ))
+    .map_err(|e| format!("下载失败: {}", e))?;
 
     // 3. 验证哈希
     progress.on_progress(&UpdateProgressEvent::new(
@@ -188,8 +196,8 @@ pub fn perform_app_update(events: &dyn HostEvents, beta: bool) -> Result<String,
         0.85,
         Some(&info.binary_path),
     ));
-    let downloaded_hash = block_on(jpcg_update::calculate_file_sha256(&temp_path))
-        .map_err(|e| e.to_string())?;
+    let downloaded_hash =
+        block_on(jpcg_update::calculate_file_sha256(&temp_path)).map_err(|e| e.to_string())?;
     if downloaded_hash != info.expected_hash {
         return Err("下载文件哈希验证失败，更新已取消。".to_string());
     }

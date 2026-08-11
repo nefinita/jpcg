@@ -8,9 +8,12 @@ pub mod engine;
 pub use crate::engine as cal;
 pub mod ffi;
 pub mod host;
-mod store;
 mod log;
+mod store;
 pub mod type_set;
+
+/// 本 core 模块库版本（供宿主 UI 展示，与 FFI jpcg_core_version 一致）
+pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod load_config {
     use crate::store::{SaveConfig, TomlConfig, load_config, load_save_config};

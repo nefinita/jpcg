@@ -137,6 +137,13 @@ export interface ModulesFileEntry {
   size: number;
 }
 
+export interface ModuleVersions {
+  core: string;
+  update: string;
+  const: string;
+  app: string;
+}
+
 export interface UpdateProgressEvent {
   stage: string;
   message: string;

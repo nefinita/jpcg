@@ -35,6 +35,7 @@ flate2 = "1.1.9"
 jpcg_core = { path = "crates/jpcg_core" }
 jpcg_update = { path = "crates/jpcg_update" }
 jpcg_api = { path = "crates/jpcg_api" }
+jpcg_const = { path = "crates/jpcg_const" }
 
 [workspace.lints.clippy]
 

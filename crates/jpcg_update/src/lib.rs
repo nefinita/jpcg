@@ -8,6 +8,9 @@ mod download;
 pub mod ffi;
 pub mod modules;
 
+/// 本 update 模块库版本（供宿主 UI 展示，与 FFI jpcg_update_version 一致）
+pub const UPDATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// 更新检查服务器基础 URL（稳定版）
 const UPDATE_BASE_URL: &str = "https://nefinita-ai.com/updates/JPCG/";
 /// 更新检查服务器基础 URL（Beta 版）

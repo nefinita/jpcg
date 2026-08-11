@@ -15,10 +15,7 @@ pub fn load_skill_data(profession: String) -> Result<SkillEditorDataDTO, String>
 }
 
 /// 保存心法技能数据（技能编辑器用）
-pub fn save_skill_data(
-    profession: String,
-    data: SkillEditorDataDTO,
-) -> Result<(), String> {
+pub fn save_skill_data(profession: String, data: SkillEditorDataDTO) -> Result<(), String> {
     let xinfa = crate::type_set::xinfa::XinfaConfig::new(
         data.xinfa.profession,
         data.xinfa.xinfa_name,
@@ -29,11 +26,14 @@ pub fn save_skill_data(
     );
     let skills = data.skills.into_iter().map(Into::into).collect();
     let version = data.version.map(Into::into);
-    store::save_skill_toml(&profession, store::TomlConfig {
-        xinfa,
-        skill: skills,
-        version,
-    })
+    store::save_skill_toml(
+        &profession,
+        store::TomlConfig {
+            xinfa,
+            skill: skills,
+            version,
+        },
+    )
 }
 
 /// 技能池条目（连招编辑器下拉）

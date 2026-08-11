@@ -13,6 +13,7 @@ import type {
   XinfaSummaryDTO,
   SkillEditorDataDTO,
   DerivativesOutputDTO,
+  ModuleVersions,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -97,6 +98,10 @@ export async function loadProfessionConfig(profession: string): Promise<Record<s
 
 export async function checkUpdate(beta = false, force = false): Promise<UpdateCheckResult> {
   return invoke("check_update", { beta, force });
+}
+
+export async function getModuleVersions(): Promise<ModuleVersions> {
+  return invoke("get_module_versions");
 }
 
 export async function performUpdate(
@@ -407,6 +412,13 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         has_modules_update: false,
         modules_version: null,
         modules_files_to_update: [],
+      };
+    case "get_module_versions":
+      return {
+        core: "2.1.0-alpha.1",
+        update: "2.1.0-alpha.1",
+        const: "130.3.20260602",
+        app: "2.1.0-alpha.1",
       };
     case "perform_app_update":
       return "重启中...（模拟）";

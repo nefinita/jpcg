@@ -27,6 +27,16 @@ pub extern "C" fn jpcg_update_abi_version() -> u32 {
     1
 }
 
+/// 返回本 update 模块库版本号（如 "2.1.0"）
+/// 返回字符串需 jpcg_update_free_string 释放。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn jpcg_update_version() -> *mut c_char {
+    CString::new(crate::UPDATE_VERSION)
+        .ok()
+        .map(|c| c.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// 返回最近一次错误信息
 #[unsafe(no_mangle)]
 pub extern "C" fn jpcg_update_last_error() -> *mut c_char {
@@ -62,7 +72,10 @@ unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
         return None;
     }
-    unsafe { CStr::from_ptr(ptr) }.to_str().ok().map(|s| s.to_string())
+    unsafe { CStr::from_ptr(ptr) }
+        .to_str()
+        .ok()
+        .map(|s| s.to_string())
 }
 
 /// 检查更新（同步封装）
@@ -85,8 +98,13 @@ pub unsafe extern "C" fn jpcg_update_check(request: *const c_char) -> *mut c_cha
                 return std::ptr::null_mut();
             }
         };
-        let base_path = std::path::PathBuf::from(parsed.base_path.unwrap_or_else(|| ".".to_string()));
-        match block_on(crate::check_updates(&base_path, parsed.beta.unwrap_or(false), parsed.force.unwrap_or(false))) {
+        let base_path =
+            std::path::PathBuf::from(parsed.base_path.unwrap_or_else(|| ".".to_string()));
+        match block_on(crate::check_updates(
+            &base_path,
+            parsed.beta.unwrap_or(false),
+            parsed.force.unwrap_or(false),
+        )) {
             Ok(result) => match serde_json::to_string(&result) {
                 Ok(s) => cstring_out(&s),
                 Err(e) => {
@@ -129,8 +147,13 @@ pub unsafe extern "C" fn jpcg_update_fetch_app_info(request: *const c_char) -> *
                 return std::ptr::null_mut();
             }
         };
-        let base_path = std::path::PathBuf::from(parsed.base_path.unwrap_or_else(|| ".".to_string()));
-        match block_on(crate::fetch_app_update_info(&base_path, parsed.beta.unwrap_or(false), parsed.force.unwrap_or(false))) {
+        let base_path =
+            std::path::PathBuf::from(parsed.base_path.unwrap_or_else(|| ".".to_string()));
+        match block_on(crate::fetch_app_update_info(
+            &base_path,
+            parsed.beta.unwrap_or(false),
+            parsed.force.unwrap_or(false),
+        )) {
             Ok(Some(info)) => match serde_json::to_string(&info) {
                 Ok(s) => cstring_out(&s),
                 Err(e) => {
@@ -172,7 +195,9 @@ pub unsafe extern "C" fn jpcg_update_file_sha256(request: *const c_char) -> *mut
                 return std::ptr::null_mut();
             }
         };
-        match block_on(crate::calculate_file_sha256(std::path::Path::new(&parsed.path))) {
+        match block_on(crate::calculate_file_sha256(std::path::Path::new(
+            &parsed.path,
+        ))) {
             Ok(hash) => match serde_json::json!({"hash": hash}).to_string() {
                 s => cstring_out(&s),
             },

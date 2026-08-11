@@ -100,7 +100,8 @@ fn delete_combo_preset_impl(name: String) -> Result<(), String> {
 #[cfg(feature = "dynamic")]
 fn delete_combo_preset_impl(name: String) -> Result<(), String> {
     let req = serde_json::json!({ "name": name });
-    crate::commands::ffi_bridge::call::<_, serde_json::Value>("delete_combo_preset", &req).map(|_| ())
+    crate::commands::ffi_bridge::call::<_, serde_json::Value>("delete_combo_preset", &req)
+        .map(|_| ())
 }
 
 #[tauri::command]

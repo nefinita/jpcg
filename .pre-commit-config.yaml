@@ -1,0 +1,40 @@
+# JPCG pre-commit hooks
+# 安装：pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: rustfmt
+        entry: cargo fmt --all -- --check
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: clippy
+        name: clippy
+        entry: cargo clippy --workspace --all-targets
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: golden-test
+        name: golden-test
+        entry: cargo test -p jpcg_core -- golden
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: frontend-build
+        name: frontend-build (tsc)
+        entry: sh -c 'cd examples/jpcg_app && npx tsc --noEmit'
+        language: system
+        pass_filenames: false
+        always_run: true

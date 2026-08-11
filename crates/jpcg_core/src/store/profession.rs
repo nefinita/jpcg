@@ -55,11 +55,7 @@ pub fn list_available_professions() -> Vec<XinfaSummary> {
         };
 
         let ver = cfg.version.clone().unwrap_or_default();
-        let version_label = if ver.level > 0 {
-            Some(format!("{}级第{}赛季", ver.level, ver.season))
-        } else {
-            None
-        };
+        let version_label = ver.label();
 
         cfg.xinfa.profession = key.clone();
         by_group.entry(key.clone()).or_default().push(XinfaSummary {

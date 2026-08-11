@@ -35,7 +35,11 @@ impl From<engine::derivatives::DerivativeEntry> for DerivativeEntryDTO {
             attr_id: d.attr_id,
             current_value: d.current_value,
             total_derivative: d.total_derivative,
-            per_skill: d.per_skill.into_iter().map(SkillDerivativeDTO::from).collect(),
+            per_skill: d
+                .per_skill
+                .into_iter()
+                .map(SkillDerivativeDTO::from)
+                .collect(),
         }
     }
 }
@@ -72,7 +76,11 @@ impl From<engine::derivatives::OptimizeRecommendation> for OptimizeRecommendatio
 impl From<engine::derivatives::DerivativesOutput> for DerivativesOutputDTO {
     fn from(o: engine::derivatives::DerivativesOutput) -> Self {
         DerivativesOutputDTO {
-            derivatives: o.derivatives.into_iter().map(DerivativeEntryDTO::from).collect(),
+            derivatives: o
+                .derivatives
+                .into_iter()
+                .map(DerivativeEntryDTO::from)
+                .collect(),
             recommendation: OptimizeRecommendationDTO::from(o.recommendation),
         }
     }
@@ -180,7 +188,12 @@ pub fn toml_to_editor_data(toml_cfg: &TomlConfig) -> SkillEditorDataDTO {
             huixin_up: toml_cfg.xinfa.huixin_up,
         },
         version: toml_cfg.version.clone().map(VersionInfoDTO::from),
-        skills: toml_cfg.skill.iter().cloned().map(SkillEditorItemDTO::from).collect(),
+        skills: toml_cfg
+            .skill
+            .iter()
+            .cloned()
+            .map(SkillEditorItemDTO::from)
+            .collect(),
     }
 }
 
@@ -205,18 +218,16 @@ impl From<ComboStepDTO> for ComboStep {
         ComboStep {
             skill_id: dto.skill.skill_id,
             skill_name: dto.skill.skill_name,
-            overrides: dto
-                .overrides
-                .map(|o| StepOverride {
-                    base_damage_override: o.base_damage_override,
-                    atk_xishu_override: o.atk_xishu_override,
-                    jianshang_bili_override: o.jianshang_bili_override,
-                    wushihuajin_override: o.wushihuajin_override,
-                    extra_atk_pct: o.extra_atk_pct,
-                    gain_override: o.gain_override,
-                    extra_crit_pct: o.extra_crit_pct,
-                    extra_crit_dmg_pct: o.extra_crit_dmg_pct,
-                }),
+            overrides: dto.overrides.map(|o| StepOverride {
+                base_damage_override: o.base_damage_override,
+                atk_xishu_override: o.atk_xishu_override,
+                jianshang_bili_override: o.jianshang_bili_override,
+                wushihuajin_override: o.wushihuajin_override,
+                extra_atk_pct: o.extra_atk_pct,
+                gain_override: o.gain_override,
+                extra_crit_pct: o.extra_crit_pct,
+                extra_crit_dmg_pct: o.extra_crit_dmg_pct,
+            }),
         }
     }
 }

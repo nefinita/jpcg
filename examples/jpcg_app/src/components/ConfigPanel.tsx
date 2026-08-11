@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO } from "../types";
+import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions } from "../types";
 import {
   XINFA_LIST as XINFA_FALLBACK, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS,
   BUFF_FIELDS, COEFFICIENT_FIELDS, DEFAULT_BUFF, DEFAULT_COEFFICIENT,
@@ -49,11 +49,13 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
   const [betaChannel, setBetaChannel] = useState(() => localStorage.getItem(STORAGE_KEYS.betaChannel) === "true");
+  const [moduleVersions, setModuleVersions] = useState<ModuleVersions | null>(null);
 
   useEffect(() => {
     api.listProfessions().then((list) => {
       if (list.length > 0) setProfessionOptions(list);
     }).catch(() => {});
+    api.getModuleVersions().then(setModuleVersions).catch(() => {});
   }, []);
 
   const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
@@ -418,6 +420,11 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
               <div className={styles.progressFill} style={{ width: `${Math.round(updateProgress * 100)}%` }} />
             </div>
             <div className={styles.progressText}>{updateMessage}</div>
+          </div>
+        )}
+        {moduleVersions && (
+          <div className={styles.moduleVersions}>
+            App {moduleVersions.app} · Core {moduleVersions.core} · Update {moduleVersions.update} · Const {moduleVersions.const}
           </div>
         )}
       </div>

@@ -38,7 +38,13 @@ pub async fn perform_update(
     latest_data_version: Option<String>,
     data_files_to_update: Vec<String>,
 ) -> Result<String, String> {
-    perform_update_impl(app_handle, beta, has_data_update, latest_data_version, data_files_to_update)
+    perform_update_impl(
+        app_handle,
+        beta,
+        has_data_update,
+        latest_data_version,
+        data_files_to_update,
+    )
 }
 
 #[cfg(feature = "static")]
@@ -78,7 +84,10 @@ fn perform_update_impl(
 }
 
 #[tauri::command]
-pub async fn perform_app_update(app_handle: tauri::AppHandle, beta: bool) -> Result<String, String> {
+pub async fn perform_app_update(
+    app_handle: tauri::AppHandle,
+    beta: bool,
+) -> Result<String, String> {
     perform_app_update_impl(app_handle, beta)
 }
 

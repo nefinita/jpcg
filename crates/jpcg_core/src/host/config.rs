@@ -10,11 +10,7 @@ use jpcg_api::{
 use crate::store;
 
 /// 保存配置（saved_config.toml）
-pub fn save_config(
-    player: PlayerConfigDTO,
-    hostilepile: HostileConfigDTO,
-    xinfa: XinfaConfigDTO,
-) {
+pub fn save_config(player: PlayerConfigDTO, hostilepile: HostileConfigDTO, xinfa: XinfaConfigDTO) {
     let player_core = crate::type_set::player::PlayerConfig::new(
         player.jcsx,
         player.jichu_shuxing,
@@ -94,5 +90,8 @@ pub fn load_config() -> jpcg_api::ConfigDataDTO {
 
 /// 可用门派列表
 pub fn list_professions() -> Vec<XinfaSummaryDTO> {
-    store::list_available_professions().into_iter().map(Into::into).collect()
+    store::list_available_professions()
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }

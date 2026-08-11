@@ -1,0 +1,5 @@
+# JPCG rustfmt 配置
+edition = "2024"
+max_width = 100
+match_arm_leading_pipes = "Never"
+reorder_imports = true

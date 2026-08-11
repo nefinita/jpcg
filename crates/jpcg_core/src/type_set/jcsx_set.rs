@@ -6,10 +6,11 @@
 
 use std::collections::HashMap;
 
-use crate::store::toml_input;
 use crate::log::info;
+use crate::store::toml_input;
 
-/// 从 data/atk_config.toml 加载属性映射数据（预留）
+/// 从 data/atk_config.toml 加载属性映射数据（预留，待接入）
+#[allow(dead_code)]
 fn data_load() {
     let content = toml_input("data/atk_config").unwrap_or_default();
     info(format!("已加载属性映射配置:\n{}", content).as_str());

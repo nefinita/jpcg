@@ -18,10 +18,29 @@ pub const MODULES_MANIFEST_FILENAME: &str = "modules_manifest.toml";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModulesFileEntry {
     pub name: String,
+    /// 产生该 dll 的 crate 版本（如 core="2.1.0"、const="130.3.20260602"）
+    pub version: String,
     pub hash: String,
     #[serde(rename = "hash_type")]
     pub hash_type: String,
     pub size: u64,
+}
+
+impl ModulesFileEntry {
+    /// 是否应更新：本地快照缺该条目 / 版本不同 / 哈希不同
+    fn needs_update(&self, local_manifest: &ModulesManifest, local_dir: &Path) -> bool {
+        if !local_dir.join(&self.name).exists() {
+            return true;
+        }
+        if let Some(local) = local_manifest.files.iter().find(|f| f.name == self.name) {
+            if !local.version.is_empty() && local.version != self.version {
+                return true;
+            }
+            local.hash != self.hash
+        } else {
+            true
+        }
+    }
 }
 
 /// 模块清单（对应服务器 modules_manifest.toml）
@@ -79,7 +98,35 @@ pub async fn fetch_modules_manifest(
     Ok(manifest)
 }
 
+/// 本地模块快照路径 = modules/modules_manifest.toml（记录上次应用的各 dll 版本+哈希）
+pub fn local_snapshot_path(local_dir: &Path) -> PathBuf {
+    local_dir.join(MODULES_MANIFEST_FILENAME)
+}
+
+fn load_local_snapshot(local_dir: &Path) -> ModulesManifest {
+    let path = local_snapshot_path(local_dir);
+    match std::fs::read_to_string(&path) {
+        Ok(s) => toml::from_str(&s).unwrap_or_else(|_| ModulesManifest {
+            modules_version: String::new(),
+            platform: String::new(),
+            files: vec![],
+        }),
+        Err(_) => ModulesManifest {
+            modules_version: String::new(),
+            platform: String::new(),
+            files: vec![],
+        },
+    }
+}
+
+fn save_local_snapshot(local_dir: &Path, manifest: &ModulesManifest) {
+    if let Ok(s) = toml::to_string_pretty(manifest) {
+        let _ = std::fs::write(local_snapshot_path(local_dir), s);
+    }
+}
+
 /// 对比本地 modules/ 目录，返回需要更新的模块文件
+/// 逐 dll 比较：本地快照缺该条目 / 版本不同 / 哈希不同 → 需更新
 pub async fn check_modules_update(
     beta: bool,
     force: bool,
@@ -114,16 +161,12 @@ pub async fn check_modules_update(
     };
 
     let local_dir = modules_dir();
+    let local_manifest = load_local_snapshot(&local_dir);
+
     let mut needed = Vec::new();
     for entry in &manifest.files {
-        let local = local_dir.join(&entry.name);
-        if force || !local.exists() {
+        if force || entry.needs_update(&local_manifest, &local_dir) {
             needed.push(entry.clone());
-            continue;
-        }
-        match download::calculate_file_sha256(&local).await {
-            Ok(hash) if hash == entry.hash => {}
-            _ => needed.push(entry.clone()),
         }
     }
 
@@ -200,6 +243,18 @@ pub async fn download_and_install_modules(
             Some(&entry.name),
         ));
     }
+
+    // 更新本地快照：合并本次安装的条目
+    let mut snapshot = load_local_snapshot(&dest_dir);
+    snapshot.modules_version = app_version.to_string();
+    for entry in files_to_update {
+        if let Some(existing) = snapshot.files.iter_mut().find(|f| f.name == entry.name) {
+            *existing = entry.clone();
+        } else {
+            snapshot.files.push(entry.clone());
+        }
+    }
+    save_local_snapshot(&dest_dir, &snapshot);
 
     Ok(())
 }

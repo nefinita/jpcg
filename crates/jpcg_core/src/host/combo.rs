@@ -3,8 +3,8 @@
 // ============================================================================
 
 use jpcg_api::{
-    ComboPresetDTO, ComboResultDTO, ComboStepDTO, PlayerConfigDTO, HostileConfigDTO,
-    XinfaConfigDTO, BuffConfigDTO, CoefficientConfigDTO,
+    BuffConfigDTO, CoefficientConfigDTO, ComboPresetDTO, ComboResultDTO, ComboStepDTO,
+    HostileConfigDTO, PlayerConfigDTO, XinfaConfigDTO,
 };
 
 use crate::engine;
@@ -21,7 +21,13 @@ fn into_core(
     xinfa: XinfaConfigDTO,
     buff: BuffConfigDTO,
     coeff: CoefficientConfigDTO,
-) -> (PlayerConfig, HostilepileConfig, XinfaConfig, BuffConfig, CoefficientConfig) {
+) -> (
+    PlayerConfig,
+    HostilepileConfig,
+    XinfaConfig,
+    BuffConfig,
+    CoefficientConfig,
+) {
     let player = PlayerConfig::new(
         player.jcsx,
         player.jichu_shuxing,
@@ -76,7 +82,8 @@ pub fn calculate_combo(
     buff: BuffConfigDTO,
     coefficient: CoefficientConfigDTO,
 ) -> Result<ComboResultDTO, String> {
-    let (player, hostile, xinfa, buff, coeff) = into_core(player, hostile, xinfa, buff, coefficient);
+    let (player, hostile, xinfa, buff, coeff) =
+        into_core(player, hostile, xinfa, buff, coefficient);
 
     let skilltypes: Vec<_> = steps
         .iter()
@@ -107,16 +114,18 @@ pub fn calculate_combo(
         })
         .collect();
 
-    let result = engine::kill_prob::calculate_combo(
-        &skilltypes, &player, &hostile, &xinfa, &buff, &coeff,
-    );
+    let result =
+        engine::kill_prob::calculate_combo(&skilltypes, &player, &hostile, &xinfa, &buff, &coeff);
     Ok(ComboResultDTO::from(result))
 }
 
 /// 保存连招预设
 pub fn save_combo_preset(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
     let core_steps = steps.into_iter().map(ComboStep::from).collect();
-    let preset = ComboPreset { name, steps: core_steps };
+    let preset = ComboPreset {
+        name,
+        steps: core_steps,
+    };
     store::save_combo_preset(&preset)
 }
 

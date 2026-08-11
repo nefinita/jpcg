@@ -51,7 +51,20 @@ cargo run -p forum                   # start forum (port 8080 by default)
 # 1. 将 app binary + manifest.toml 放到对应版本目录
 # 2. 更新 update.toml
 # 3. 将 updater binary 放到所有版本目录的公共位置
+
+# 版本管理（组件独立，见 CONTRIBUTING.md）：
+# 根 workspace version = core 版本（release tag / 安装包命名源）；继承 crates 用 version.workspace=true
+# jpcg_const = 130.3.{date}（等级.赛季.日期）；jpcg_updater 独立版本
+# bump: cargo set-version <ver> + scripts/sync-version.sh（同步 package.json/tauri.conf.json/前端模拟串）
 ```
+
+## 维护流程（git-flow + CI，详见 CONTRIBUTING.md）
+
+- **分支**：`master`(生产，受保护) + `develop`(集成交互，受保护) + `feature/*` + `release/vX` + `hotfix/*`。一律经 PR，squash 合并
+- **CI**（.github/workflows/ci.yml）：rustfmt + clippy(不 -D warnings) + 构建/测试 + 金标准 + 前端 build
+- **发布**（scripts/release.sh + release.yml）：三平台矩阵构建 + 打包，GitHub Release 命名用 core 版本
+- **依赖**：deps.yml（cargo audit / npm audit）+ dependabot.yml（每周）
+- **变更日志**：`changes/` 逐条 + 发布时聚合到 CHANGELOG.md
 
 No CI, test suites, or formatter config exist.
 
@@ -74,6 +87,8 @@ No CI, test suites, or formatter config exist.
 - **No `rust-toolchain.toml`** — relies on `rustup default`.
 - **`tauri.conf.json`** has `withGlobalTauri: true` — frontend accesses `window.__TAURI__`. CSP is `null` (disabled).
 - **Forum** default port 8080, configurable via `PORT`. Data dir (`FORUM_DATA_DIR`, default `forum_data`).
+- **版本模型（组件独立）**：root `workspace.package.version` = core/release 版本源；`version.workspace=true` 继承（api/core/update/app/forum/manifest-gen）；`jpcg_const` = `130.3.{YYYYMMDD}`（等级.赛季.日期，独立）；`jpcg_updater` 独立。shuxing 数据 `version={level,season,modified}`，modified=YYYYMMDD。FFI 版本 getter：`jpcg_core_version`/`jpcg_const_version`/`jpcg_update_version`；Tauri `get_module_versions` 命令 + ConfigPanel 底部展示。
+- **模块更新**：`modules_manifest.toml` 逐 dll 带 `version`+`sha256`，本地 `modules/modules_manifest.toml` 存快照，`check_modules_update` 逐 dll 比较。
 
 ## Agreement: change log
 
