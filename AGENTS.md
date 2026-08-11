@@ -66,7 +66,14 @@ cargo run -p forum                   # start forum (port 8080 by default)
 - **依赖**：deps.yml（cargo audit / npm audit）+ dependabot.yml（每周）
 - **变更日志**：`changes/` 逐条 + 发布时聚合到 CHANGELOG.md
 
-No CI, test suites, or formatter config exist.
+## 开源与命名（当前决策）
+
+- **名称**：当前保留 `JPCG`（= JX3 PVP Calc GUI）。曾考虑改名"试剑/演武/剑算"等场景无关名以支持 PVE/全场景，
+  但**重命名已搁置**（内部 `jpcg_*` crate/FFI/`JPCG_*` env 均不动）。后续若改产品名，范围仅仓库/README/tauri productName/前端标题。
+- **`data/`（shuxing 数据）**：当前**保留在仓库**。将来可能**联系其他项目负责人获取 lua 数据访问权限**后再评估数据合规与发布方式（详见 PLAN.md）。
+- **开源状态**：仓库当前**私有**（GitHub Free）。**私有仓库不强制分支保护**（需 Team/Enterprise 或转公有）。
+  已建 ci/release/deps 工作流 + 模板 + 脚本，转公有后即可配置完整分支保护。
+- **场景扩展**：core 引擎本就场景无关（PVE=不同 hostile/target_hp 配置）；支持 PVE/全场景主要是 UI 预设 + 数据模板，命名无需绑死 PVP。
 
 ## Key facts
 
