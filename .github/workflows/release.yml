@@ -60,6 +60,18 @@ jobs:
           npm ci
           npm run build
 
+      # tauri externalBin 需要 jpcg_updater-<host-triple>
+      - name: 构建并放置 jpcg_updater
+        run: |
+          cargo build -p jpcg_updater
+          HOST="$(rustc -vV | grep '^host:' | cut -d' ' -f2)"
+          mkdir -p examples/jpcg_app/src-tauri/binaries
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/debug/jpcg_updater.exe "examples/jpcg_app/src-tauri/binaries/jpcg_updater-${HOST}.exe"
+          else
+            cp target/debug/jpcg_updater "examples/jpcg_app/src-tauri/binaries/jpcg_updater-${HOST}"
+          fi
+
       - name: 构建模块库（dll）
         run: |
           cargo build -p jpcg_core -p jpcg_update -p jpcg_const --release
