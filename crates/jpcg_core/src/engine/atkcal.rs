@@ -43,11 +43,15 @@ impl<'a> JpcgConfig<'a> {
     }
 
     fn guo_fangyu(&self) -> u32 {
-        let wushifangyu_total = self.skilltype.wushifangyu
-            + (self.buff.wushi_fangyu_pct * 1024.0 / 100.0) as u32;
+        let wushifangyu_total =
+            self.skilltype.wushifangyu + (self.buff.wushi_fangyu_pct * 1024.0 / 100.0) as u32;
         match self.xinfa.xinfa_nom.as_str() {
-            "gengu" | "yuanqi" => self.hostilepile.guo_nfangyu_with(wushifangyu_total, &self.coeff),
-            _ => self.hostilepile.guo_wfangyu_with(wushifangyu_total, &self.coeff),
+            "gengu" | "yuanqi" => self
+                .hostilepile
+                .guo_nfangyu_with(wushifangyu_total, &self.coeff),
+            _ => self
+                .hostilepile
+                .guo_wfangyu_with(wushifangyu_total, &self.coeff),
         }
     }
 
@@ -68,7 +72,9 @@ impl<'a> JpcgConfig<'a> {
     }
 
     fn b_cal(&self) -> u32 {
-        self.player.atk_with_buff(self.xinfa.atk_up, self.buff.base_atk_pct).total()
+        self.player
+            .atk_with_buff(self.xinfa.atk_up, self.buff.base_atk_pct)
+            .total()
     }
 
     fn i_cal(&self) -> [u32; 5] {
@@ -90,7 +96,9 @@ impl<'a> JpcgConfig<'a> {
         // 游戏实测截断点（顺序与取整策略源自实际检测结果，勿改动逻辑）
         // ① 技能伤害系数×命中加成×伤害增益 → ×破防系数 → 截断
         let mut x = truncate(
-            i_hit as f32 * (1.0 + self.skilltype.hit_up as f32 / 100.0) * shanghai_buff
+            i_hit as f32
+                * (1.0 + self.skilltype.hit_up as f32 / 100.0)
+                * shanghai_buff
                 * (y as f32 / 1024.0),
         );
         // ② × 化劲减免 → 截断
@@ -112,8 +120,7 @@ impl<'a> JpcgConfig<'a> {
                 * (0.75
                     + (huixiao as f32 + buff_huixiao) / 1024.0
                     + self.skilltype.huixiao_up as f32 / 100.0)
-                * (1.0 - yujin_huixiao as f32 / 1024.0))
-                as u32;
+                * (1.0 - yujin_huixiao as f32 / 1024.0)) as u32;
         [i[0], i[1], i[2], i[3], x]
     }
 
@@ -159,15 +166,16 @@ impl<'a> JpcgConfig<'a> {
 
         // ---- 公共导数因子 ----
         // dG/dI2（无截断连续近似）
-        let dg_di2 = (1.0 + hit_up) * shanghai_buff
+        let dg_di2 = (1.0 + hit_up)
+            * shanghai_buff
             * (y_val / 1024.0)
             * (1.0 - huajin / 1024.0)
             * pvp
             * (1.0 - jianshang_bili);
 
         // H = G + G * h_factor * yujin_factor
-        let h_factor = 0.75 + (huixiao + buff_huixiao_f) / 1024.0
-            + self.skilltype.huixiao_up as f32 / 100.0;
+        let h_factor =
+            0.75 + (huixiao + buff_huixiao_f) / 1024.0 + self.skilltype.huixiao_up as f32 / 100.0;
         let yujin_factor = 1.0 - yujin_huixiao / 1024.0;
         let dh_dg = 1.0 + h_factor * yujin_factor;
 
@@ -206,7 +214,9 @@ impl<'a> JpcgConfig<'a> {
         let fangyu = self.guo_fangyu() as f32;
         let dy_dpofang = 1.0 - fangyu / 1024.0;
         let dg_dy = i_hit * (1.0 + hit_up) * shanghai_buff / 1024.0
-            * (1.0 - huajin / 1024.0) * pvp * (1.0 - jianshang_bili);
+            * (1.0 - huajin / 1024.0)
+            * pvp
+            * (1.0 - jianshang_bili);
         let d_pofang_dengji = dq_dg * dg_dy * dy_dpofang * dpofang_d_pd;
 
         // 6. wuqi_shanghai: 仅走 watk_xishu 路径
@@ -282,7 +292,7 @@ pub struct DamageResultWithDerivatives {
 // ============================================================================
 #[cfg(test)]
 mod golden_tests {
-    use crate::cal::atkcal::JpcgConfig;
+    use crate::engine::atkcal::JpcgConfig;
     use crate::type_set::buff::BuffConfig;
     use crate::type_set::coefficient::CoefficientConfig;
     use crate::type_set::hostilepile::HostilepileConfig;

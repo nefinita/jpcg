@@ -18,7 +18,7 @@ tokio = { version = "1.52.1", features = ["full"] }
 csv = "1.4.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-toml = "1.1.2+spec-1.1.0"
+toml = "1.1.2"
 colorized = "1.0.0"
 libc = "0.2.186"
 axum = "0.8.9"
@@ -34,6 +34,7 @@ tar = "0.4.45"
 flate2 = "1.1.9"
 jpcg_core = { path = "crates/jpcg_core" }
 jpcg_update = { path = "crates/jpcg_update" }
+jpcg_api = { path = "crates/jpcg_api" }
 
 [workspace.lints.clippy]
 

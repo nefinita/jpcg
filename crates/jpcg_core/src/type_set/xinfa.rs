@@ -20,7 +20,14 @@ impl XinfaConfig {
         pofang_up: f32,
         huixin_up: f32,
     ) -> Self {
-        Self { profession, xinfa_name, xinfa_nom, atk_up, pofang_up, huixin_up }
+        Self {
+            profession,
+            xinfa_name,
+            xinfa_nom,
+            atk_up,
+            pofang_up,
+            huixin_up,
+        }
     }
 
     pub fn default() -> Self {
@@ -53,5 +60,5 @@ pub struct XinfaSummary {
 }
 
 pub fn get_xinfa_list() -> Vec<XinfaSummary> {
-    crate::io::list_available_professions()
+    crate::store::list_available_professions()
 }

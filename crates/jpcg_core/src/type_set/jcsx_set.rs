@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::io::toml_input;
+use crate::store::toml_input;
 use crate::log::info;
 
 /// 从 data/atk_config.toml 加载属性映射数据（预留）
@@ -18,10 +18,10 @@ fn data_load() {
 /// 基础属性映射配置
 /// 将 "根骨"/"力道"/"身法"/"元气" 名称映射为对应的攻击/破防/会心加成值
 pub struct JcsxConfig {
-    pub jcsx_name: String,   // 基础属性名称
-    pub jcsx_atk: f32,      // 攻击加成系数
-    pub jcsx_pofang: f32,   // 破防加成系数
-    pub jcsx_huixin: f32,   // 会心加成系数
+    pub jcsx_name: String, // 基础属性名称
+    pub jcsx_atk: f32,     // 攻击加成系数
+    pub jcsx_pofang: f32,  // 破防加成系数
+    pub jcsx_huixin: f32,  // 会心加成系数
 }
 
 /// 获取可用的基础属性映射表（尚未实现）

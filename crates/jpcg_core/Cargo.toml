@@ -5,10 +5,29 @@ readme.workspace = true
 version.workspace = true
 edition.workspace = true
 
+# core 即 host：engine（计算）/ store（数据）/ api（门面）/ services（服务）。
+# crate-type = ["cdylib", "rlib"] 产出双形态：
+#   rlib  — 静态模式供 Tauri 壳直接链接（单一二进制）
+#   cdylib— 动态模式被 Tauri 壳 dlopen（libjpcg_core.dylib）
+# 默认启用 full 特性（含 update 服务），关闭 net 可剥离网络依赖。
+
 [dependencies]
 colorized.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 toml.workspace = true
+jpcg_api.workspace = true
+
+# 网络服务（forum 客户端、update 编排）—— 可选特性 net
+jpcg_update = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[features]
+default = ["net"]
+net = ["dep:jpcg_update", "dep:tokio"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [lints]
 workspace = true

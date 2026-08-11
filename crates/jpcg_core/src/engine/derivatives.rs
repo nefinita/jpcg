@@ -1,8 +1,7 @@
-use crate::cal::atkcal::{DerivativeSet, JpcgConfig};
+use crate::engine::atkcal::{DerivativeSet, JpcgConfig};
 use crate::type_set::{
-    buff::BuffConfig, coefficient::CoefficientConfig,
-    hostilepile::HostilepileConfig, player::PlayerConfig, skilltype::Skilltype,
-    xinfa::XinfaConfig,
+    buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
+    player::PlayerConfig, skilltype::Skilltype, xinfa::XinfaConfig,
 };
 use serde::Serialize;
 
@@ -49,13 +48,48 @@ pub struct DerivativesOutput {
     pub recommendation: OptimizeRecommendation,
 }
 
-const ATTR_META: [(&str, &str, fn(&DerivativeSet) -> f32, fn(&PlayerConfig) -> f32); 6] = [
-    ("基础属性",   "jichu_shuxing",   |d| d.d_jichu_shuxing,   |p| p.jichu_shuxing as f32),
-    ("基础攻击",   "jichu_gongji",    |d| d.d_jichu_gongji,    |p| p.jichu_gongji as f32),
-    ("会心等级",   "huixin_dengji",   |d| d.d_huixin_dengji,   |p| p.huixin_dengji as f32),
-    ("会心效果",   "huixin_xiaoguo",  |d| d.d_huixin_xiaoguo,  |p| p.huixin_xiaoguo as f32),
-    ("破防等级",   "pofang_dengji",   |d| d.d_pofang_dengji,   |p| p.pofang_dengji as f32),
-    ("武器伤害",   "wuqi_shanghai",   |d| d.d_wuqi_shanghai,   |p| p.wuqi_shanghai as f32),
+const ATTR_META: [(
+    &str,
+    &str,
+    fn(&DerivativeSet) -> f32,
+    fn(&PlayerConfig) -> f32,
+); 6] = [
+    (
+        "基础属性",
+        "jichu_shuxing",
+        |d| d.d_jichu_shuxing,
+        |p| p.jichu_shuxing as f32,
+    ),
+    (
+        "基础攻击",
+        "jichu_gongji",
+        |d| d.d_jichu_gongji,
+        |p| p.jichu_gongji as f32,
+    ),
+    (
+        "会心等级",
+        "huixin_dengji",
+        |d| d.d_huixin_dengji,
+        |p| p.huixin_dengji as f32,
+    ),
+    (
+        "会心效果",
+        "huixin_xiaoguo",
+        |d| d.d_huixin_xiaoguo,
+        |p| p.huixin_xiaoguo as f32,
+    ),
+    (
+        "破防等级",
+        "pofang_dengji",
+        |d| d.d_pofang_dengji,
+        |p| p.pofang_dengji as f32,
+    ),
+    (
+        "武器伤害",
+        "wuqi_shanghai",
+        |d| d.d_wuqi_shanghai,
+        |p| p.wuqi_shanghai as f32,
+    ),
 ];
 
 pub fn compute_derivatives(
@@ -67,7 +101,8 @@ pub fn compute_derivatives(
     skills: &[Skilltype],
 ) -> DerivativesOutput {
     // 每属性: 收集各技能导数
-    let mut per_attr: Vec<Vec<SkillDerivative>> = (0..6).map(|_| Vec::with_capacity(skills.len())).collect();
+    let mut per_attr: Vec<Vec<SkillDerivative>> =
+        (0..6).map(|_| Vec::with_capacity(skills.len())).collect();
     let mut attr_totals = [0.0f32; 6];
 
     for skill in skills {
@@ -96,7 +131,11 @@ pub fn compute_derivatives(
         })
         .collect();
 
-    derivatives.sort_by(|a, b| b.total_derivative.partial_cmp(&a.total_derivative).unwrap_or(std::cmp::Ordering::Equal));
+    derivatives.sort_by(|a, b| {
+        b.total_derivative
+            .partial_cmp(&a.total_derivative)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let huixin_total = attr_totals[2];
     let pofang_total = attr_totals[4];

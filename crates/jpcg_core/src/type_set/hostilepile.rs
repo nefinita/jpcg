@@ -106,7 +106,8 @@ impl HostilepileConfig {
 
     /// 使用可配置系数的化劲计算
     pub fn guo_huajin_with(&self, coeff: &CoefficientConfig) -> u32 {
-        ((self.huajin_dengji as f32 / (self.huajin_dengji as f32 + coeff.huajin_xishu) + 102.0 / 1024.0)
+        ((self.huajin_dengji as f32 / (self.huajin_dengji as f32 + coeff.huajin_xishu)
+            + 102.0 / 1024.0)
             * 1024.0) as u32
     }
 

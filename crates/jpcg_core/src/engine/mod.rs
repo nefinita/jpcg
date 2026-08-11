@@ -1,21 +1,24 @@
 // ============================================================================
-// cal — 剑网3 伤害计算引擎
+// engine — 剑网3 伤害计算引擎
 // 根据玩家属性、目标防御属性、心法配置、技能数据，
 // 逐一计算每个技能的多段伤害（Y/B/I/N/H/Q）。
 // 核心公式参考剑网3 现行版本伤害机制。
 // ============================================================================
 
-mod atkcal;
+pub mod atkcal;
 pub mod derivatives;
 pub mod kill_prob;
 
 use std::io::Error;
 
 use crate::{
-    cal::atkcal::JpcgConfig,
-    io::{data_dir, toml_input, TomlConfig},
+    engine::atkcal::JpcgConfig,
+    store::{TomlConfig, data_dir, toml_input},
     log::{error, success},
-    type_set::{buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig},
+    type_set::{
+        buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
+        player::PlayerConfig, xinfa::XinfaConfig,
+    },
 };
 use serde::Serialize;
 
@@ -37,7 +40,13 @@ pub fn start_calculation(
     hostilepile: HostilepileConfig,
     xinfa: XinfaConfig,
 ) -> Result<Vec<CalculateResult>, Error> {
-    start_calculation_with_config(player, hostilepile, xinfa, &BuffConfig::default(), &CoefficientConfig::default())
+    start_calculation_with_config(
+        player,
+        hostilepile,
+        xinfa,
+        &BuffConfig::default(),
+        &CoefficientConfig::default(),
+    )
 }
 
 pub fn start_calculation_with_config(
@@ -161,9 +170,9 @@ fn call_back(
         // 将 5 段伤害数组映射为 CalculateResult
         let calculate_result = CalculateResult::new(
             skill.skill_name.clone(),
-            damage_result.y,      // Y: 破防系数段
-            damage_result.b,      // B: 基础攻击段
-            damage_result.i,      // I: 技能基础段
+            damage_result.y,        // Y: 破防系数段
+            damage_result.b,        // B: 基础攻击段
+            damage_result.i,        // I: 技能基础段
             damage_result.g_damage, // N: 普通命中段
             damage_result.h_damage, // H: 会心段
             damage_result.q_damage, // Q: 期望值段

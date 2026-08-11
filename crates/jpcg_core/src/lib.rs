@@ -4,14 +4,16 @@
 // 该库作为底层 crate，被 jpcg_update、jpcg_app (Tauri) 等上层 crate 依赖。
 // ============================================================================
 
-pub mod cal;
-mod io;
+pub mod engine;
+pub use crate::engine as cal;
+pub mod ffi;
+pub mod host;
+mod store;
 mod log;
 pub mod type_set;
-pub mod ffi;
 
 pub mod load_config {
-    use crate::io::{SaveConfig, TomlConfig, load_config, load_save_config};
+    use crate::store::{SaveConfig, TomlConfig, load_config, load_save_config};
 
     pub fn default_load() -> SaveConfig {
         load_save_config()
@@ -23,7 +25,7 @@ pub mod load_config {
 }
 
 pub mod save_config {
-    use crate::io::save_config;
+    use crate::store::save_config;
     use crate::type_set::{hostilepile::HostilepileConfig, player::PlayerConfig};
 
     pub fn save(
@@ -36,35 +38,35 @@ pub mod save_config {
 }
 
 pub mod combo_io {
-    use crate::io;
+    use crate::store;
     use crate::type_set::combo::ComboPreset;
 
     pub fn list_presets() -> Vec<String> {
-        io::list_combo_presets()
+        store::list_combo_presets()
     }
 
     pub fn load_preset(name: &str) -> Option<ComboPreset> {
-        io::load_combo_preset(name)
+        store::load_combo_preset(name)
     }
 
     pub fn save_preset(preset: &ComboPreset) -> Result<(), String> {
-        io::save_combo_preset(preset)
+        store::save_combo_preset(preset)
     }
 
     pub fn delete_preset(name: &str) -> Result<(), String> {
-        io::delete_combo_preset(name)
+        store::delete_combo_preset(name)
     }
 }
 
 pub mod config_io {
-    use crate::io;
+    use crate::store;
 
     pub fn export_config() -> Result<String, String> {
-        io::export_config_toml()
+        store::export_config_toml()
     }
 
     pub fn import_config(toml_str: &str) -> Result<(), String> {
-        io::import_config_toml(toml_str)
+        store::import_config_toml(toml_str)
     }
 }
 
@@ -72,17 +74,17 @@ pub mod profession_list {
     use crate::type_set::xinfa::XinfaSummary;
 
     pub fn list_available() -> Vec<XinfaSummary> {
-        crate::io::list_available_professions()
+        crate::store::list_available_professions()
     }
 }
 
 pub mod skill_editor {
-    use crate::io::{self, TomlConfig};
+    use crate::store::{self, TomlConfig};
     use crate::type_set::skilltype::Skilltype;
     use crate::type_set::xinfa::{VersionInfo, XinfaConfig};
 
     pub fn load_skills(profession: &str) -> TomlConfig {
-        io::load_config(profession)
+        store::load_config(profession)
     }
 
     pub fn save_skills(
@@ -91,17 +93,20 @@ pub mod skill_editor {
         skills: Vec<Skilltype>,
         version: Option<VersionInfo>,
     ) -> Result<(), String> {
-        let config = TomlConfig { xinfa, skill: skills, version };
-        io::save_skill_toml(profession, config)
+        let config = TomlConfig {
+            xinfa,
+            skill: skills,
+            version,
+        };
+        store::save_skill_toml(profession, config)
     }
 }
 
 pub mod derivatives {
-    use crate::cal;
+    use crate::engine as cal;
     use crate::type_set::{
-        buff::BuffConfig, coefficient::CoefficientConfig,
-        hostilepile::HostilepileConfig, player::PlayerConfig, skilltype::Skilltype,
-        xinfa::XinfaConfig,
+        buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
+        player::PlayerConfig, skilltype::Skilltype, xinfa::XinfaConfig,
     };
 
     pub fn compute_derivatives(
@@ -119,10 +124,10 @@ pub mod derivatives {
 pub mod calculate {
     use std::io::Error;
 
-    use crate::cal;
+    use crate::engine as cal;
     use crate::type_set::{
-        buff::BuffConfig, coefficient::CoefficientConfig,
-        hostilepile::HostilepileConfig, player::PlayerConfig, xinfa::XinfaConfig,
+        buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
+        player::PlayerConfig, xinfa::XinfaConfig,
     };
 
     pub fn start(

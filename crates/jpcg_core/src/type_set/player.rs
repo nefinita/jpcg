@@ -13,14 +13,14 @@ use crate::type_set::coefficient::CoefficientConfig;
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayerConfig {
-    pub jcsx: String,            // 基础属性类型（根骨/力道/身法/元气）
-    pub jichu_shuxing: u32,     // 基础属性值（如根骨点数）
-    pub jichu_gongji: u32,      // 基础攻击力（不含武器伤害）
-    pub huixin_dengji: u32,     // 会心等级
-    pub huixin_xiaoguo: u32,    // 会心效果等级（会效）
-    pub pofang_dengji: u32,     // 破防等级
-    pub wuqi_shanghai: u32,     // 武器伤害（额外附加）
-    pub zuizhong_gongji: u32,   // 最终攻击力（外部计算填入，0=自动计算）
+    pub jcsx: String,         // 基础属性类型（根骨/力道/身法/元气）
+    pub jichu_shuxing: u32,   // 基础属性值（如根骨点数）
+    pub jichu_gongji: u32,    // 基础攻击力（不含武器伤害）
+    pub huixin_dengji: u32,   // 会心等级
+    pub huixin_xiaoguo: u32,  // 会心效果等级（会效）
+    pub pofang_dengji: u32,   // 破防等级
+    pub wuqi_shanghai: u32,   // 武器伤害（额外附加）
+    pub zuizhong_gongji: u32, // 最终攻击力（外部计算填入，0=自动计算）
 }
 
 impl PlayerConfig {
@@ -126,8 +126,8 @@ impl PlayerConfig {
 
 /// 攻击力配置（基础攻击 + 武器伤害）
 pub struct AtkConfig {
-    base: u32,   // 基础攻击力（基础攻击 + 属性转化）
-    extra: u32,  // 额外攻击力（武器伤害）
+    base: u32,  // 基础攻击力（基础攻击 + 属性转化）
+    extra: u32, // 额外攻击力（武器伤害）
 }
 
 impl AtkConfig {
