@@ -34,6 +34,16 @@ jobs:
         id: version
         run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # 通道判定：tag 含 -beta → beta 通道；否则 stable 通道
+      - name: 判断更新通道
+        id: channel
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-beta* ]]; then
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -85,6 +95,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/modules dist/app
+          # 写入通道标记，便于按 stable/beta 路由部署
+          echo "${{ steps.channel.outputs.channel }}" > dist/channel.txt
+          echo "channel=${{ steps.channel.outputs.channel }}" >> "$GITHUB_STEP_SUMMARY"
           cp target/release/libjpcg_core.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_core.${{ matrix.ext }} dist/modules/
           cp target/release/libjpcg_update.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_update.${{ matrix.ext }} dist/modules/
           cp target/release/libjpcg_const.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_const.${{ matrix.ext }} dist/modules/
@@ -114,4 +127,5 @@ jobs:
           files: |
             dist/app/**
             dist/modules/**
+            dist/channel.txt
             data_manifest.toml

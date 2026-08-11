@@ -58,11 +58,11 @@ cargo run -p forum                   # start forum (port 8080 by default)
 # bump: cargo set-version <ver> + scripts/sync-version.sh（同步 package.json/tauri.conf.json/前端模拟串）
 ```
 
-## 维护流程（git-flow + CI，详见 CONTRIBUTING.md）
+## 维护流程（三分支线性 + CI，详见 CONTRIBUTING.md）
 
-- **分支**：`master`(生产，受保护) + `develop`(集成交互，受保护) + `feature/*` + `release/vX` + `hotfix/*`。一律经 PR，squash 合并
-- **CI**（.github/workflows/ci.yml）：rustfmt + clippy(不 -D warnings) + 构建/测试 + 金标准 + 前端 build
-- **发布**（scripts/release.sh + release.yml）：三平台矩阵构建 + 打包，GitHub Release 命名用 core 版本
+- **分支**：`dev`(集成/最上游，alpha.n，受保护) + `beta`(公测，beta.n，tag vX.Y.Z-beta.n，受保护) + `release`(稳定，X.Y.Z，tag vX.Y.Z，受保护)。线性：`release ⊂ beta ⊂ dev`，一律经 PR，squash 合并
+- **发布**（scripts/release.sh --stage alpha|beta|release + release.yml）：tag 触发三平台矩阵构建，beta/stable 通道由 tag 判定
+- **CI**（.github/workflows/ci.yml）：dev/beta/release PR 均跑 rustfmt + clippy(不 -D warnings) + 构建/测试 + 金标准 + 前端 build
 - **依赖**：deps.yml（cargo audit / npm audit）+ dependabot.yml（每周）
 - **变更日志**：`changes/` 逐条 + 发布时聚合到 CHANGELOG.md
 
