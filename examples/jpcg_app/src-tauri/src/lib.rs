@@ -13,6 +13,7 @@ pub fn run() {
             commands::update::check_update,
             commands::update::perform_update,
             commands::update::perform_app_update,
+            commands::update::perform_modules_update,
             commands::forum::forum_list_files,
             commands::forum::forum_list_categories,
             commands::forum::forum_download_file,
