@@ -52,32 +52,36 @@ git checkout release && git pull origin release
 scripts/release.sh release         # → tag v2.1.0，触发 stable 通道构建
 ```
 
-### 脚本内部 6 步
+### 脚本内部 8 步
 
 1. **校验**：工作树干净；所在分支与 stage 匹配（alpha→dev、beta→beta、release→release）
-2. **全量测试**：`make check-all` + 金标准回归
-3. **bump 版本**：`cargo set-version` + `sync-version.sh`
-4. **聚合 CHANGELOG**：把 `changes/*.md` 并入 `CHANGELOG.md`
-5. **commit + tag**：alpha 不 tag；beta/release 打对应 tag
-6. **push**：推分支；beta/release 额外推 tag
+2. **同步**：确保基于最新目标分支（ff-only）
+3. **全量测试**：`make check-all` + 金标准回归
+4. **bump 版本**：`cargo set-version` + `sync-version.sh`
+5. **聚合 CHANGELOG**：把 `changes/*.md` 并入 `CHANGELOG.md`
+6. **commit + tag**：alpha 不 tag；beta/release 打对应 tag
+7. **推 prep 合并分支 + 开 PR**：推 `release/prep-<ver>`，`gh pr create` 到目标分支
+8. **推 tag**（beta/release）：推 tag 触发 release.yml
 
 ### 安全性说明（可放心分发）
 
 - **无特殊权限**：普通脚本，仅操作当前仓库，不需要 sudo/系统目录
-- **防呆**：缺 `stage` 退出；分支不匹配退出；工作树不干净退出 —— 不会误提交
+- **防呆**：缺 `stage` 退出；分支不匹配退出；工作树不干净退出；缺 `gh` 退出 —— 不会误提交
 - **只显式触发**：不会被自动调用
 - **不会乱提交**：所有改动先经 git add + 明确 commit，且仅在满足上述校验后
+- **不直接 push 受保护分支**：改动提交到 prep 合并分支并开 PR，由 review 合并落地
 
-### ⚠️ 受保护分支的注意点
+### ⚠️ 受保护分支的处理方式
 
-`dev`/`beta`/`release` 均开启**分支保护**（禁直接 push、需 PR + review）。因此：
+`dev`/`beta`/`release` 均开启**分支保护**（禁直接 push、需 PR + review）。因此脚本**不直接 push 目标分支**，改为：
 
-- 脚本会在**本地**完成 commit + tag
-- `git push origin <分支>` 对受保护分支会被**拒绝**
-- 让分支提交落地有两种方式：
-  1. **经 PR**：把脚本产生的提交以 PR 合入目标分支（推荐，符合流程）
-  2. **临时降级**：单人维护时可临时把该分支 review 数调为 0，`git push` 后恢复（见 CONTRIBUTING/维护者约定）
-- **tag 推送**不受分支保护影响，可正常 `git push origin vX.Y.Z` 触发 release.yml
+1. 在本地对目标分支做 commit + tag
+2. 把该提交推到 prep 分支：`release/prep-<版本>`
+3. 用 `gh` 开 PR：`release/prep-<版本>` → 目标分支
+4. 推 tag（beta/release）触发 release.yml 构建
+
+由 reviewer 批准并 **squash 合并** PR 后，版本提交落地目标分支。合并后可删除 prep 分支：
+`git push origin --delete release/prep-<版本>`
 
 ### 首次/常规发布速查
 

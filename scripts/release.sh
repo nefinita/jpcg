@@ -5,14 +5,17 @@
 # 用法：
 #   scripts/release.sh <stage> [版本号]
 #     stage   = alpha | beta | release
-#     [版本]  缺省从当前 branch 推断（见下）
 #
 # 模型：
-#   dev    （alpha.n，不 tag）       → 切/提升 beta 时
+#   dev    （alpha.n，不 tag）
 #   beta   （beta.n，tag vX.Y.Z-beta.n）
 #   release（X.Y.Z，tag vX.Y.Z）
 #
-# 流程：校验干净 → 全量测试 → bump 版本 → 聚合 CHANGELOG → commit → [tag] → push
+# 流程：校验 → 全量测试 → bump 版本 → 聚合 CHANGELOG → commit + tag
+#       → 推 prep 合并分支 → 开 PR 到目标分支 → 推 tag（beta/release）
+#
+# 说明：目标分支（dev/beta/release）受保护，脚本不直接 push 分支，
+#       而是把改动提交到 prep 分支并开 PR，由 review 后合并落地。
 # ============================================================================
 set -euo pipefail
 
@@ -25,35 +28,46 @@ case "$STAGE" in
   *) echo "错误: stage 必须是 alpha|beta|release" >&2; exit 1 ;;
 esac
 
-CUR_BRANCH="$(git branch --show-current)"
+# 目标分支：alpha→dev、beta→beta、release→release
+case "$STAGE" in
+  alpha)   TARGET_BRANCH="dev" ;;
+  beta)    TARGET_BRANCH="beta" ;;
+  release) TARGET_BRANCH="release" ;;
+esac
 
-# 分支约束：alpha→dev、beta→beta、release→release
-EXPECT_BRANCH="$STAGE"
-if [ "$STAGE" = "alpha" ]; then EXPECT_BRANCH="dev"; fi
-if [ "$CUR_BRANCH" != "$EXPECT_BRANCH" ]; then
-  echo "错误: stage=$STAGE 应在 $EXPECT_BRANCH 分支，当前在 $CUR_BRANCH" >&2
+CUR_BRANCH="$(git branch --show-current)"
+if [ "$CUR_BRANCH" != "$TARGET_BRANCH" ]; then
+  echo "错误: stage=$STAGE 应在 $TARGET_BRANCH 分支，当前在 $CUR_BRANCH" >&2
+  exit 1
+fi
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "错误: 需要 gh（GitHub CLI）来创建 PR，请先安装并 gh auth login" >&2
   exit 1
 fi
 
 VERSION="${2:-}"
 
-echo "==> [1/6] 校验工作树干净"
+echo "==> [1/8] 校验工作树干净"
 if [ -n "$(git status --porcelain)" ]; then
   echo "错误：工作树不干净，请先提交或 stash。" >&2
   git status --porcelain
   exit 1
 fi
 
-echo "==> [2/6] 全量测试"
+echo "==> [2/8] 确保基于最新 $TARGET_BRANCH"
+git fetch origin "$TARGET_BRANCH"
+git merge --ff-only "origin/$TARGET_BRANCH"
+
+echo "==> [3/8] 全量测试"
 make check-all
 cargo test -p jpcg_core -- golden
 
-echo "==> [3/6] 版本处理（stage=$STAGE, 版本=${VERSION:-未显式给定}）"
+echo "==> [4/8] 版本处理（stage=$STAGE, 版本=${VERSION:-未显式给定}）"
 if [ -z "$VERSION" ]; then
-  # 未给版本：从当前 workspace 版本按 stage 规整（dev 保持 alpha，beta→beta，release 去后缀）
   CUR="$(python3 -c "import re;print(re.search(r'^version\s*=\s*\"([^\"]+)\"',open('Cargo.toml').read(),re.M).group(1))")"
   case "$STAGE" in
-    alpha)   VERSION="$CUR" ;;                                  # 保持 alpha.n
+    alpha)   VERSION="$CUR" ;;
     beta)    VERSION="$(echo "$CUR" | sed -E 's/-alpha\.[0-9]+/-beta.1/')" ;;
     release) VERSION="$(echo "$CUR" | sed -E 's/-alpha\.[0-9]+//; s/-beta\.[0-9]+//')" ;;
   esac
@@ -63,7 +77,7 @@ fi
 cargo set-version "$VERSION"
 scripts/sync-version.sh "$VERSION"
 
-echo "==> [4/6] 聚合 CHANGELOG"
+echo "==> [5/8] 聚合 CHANGELOG"
 python3 - "$VERSION" <<'PY'
 import re,sys,glob,datetime
 ver=sys.argv[1]
@@ -82,7 +96,7 @@ open('CHANGELOG.md','w').write(text)
 print(f"    已更新 CHANGELOG.md -> [{ver}]")
 PY
 
-echo "==> [5/6] commit + tag"
+echo "==> [6/8] commit + tag"
 git add -A
 git commit -q -m "release($STAGE): v${VERSION}"
 if [ "$STAGE" != "alpha" ]; then
@@ -92,11 +106,21 @@ else
   echo "  alpha 阶段不 tag"
 fi
 
-echo "==> [6/6] push"
-git push origin "$CUR_BRANCH"
+echo "==> [7/8] 推 prep 合并分支 + 开 PR"
+PREP_BRANCH="release/prep-${VERSION}"
+git push origin "HEAD:$PREP_BRANCH" >/dev/null
+PR_URL="$(gh pr create --base "$TARGET_BRANCH" --head "$PREP_BRANCH" \
+  --title "release($STAGE): v${VERSION}" \
+  --body "发布准备（$STAGE，v${VERSION}）：版本 bump + CHANGELOG 聚合。\n\n请 review 并 squash 合并到 $TARGET_BRANCH。")"
+echo "  PR: $PR_URL"
+
+echo "==> [8/8] 推 tag（beta/release）"
 if [ "$STAGE" != "alpha" ]; then
   git push origin "v${VERSION}"
+  echo "  已推 tag: v${VERSION}（触发 release.yml）"
 fi
 
-echo "✅ 完成: stage=$STAGE version=$VERSION（$CUR_BRANCH）"
-if [ "$STAGE" = "beta" ]; then echo "  提示: 公测稳定后，在 beta 分支再跑 scripts/release.sh release 发布稳定版"; fi
+echo ""
+echo "✅ 完成: stage=$STAGE version=$VERSION"
+echo "   下一步：reviewer 合并 PR ${PR_URL:-} 后，版本提交即落地 $TARGET_BRANCH。"
+echo "   PR 合并后可删除 prep 分支: git push origin --delete $PREP_BRANCH"
