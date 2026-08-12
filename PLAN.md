@@ -15,7 +15,7 @@
 
 | 项 | 状态 |
 |----|------|
-| 分支策略 | git-flow：`master` + `develop` + `feature/*` + `release/vX` + `hotfix/*`；develop 已建 |
+| 分支策略 | 三分支线性：`dev`(alpha) + `beta`(beta) + `release`(稳定)，release ⊂ beta ⊂ dev |
 | CI/CD | ci.yml / release.yml（三平台矩阵）/ deps.yml + dependabot |
 | 文档/模板 | CONTRIBUTING / CHANGELOG / PR+Issue 模板 / AGENTS / server_manifest |
 | 版本模型 | 组件独立：root=core/tag 源；const=`130.3.{date}`；updater 独立 |
@@ -26,15 +26,16 @@
 ## 3. 里程碑
 
 ### M0 — 现状基线（已完成）
-- git-flow 分支 + CI/CD + 模板 + 脚本 + 组件独立版本（见 changes/2026-08-11-231500.md）
+- 三分支（dev/beta/release）+ CI/CD + 模板 + 脚本 + 组件独立版本（见 changes/2026-08-11-231500.md）
 
 ### M1 — 转公有与分支保护（待执行）
 - **转公有**：Settings → Danger Zone → Change visibility → Public
   （转公有后 GitHub Free 即完整支持分支保护）
 - **重命名（可选，已搁置）**：若改产品名，范围仅仓库/README/tauri productName/前端标题；内部 `jpcg_*` 不动
 - **配置分支保护**：
-  - `master`：必需 review≥1 + 状态检查(CI 三 job) + conversation resolution + up-to-date + 禁强推/删除 + 禁绕过
-  - `develop`：必需 review≥1 + 状态检查 + conversation resolution + squash
+  - `dev`：必需 review≥1 + 状态检查(CI 三 job) + conversation resolution + squash
+  - `beta`：必需 review≥1 + 状态检查(CI 三 job, strict) + conversation resolution + squash
+  - `release`：必需 review≥1 + 状态检查(CI 三 job, strict) + conversation resolution + up-to-date + 禁强推/删除 + 禁绕过
 - **收尾文案**：README 徽章（GPL-3.0 / CI / 平台）、项目定位、贡献链接；加 `SECURITY.md`
 - **CODEOWNERS + merge-gate**（软门禁加固）
 
@@ -71,5 +72,5 @@
 
 | 日期 | 决策 |
 |------|------|
-| 2026-08-11 | 采用 git-flow + CI/CD + 组件独立版本（M0 落地） |
+| 2026-08-11 | 采用三分支线性（dev/beta/release）+ CI/CD + 组件独立版本（M0 落地） |
 | 2026-08-11 | 保留 `JPCG` 命名；`data/` 暂留仓库；未来联系上游获取 lua 授权后再定数据发布（本 PLAN） |

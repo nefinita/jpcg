@@ -1,27 +1,32 @@
 # JPCG 贡献指南
 
-JPCG 是一个剑网3 PVP 伤害计算器，采用 **git-flow** 分支模型，Rust workspace + Tauri v2 桌面应用。
+JPCG 是一个剑网3 伤害计算器，采用**三分支线性**模型，Rust workspace + Tauri v2 桌面应用。
 
-## 分支模型 (git-flow)
+## 分支模型（三分支线性：release ⊂ beta ⊂ dev）
 
 ```
-master       生产分支（可发布，仅经 release/hotfix 合入，受保护）
-  └─ develop 集成交互分支（日常开发的汇合点，受保护）
-       ├─ feature/*   新功能 → 合入 develop
-       └─ release/vX  发布准备 → 合入 master + develop
-master ── hotfix/*   紧急修复 → 合入 master + develop
+dev      （集成/最上游，alpha.n）← 所有 feature/* 合入，受保护
+  │ 稳定后 提升
+  ▼
+beta     （预发布/公测，beta.n，tag vX.Y.Z-beta.n）受保护
+  │ 公测稳定后 提升
+  ▼
+release  （稳定/生产，X.Y.Z，tag vX.Y.Z）受保护
 ```
 
-- **永不直接 push** master / develop；一律通过 PR
-- 特性分支命名：`feature/<描述>`、`fix/<描述>`、`hotfix/<描述>`、`release/vX.Y.Z`
-- 合并方式：squash（保持 master/develop 历史线性）
+- **永不直接 push** dev / beta / release；一律通过 PR + review
+- 分支命名：`feature/*`、`fix/*`、`hotfix/*`
+- 合并方式：squash（保持链式线性）
+- 线性关系：`release ⊂ beta ⊂ dev`（单向超集），新提交从 dev 流向 release
 
 ## 开发流程
 
-1. 从 `develop` 切特性分支：`git flow feature start <name>` 或 `git checkout -b feature/<name> develop`
+1. 从 `dev` 切特性分支：`git checkout -b feature/<name> dev`
 2. 编码 + 本地验证（见下方"验证命令"）
 3. 每个改动附 `changes/YYYY-MM-DD-HHMMSS.md` 变更日志（描述 什么/为什么/关键决策）
-4. 提交 → push → 开 PR（目标 `develop`），通过 CI + ≥1 review 后 squash 合入
+4. 提交 → push → 开 PR（目标 `dev`），通过 CI + ≥1 review 后 squash 合入
+5. 需要公测时：提升 dev → beta（`scripts/release.sh beta`，打 beta tag）
+6. 公测稳定后：提升 beta → release（`scripts/release.sh release`，打正式 tag）
 
 ## Commit 规范
 
@@ -62,13 +67,16 @@ npm ci && npm run build         # tsc 类型检查 + vite build
   `jpcg_updater`（独立）为显式独立版本，不随 workspace 变更
 - **release tag 跟随 core**：`v<core_version>`（如 `v2.1.0`）；安装包命名用 core 版本
 
-## 发布流程 (Release)
+## 发布流程 (三分支)
 
-1. 从 develop 切 `release/vX.Y.Z` → 冻结（只修 bug，不加功能）
-2. `scripts/release.sh`：全量测试 → bump 版本 → 聚合 CHANGELOG → commit → tag `vX.Y.Z`
-3. tag 触发 CI `release.yml`：三平台矩阵构建 + 打包 → GitHub Release（命名用 core 版本）
-4. 发布后合回 master + develop；如修复走 `hotfix/*` 并回补 develop
-5. 按 `server_manifest.md` 部署 update.toml / manifests 到 `nefinita-ai.com`
+版本阶段：dev=`X.Y.Z-alpha.n` → beta=`X.Y.Z-beta.n` → release=`X.Y.Z`
+
+1. **dev**（alpha）：日常集成，`scripts/release.sh alpha`（不 tag），或直接随 PR 合入
+2. **beta**（公测）：在 `beta` 分支 `scripts/release.sh beta` → 打 `vX.Y.Z-beta.n` → 触发 release.yml 走 beta 通道
+3. **release**（稳定）：beta 公测稳定后，在 `release` 分支 `scripts/release.sh release` → 打 `vX.Y.Z` → stable 发布
+4. 按 `server_manifest.md` 部署 update.toml / manifests 到 `nefinita-ai.com`（stable/beta 通道）
+
+**hotfix**：从 `release` 切出 → 修后**向前传播** release→beta→dev（保持线性超集）
 
 ## 测试要求
 
