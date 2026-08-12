@@ -14,6 +14,7 @@ import OptimizePage from "./components/OptimizePage";
 import SkillEditorPage from "./components/SkillEditorPage";
 import StatusBar from "./components/StatusBar";
 import Toast from "./components/Toast";
+import { IconBug, IconCalc } from "./components/icons";
 import styles from "./App.module.css";
 
 export default function App() {
@@ -74,14 +75,17 @@ export default function App() {
         <ActivityBar currentPage={curPage} onNavigate={setCurPage} />
         <div className={styles.main}>
           <header className={styles.header}>
-            <div className={styles.logo}>剑网3PVP计算器（JPCG）</div>
+            <div className={styles.logo}>
+              <span className={styles.logoMark}><IconCalc size={17} /></span>
+              剑网3PVP计算器（JPCG）
+            </div>
             <div className={styles.headerActions}>
               <button
                 className={styles.headerBtn}
                 onClick={() => window.open(GITHUB_ISSUES_URL, "_blank")}
                 title="反馈 / Issues"
               >
-                🐛
+                <IconBug size={16} />
               </button>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
             </div>

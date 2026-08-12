@@ -5,6 +5,7 @@ import type {
   SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData,
 } from "../types";
 import * as api from "../api/commands";
+import { IconGear, IconClose, IconSave, IconTrash, IconStar } from "./icons";
 import styles from "./ComboPage.module.css";
 
 interface Props {
@@ -160,8 +161,8 @@ export default function ComboPage({ xinfaName, formData }: Props) {
                             <span className={styles.comboIndex}>{i + 1}</span>
                             <span className={styles.comboName}>{item.skill.skill_name}</span>
                             <span className={styles.comboActions}>
-                              <button className={styles.smallBtn} onClick={() => setAdjustTarget(adjustTarget === i ? null : i)} title="调整系数">⚙️</button>
-                              <button className={styles.smallBtn} onClick={() => removeFromSequence(i)} title="移除">✕</button>
+                              <button className={styles.smallBtn} onClick={() => setAdjustTarget(adjustTarget === i ? null : i)} title="调整系数"><IconGear size={14} /></button>
+                              <button className={styles.smallBtn} onClick={() => removeFromSequence(i)} title="移除"><IconClose size={14} /></button>
                             </span>
                           </div>
                         )}
@@ -202,9 +203,9 @@ export default function ComboPage({ xinfaName, formData }: Props) {
               <option key={p} value={p}>{p}</option>
             ))}
           </select>
-          <button className={styles.smallBtn} onClick={() => setSaveDialog(true)}>💾保存</button>
+          <button className={styles.smallBtn} onClick={() => setSaveDialog(true)}><IconSave size={14} /> 保存</button>
           {presets.length > 0 && (
-            <button className={styles.smallBtn} onClick={() => { const p = presets[presets.length - 1]; handleDeletePreset(p); }}>🗑️</button>
+            <button className={styles.smallBtn} onClick={() => { const p = presets[presets.length - 1]; handleDeletePreset(p); }}><IconTrash size={14} /></button>
           )}
         </div>
 
@@ -230,9 +231,9 @@ export default function ComboPage({ xinfaName, formData }: Props) {
               className={`${styles.skillChip} ${favorites.has(s.skill_id) ? styles.favoriteChip : ""}`}
               onClick={() => addToSequence(s)}
               onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s.skill_id); }}
-              title={`基础伤害 ${s.base_damage1}-${s.base_damage2} | 系数 ${s.atk_xishu}${favorites.has(s.skill_id) ? " ⭐最爱" : " 右键标记最爱"}`}>
+              title={`基础伤害 ${s.base_damage1}-${s.base_damage2} | 系数 ${s.atk_xishu}${favorites.has(s.skill_id) ? " · 已收藏" : " · 右键标记收藏"}`}>
               {s.skill_name}
-              {favorites.has(s.skill_id) && <span className={styles.starIcon}>⭐</span>}
+              {favorites.has(s.skill_id) && <span className={styles.starIcon}><IconStar size={12} /></span>}
             </button>
           ))}
           {pool.length === 0 && <span className={styles.emptyHint}>先选择心法加载技能池</span>}
@@ -293,7 +294,7 @@ function StepAdjustModal({ step, index, onUpdate, onReset, onClose }: {
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
           <span>{step.skill.skill_name} — 临时调整</span>
-          <button onClick={onClose}>✕</button>
+          <button onClick={onClose} aria-label="关闭"><IconClose size={15} /></button>
         </div>
         <div className={styles.modalBody}>
           {fields.map((f) => (

@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import type { FormData, DerivativesOutputDTO } from "../types";
 import * as api from "../api/commands";
+import { IconClose } from "./icons";
 import styles from "./OptimizePage.module.css";
 
 interface Props {
@@ -158,7 +159,7 @@ export default function OptimizePage({ formData }: Props) {
             <section className={styles.section}>
               <div className={styles.sectionTitle}>
                 {chartSkill.attr_name} — 各技能导数对比
-                <button className={styles.closeBtn} onClick={() => setChartAttr(null)}>✕</button>
+                <button className={styles.closeBtn} onClick={() => setChartAttr(null)} aria-label="关闭"><IconClose size={15} /></button>
               </div>
               <div className={styles.barChart}>
                 {chartSkill.per_skill.map((s) => {
