@@ -1,0 +1,19 @@
+# ============================================================================
+# JPCG cargo 别名（双构建模式）
+# 用法：cargo <alias> [其它参数]
+# ============================================================================
+
+[alias]
+
+# 静态模式：app 编译期链接 core（默认，推荐用于日常开发）
+build-app-static = "build -p jpcg_app"
+
+# 动态模式：app dlopen libjpcg_core（更新时只换 dll，不重装 app）
+build-app-dynamic = "build -p jpcg_app --no-default-features --features dynamic"
+
+# 模块库（各 crate 独立 cdylib，供动态模式/跨语言使用）
+build-modules = "build -p jpcg_core -p jpcg_update -p jpcg_const"
+
+# 模块测试
+test-core = "test -p jpcg_core"
+test-app-dynamic = "test -p jpcg_app --lib --no-default-features --features dynamic"

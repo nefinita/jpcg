@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use std::fs;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ForumFileInfo {
@@ -96,12 +96,10 @@ pub async fn forum_download_file(
         .map_err(|e| format!("读取文件数据失败: {}", e))?;
 
     let dest_dir = download_dir(&cat);
-    std::fs::create_dir_all(&dest_dir)
-        .map_err(|e| format!("创建目录失败: {}", e))?;
+    std::fs::create_dir_all(&dest_dir).map_err(|e| format!("创建目录失败: {}", e))?;
 
     let dest_path = dest_dir.join(&filename);
-    std::fs::write(&dest_path, &bytes)
-        .map_err(|e| format!("保存文件失败: {}", e))?;
+    std::fs::write(&dest_path, &bytes).map_err(|e| format!("保存文件失败: {}", e))?;
 
     Ok(format!("已下载: {}", filename))
 }

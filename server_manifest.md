@@ -96,3 +96,38 @@ cp target/debug/jpcg_updater examples/jpcg_app/src-tauri/binaries/
 ## 数据文件
 
 数据文件独立管理，见 `data_manifest.toml`，由 `manifest-gen` 工具生成。
+
+## 模块库（dll）增量更新（B 模式 / 动态模式）
+
+模块库与 app 版本同目录部署，由 `manifest-gen` 的 `--modules-dir` 生成
+`modules_manifest.toml`（含每个 dll 的 SHA256 与 size）：
+
+```sh
+cargo run -p manifest-gen -- --version v2.1.0 \
+  --data-dir ./data \
+  --modules-dir ./dist/modules/v2.1.0 \
+  --modules-output ./dist/modules/v2.1.0/modules_manifest.toml
+```
+
+### 目录结构（与数据文件布局对齐）
+
+```
+files/JPCG/
+└── v2.1.0/
+    ├── data/
+    │   └── data_manifest.toml
+    └── modules/
+        ├── modules_manifest.toml
+        ├── libjpcg_core.dylib
+        ├── libjpcg_update.dylib
+        └── libjpcg_const.dylib
+```
+
+Beta 通道模块清单不带版本目录：`files/JPCG_beta/modules/`。
+
+### 客户端行为（动态模式）
+
+1. `check_update` 在 force 或有 app 更新时拉取 `modules_manifest.toml`，
+   与本地 `exe同目录/modules/` 子目录按 SHA256 差量对比
+2. `perform_modules_update` 下载 → 校验 → 原子替换到 `modules/` → 请求重启
+3. 重启后 ffi_bridge 优先加载 `modules/libjpcg_core.*`（增量生效，app 本体无需重装）

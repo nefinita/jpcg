@@ -3,6 +3,12 @@
 // 将玩家、目标、心法、技能、心法属性映射五个子模块统一导出。
 // ============================================================================
 
+/// 阵眼/奇穴增益
+pub mod buff;
+/// 系数设置
+pub mod coefficient;
+/// 连招序列与预设
+pub mod combo;
 /// 敌对（木桩/目标）属性配置
 pub mod hostilepile;
 /// 根骨/力道/身法/元气 属性映射表（核心属性转换，当前预留占位）
@@ -13,9 +19,3 @@ pub mod player;
 pub mod skilltype;
 /// 心法配置
 pub mod xinfa;
-/// 阵眼/奇穴增益
-pub mod buff;
-/// 系数设置
-pub mod coefficient;
-/// 连招序列与预设
-pub mod combo;

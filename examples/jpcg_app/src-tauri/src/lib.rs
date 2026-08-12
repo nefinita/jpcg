@@ -13,6 +13,7 @@ pub fn run() {
             commands::update::check_update,
             commands::update::perform_update,
             commands::update::perform_app_update,
+            commands::update::perform_modules_update,
             commands::forum::forum_list_files,
             commands::forum::forum_list_categories,
             commands::forum::forum_download_file,
@@ -29,6 +30,7 @@ pub fn run() {
             commands::combo::import_config_cmd,
             commands::skill_editor::load_skill_data,
             commands::skill_editor::save_skill_data,
+            commands::version::get_module_versions,
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用程序时发生错误");

@@ -125,6 +125,23 @@ export interface UpdateCheckResult {
   latest_data_version: string | null;
   has_data_update: boolean;
   data_files_to_update: string[];
+  has_modules_update: boolean;
+  modules_version: string | null;
+  modules_files_to_update: ModulesFileEntry[];
+}
+
+export interface ModulesFileEntry {
+  name: string;
+  hash: string;
+  hash_type: string;
+  size: number;
+}
+
+export interface ModuleVersions {
+  core: string;
+  update: string;
+  const: string;
+  app: string;
 }
 
 export interface UpdateProgressEvent {
