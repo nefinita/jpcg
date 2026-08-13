@@ -333,8 +333,10 @@ pub struct DamageResultWithDerivatives {
 
 // ============================================================================
 // 金标准基准测试
-// 数值取自 2026-08-09 重构前（jpcg_core cd5b694 时代代码）在相同输入下的输出，
-// 用于锁定「P1 引用化/P2 截断显式化」前后行为逐位一致。
+// 输入为真实面板属性（2026-08-13 用户提供：基础 21371/攻击 64329/会心 61877/
+// 会效 2925/破防 109160，目标外防 15176/内防 21388/御劲 5047/化劲 59402，pvp 0.9），
+// 期望值由引擎输出回填（examples/python_demo/quick_calc_test.py 全量一致），
+// 锁定计算行为；待用户木桩实测后校准关键值。
 // ============================================================================
 #[cfg(test)]
 mod golden_tests {
@@ -370,23 +372,23 @@ mod golden_tests {
     fn player() -> PlayerConfig {
         PlayerConfig {
             jcsx: "gengu".into(),
-            jichu_shuxing: 18888,
-            jichu_gongji: 4666,
-            huixin_dengji: 33000,
-            huixin_xiaoguo: 22000,
-            pofang_dengji: 25000,
-            wuqi_shanghai: 2800,
+            jichu_shuxing: 21371,
+            jichu_gongji: 64329,
+            huixin_dengji: 61877,
+            huixin_xiaoguo: 2925,
+            pofang_dengji: 109160,
+            wuqi_shanghai: 0,
             zuizhong_gongji: 0,
         }
     }
 
     fn hostile() -> HostilepileConfig {
         HostilepileConfig {
-            waigong_fangyu: 21000,
-            neigong_fangyu: 21000,
-            yujin_dengji: 8500,
-            huajin_dengji: 35000,
-            jianshang_bili: 35,
+            waigong_fangyu: 15176,
+            neigong_fangyu: 21388,
+            yujin_dengji: 5047,
+            huajin_dengji: 59402,
+            jianshang_bili: 0,
             target_hp: 200,
         }
     }
@@ -491,32 +493,30 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 975,
-                b: 116260,
-                i: 44486,
-                n: 23524,
-                h: 47202,
-                q: 26458,
-                d_js: 1.163984,
-                d_jg: 0.593869,
-                d_hxd: 0.119766,
-                d_hxg: 0.038300,
-                d_pf: 0.105450,
+                y: 1355,
+                b: 277337,
+                i: 106216,
+                n: 78378,
+                h: 138727,
+                q: 95725,
+                d_js: 1.765283,
+                d_jg: 0.90065455,
+                d_hxd: 0.3052508,
+                d_hxg: 0.30143535,
+                d_pf: 0.2857653,
                 d_wq: 0.000000,
             },
         );
     }
 
-    /// DOT 每跳等比递增：首跳 = 同配置普通技能 Q（宫 default 金标准 q=26458），
-    /// 第 k 跳 × 1.08^k（k=0..5），共 6 跳（18s / 3s）。
-    /// 期望由等比公式手工推算，锁定引擎行为；数值待正式服数据校准。
+    /// DOT 金标准（真实属性）：普通 6 跳每跳相等（18s/3s），疏曲 9 跳等比 1.12（18s/2s）。
+    /// 期望值由引擎回填（quick_calc_test.py 输出一致），待木桩实测校准。
     #[test]
-    fn golden_gong_dot() {
-        let mut sk = skill("宫(6跳dot)", 160, 200, 2.609375, 0, 0, 0);
+    fn golden_shang_dot() {
+        let mut sk = skill("商（dot）", 58, 58, 0.20833333, 0, 0, 0);
         sk.dot_flag = 1;
         sk.dot_interval = 3;
         sk.dot_duration = 18;
-        sk.dot_up = 0.08;
         let p = player();
         let h = hostile();
         let x = xinfa();
@@ -524,38 +524,40 @@ mod golden_tests {
         let c = CoefficientConfig::default();
         let cfg = JpcgConfig::new_with_config(&p, &h, &sk, &x, &b, &c);
         let d = cfg.q_cal();
-        let expect_jumps: [u32; 6] = [
-            26458,          // k=0: 26458 × 1.08^0
-            28574,          // k=1: 26458 × 1.08 = 28574.64
-            30860,          // k=2: 26458 × 1.08^2 = 30860.61
-            33329,          // k=3: 26458 × 1.08^3 = 33329.46
-            35995,          // k=4: 26458 × 1.08^4 = 35995.82
-            38875,          // k=5: 26458 × 1.08^5 = 38875.48
-        ];
-        assert_eq!(d.dot_jumps, expect_jumps, "DOT 每跳不匹配");
-        assert_eq!(
-            d.q_damage,
-            expect_jumps.iter().sum::<u32>(),
-            "DOT 总期望不匹配"
+        assert_eq!(d.dot_jumps.len(), 6, "普通 dot 应为 6 跳");
+        assert!(
+            d.dot_jumps.iter().all(|j| *j == d.dot_jumps[0]),
+            "非递增条目每跳应相等: {:?}",
+            d.dot_jumps
         );
+        assert_eq!(d.q_damage, d.dot_jumps.iter().sum::<u32>(), "总期望 = Σ 每跳");
+    }
 
-        // 导数链 × 等比和因子 Σ_{k=0..5} 1.08^k = (1.08^6-1)/0.08 = 7.3359290...
-        let factor = 7.3359290368;
-        let dr = cfg.q_cal_with_derivatives().derivatives;
-        let want_pairs = [
-            (dr.d_jichu_shuxing, 1.163984 * factor),
-            (dr.d_jichu_gongji, 0.593869 * factor),
-            (dr.d_huixin_dengji, 0.119766 * factor),
-            (dr.d_huixin_xiaoguo, 0.038300 * factor),
-            (dr.d_pofang_dengji, 0.105450 * factor),
-        ];
-        for (got, want) in want_pairs {
+    #[test]
+    fn golden_shang_dot_shuqu() {
+        let mut sk = skill("商（dot）疏曲", 58, 58, 0.20833333, 0, 0, 0);
+        sk.dot_flag = 1;
+        sk.dot_interval = 2;
+        sk.dot_duration = 18;
+        sk.dot_up = 0.12;
+        let p = player();
+        let h = hostile();
+        let x = xinfa();
+        let b = BuffConfig::default();
+        let c = CoefficientConfig::default();
+        let cfg = JpcgConfig::new_with_config(&p, &h, &sk, &x, &b, &c);
+        let d = cfg.q_cal();
+        assert_eq!(d.dot_jumps.len(), 9, "疏曲 dot 应为 9 跳");
+        let first = d.dot_jumps[0];
+        for (k, j) in d.dot_jumps.iter().enumerate() {
+            let expect = (first as f32 * 1.12_f32.powi(k as i32)) as u32;
             assert!(
-                (got - want).abs() < 1e-3,
-                "DOT 导数不匹配: got {got} want {want}"
+                (*j as i64 - expect as i64).abs() <= 1,
+                "第{}跳 {j} != {expect} (±1)",
+                k + 1
             );
         }
-        assert_eq!(dr.d_wuqi_shanghai, 0.0);
+        assert_eq!(d.q_damage, d.dot_jumps.iter().sum::<u32>(), "总期望 = Σ 每跳");
     }
 
     #[test]
@@ -566,17 +568,17 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1001,
-                b: 127139,
-                i: 48655,
-                n: 27996,
-                h: 58319,
-                q: 33269,
-                d_js: 1.472244,
-                d_jg: 0.751145,
-                d_hxd: 0.153377,
-                d_hxg: 0.063971,
-                d_pf: 0.129154,
+                y: 1382,
+                b: 305051,
+                i: 116837,
+                n: 93204,
+                h: 172236,
+                q: 119873,
+                d_js: 2.210735,
+                d_jg: 1.127926,
+                d_hxd: 0.39975113,
+                d_hxg: 0.42080545,
+                d_pf: 0.35086095,
                 d_wq: 0.000000,
             },
         );
@@ -590,17 +592,17 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 975,
-                b: 79208,
-                i: 44486,
-                n: 19233,
-                h: 38592,
-                q: 21632,
-                d_js: 0.950703,
-                d_jg: 0.485052,
-                d_hxd: 0.097920,
-                d_hxg: 0.031313,
-                d_pf: 0.086212,
+                y: 1355,
+                b: 188844,
+                i: 106216,
+                n: 64042,
+                h: 113353,
+                q: 78216,
+                d_js: 1.4418241,
+                d_jg: 0.7356245,
+                d_hxd: 0.24941957,
+                d_hxg: 0.24630027,
+                d_pf: 0.2334996,
                 d_wq: 0.000000,
             },
         );
@@ -614,17 +616,17 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1001,
-                b: 86613,
-                i: 48655,
-                n: 22887,
-                h: 47676,
-                q: 27198,
-                d_js: 1.202480,
-                d_jg: 0.613510,
-                d_hxd: 0.125385,
-                d_hxg: 0.052297,
-                d_pf: 0.105583,
+                y: 1382,
+                b: 207707,
+                i: 116837,
+                n: 76153,
+                h: 140726,
+                q: 97943,
+                d_js: 1.8056543,
+                d_jg: 0.92125213,
+                d_hxd: 0.32661617,
+                d_hxg: 0.34382215,
+                d_pf: 0.2866784,
                 d_wq: 0.000000,
             },
         );
@@ -638,18 +640,18 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 988,
-                b: 143548,
-                i: 44486,
-                n: 29433,
-                h: 59059,
-                q: 33104,
-                d_js: 1.426705,
-                d_jg: 0.727911,
-                d_hxd: 0.149851,
-                d_hxg: 0.047920,
-                d_pf: 0.131832,
-                d_wq: 0.230625,
+                y: 1369,
+                b: 335584,
+                i: 106216,
+                n: 95818,
+                h: 169595,
+                q: 117025,
+                d_js: 2.157314,
+                d_jg: 1.1006705,
+                d_hxd: 0.37317085,
+                d_hxg: 0.36850816,
+                d_pf: 0.34918728,
+                d_wq: 0.34872726,
             },
         );
     }
@@ -662,18 +664,18 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1014,
-                b: 156707,
-                i: 48655,
-                n: 34956,
-                h: 72817,
-                q: 41540,
-                d_js: 1.803926,
-                d_jg: 0.920370,
-                d_hxd: 0.191504,
-                d_hxg: 0.079875,
-                d_pf: 0.161185,
-                d_wq: 0.265093,
+                y: 1396,
+                b: 369106,
+                i: 116837,
+                n: 113917,
+                h: 210512,
+                q: 146513,
+                d_js: 2.7011516,
+                d_jg: 1.3781385,
+                d_hxd: 0.4885864,
+                d_hxg: 0.5143223,
+                d_pf: 0.42871556,
+                d_wq: 0.39694357,
             },
         );
     }

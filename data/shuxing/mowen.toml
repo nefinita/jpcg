@@ -28,6 +28,8 @@ base_damage1 = 58
 base_damage2 = 58
 atk_xishu = 0.20833333333333334
 dot_flag = 1
+dot_interval = 3
+dot_duration = 18
 
 [[skill]]
 skill_name = "商（dot）"
@@ -36,7 +38,9 @@ base_damage1 = 58
 base_damage2 = 58
 atk_xishu = 0.20833333333333334
 dot_flag = 1
-dot_up = 0.2
+dot_interval = 2
+dot_duration = 18
+dot_up = 0.12
 
 [[skill]]
 skill_name = "角"
@@ -50,6 +54,8 @@ base_damage1 = 58
 base_damage2 = 58
 atk_xishu = 0.234375
 dot_flag = 1
+dot_interval = 3
+dot_duration = 18
 
 [[skill]]
 skill_name = "角（dot）"
@@ -58,7 +64,9 @@ base_damage1 = 58
 base_damage2 = 58
 atk_xishu = 0.234375
 dot_flag = 1
-dot_up = 0.2
+dot_interval = 2
+dot_duration = 18
+dot_up = 0.12
 
 [[skill]]
 skill_name = "徵"
