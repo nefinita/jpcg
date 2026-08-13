@@ -115,7 +115,8 @@ impl From<SkillEditorItemDTO> for Skilltype {
             wushijianshang: dto.wushijianshang,
             zhenshishanghai: dto.zhenshishanghai,
             dot_flag: dto.dot_flag,
-            dot_num: dto.dot_num,
+            dot_interval: dto.dot_interval,
+            dot_duration: dto.dot_duration,
             dot_up: dto.dot_up,
         }
     }
@@ -148,7 +149,8 @@ impl From<Skilltype> for SkillEditorItemDTO {
             wushijianshang: core.wushijianshang,
             zhenshishanghai: core.zhenshishanghai,
             dot_flag: core.dot_flag,
-            dot_num: core.dot_num,
+            dot_interval: core.dot_interval,
+            dot_duration: core.dot_duration,
             dot_up: core.dot_up,
         }
     }
@@ -209,6 +211,7 @@ impl From<engine::CalculateResult> for SkillResultDTO {
             n: core.n,
             h: core.h,
             q: core.q,
+            dot_jumps: core.dot_jumps,
         }
     }
 }
@@ -283,6 +286,7 @@ impl From<engine::kill_prob::ComboStepResult> for ComboStepResultDTO {
             crit_rate: s.crit_rate,
             cumulative_mean_wan: s.cumulative_mean / 10000.0,
             kill_prob: s.kill_prob,
+            dot_jumps: s.dot_jumps,
         }
     }
 }

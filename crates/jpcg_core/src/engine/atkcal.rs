@@ -127,11 +127,34 @@ impl<'a> JpcgConfig<'a> {
     /// Q 段: 期望伤害（最终结果）
     /// crit_rate = 自身会心率 - 目标御劲减免 + 技能增益
     /// buff.huixin_pct 已在 guo_huixin() 中计入，此处不再重复
+    /// Dot 技能：返回总期望（各跳之和），并填充 dot_jumps 每跳期望
     pub fn q_cal(&self) -> DamageResult {
         let i = self.h_cal();
         let crit_rate = self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0;
-        let x = (i[3] as f32 * (1.0 - crit_rate) + i[4] as f32 * crit_rate) as u32;
-        DamageResult::new(i, x)
+        let base_q = (i[3] as f32 * (1.0 - crit_rate) + i[4] as f32 * crit_rate) as u32;
+        let mut result = DamageResult::new(i, base_q);
+        let jumps = self.dot_jump_expected(base_q);
+        result.dot_jumps = jumps.clone();
+        if !jumps.is_empty() {
+            result.q_damage = jumps.iter().sum();
+        }
+        result
+    }
+
+    /// Dot 每跳期望（等比递增）：首跳 = 单次期望，第 k 跳 × (1+dot_up)^(k-1)
+    /// 非 Dot 技能返回空集合
+    fn dot_jump_expected(&self, base_q: u32) -> Vec<u32> {
+        let n = self.skilltype.dot_jump_count();
+        if n == 0 {
+            return Vec::new();
+        }
+        let up = self.skilltype.dot_up;
+        let mut jumps = Vec::with_capacity(n as usize);
+        for k in 0..n {
+            let factor = if up > 0.0 { (1.0 + up).powi(k as i32) } else { 1.0 };
+            jumps.push((base_q as f32 * factor) as u32);
+        }
+        jumps
     }
 
     /// 正向计算伤害 + 反向求导（链式法则）
@@ -146,7 +169,14 @@ impl<'a> JpcgConfig<'a> {
 
         // 与 q_cal() 完全等价的 Q 段计算（不重复调用全链）
         let q = (g_arr[3] as f32 * (1.0 - crit_rate) + h_arr[4] as f32 * crit_rate) as u32;
-        let result = DamageResult::new([y, i_arr[1], i_arr[2], g_arr[3], h_arr[4]], q);
+        let jumps = self.dot_jump_expected(q);
+        let total_q = if jumps.is_empty() {
+            q
+        } else {
+            jumps.iter().sum()
+        };
+        let mut result = DamageResult::new([y, i_arr[1], i_arr[2], g_arr[3], h_arr[4]], total_q);
+        result.dot_jumps = jumps;
 
         // ---- intermediates (f32, 连续) ----
         let i_hit = i_arr[2] as f32;
@@ -224,15 +254,28 @@ impl<'a> JpcgConfig<'a> {
         let di2_d_wq = self.skilltype.watk_xishu as f32 / 100.0;
         let d_wuqi_shanghai = dq_di2 * di2_d_wq;
 
+        // ---- Dot 等比和因子 ----
+        // 总期望 = Σ 首跳×(1+u)^(k-1)，∂Q/∂attr 整体按等比和缩放
+        //（dot_up=0 时退化为跳数倍；非 Dot 技能因子为 1）
+        let dot_n = self.skilltype.dot_jump_count() as f32;
+        let dot_up = self.skilltype.dot_up;
+        let dot_factor = if dot_n == 0.0 {
+            1.0
+        } else if dot_up == 0.0 {
+            dot_n
+        } else {
+            ((1.0 + dot_up).powi(dot_n as i32) - 1.0) / dot_up
+        };
+
         DamageResultWithDerivatives {
             result,
             derivatives: DerivativeSet {
-                d_jichu_shuxing,
-                d_jichu_gongji,
-                d_huixin_dengji,
-                d_huixin_xiaoguo,
-                d_pofang_dengji,
-                d_wuqi_shanghai,
+                d_jichu_shuxing: d_jichu_shuxing * dot_factor,
+                d_jichu_gongji: d_jichu_gongji * dot_factor,
+                d_huixin_dengji: d_huixin_dengji * dot_factor,
+                d_huixin_xiaoguo: d_huixin_xiaoguo * dot_factor,
+                d_pofang_dengji: d_pofang_dengji * dot_factor,
+                d_wuqi_shanghai: d_wuqi_shanghai * dot_factor,
             },
         }
     }
@@ -249,6 +292,8 @@ pub struct DamageResult {
     pub g_damage: u32,
     pub h_damage: u32,
     pub q_damage: u32,
+    /// Dot 每跳期望伤害（非 Dot 技能为空；q_damage 为各跳之和）
+    pub dot_jumps: Vec<u32>,
 }
 
 impl DamageResult {
@@ -260,6 +305,7 @@ impl DamageResult {
             g_damage: i[3],
             h_damage: i[4],
             q_damage: x,
+            dot_jumps: Vec::new(),
         }
     }
 }
@@ -459,6 +505,57 @@ mod golden_tests {
                 d_wq: 0.000000,
             },
         );
+    }
+
+    /// DOT 每跳等比递增：首跳 = 同配置普通技能 Q（宫 default 金标准 q=26458），
+    /// 第 k 跳 × 1.08^k（k=0..5），共 6 跳（18s / 3s）。
+    /// 期望由等比公式手工推算，锁定引擎行为；数值待正式服数据校准。
+    #[test]
+    fn golden_gong_dot() {
+        let mut sk = skill("宫(6跳dot)", 160, 200, 2.609375, 0, 0, 0);
+        sk.dot_flag = 1;
+        sk.dot_interval = 3;
+        sk.dot_duration = 18;
+        sk.dot_up = 0.08;
+        let p = player();
+        let h = hostile();
+        let x = xinfa();
+        let b = BuffConfig::default();
+        let c = CoefficientConfig::default();
+        let cfg = JpcgConfig::new_with_config(&p, &h, &sk, &x, &b, &c);
+        let d = cfg.q_cal();
+        let expect_jumps: [u32; 6] = [
+            26458,          // k=0: 26458 × 1.08^0
+            28574,          // k=1: 26458 × 1.08 = 28574.64
+            30860,          // k=2: 26458 × 1.08^2 = 30860.61
+            33329,          // k=3: 26458 × 1.08^3 = 33329.46
+            35995,          // k=4: 26458 × 1.08^4 = 35995.82
+            38875,          // k=5: 26458 × 1.08^5 = 38875.48
+        ];
+        assert_eq!(d.dot_jumps, expect_jumps, "DOT 每跳不匹配");
+        assert_eq!(
+            d.q_damage,
+            expect_jumps.iter().sum::<u32>(),
+            "DOT 总期望不匹配"
+        );
+
+        // 导数链 × 等比和因子 Σ_{k=0..5} 1.08^k = (1.08^6-1)/0.08 = 7.3359290...
+        let factor = 7.3359290368;
+        let dr = cfg.q_cal_with_derivatives().derivatives;
+        let want_pairs = [
+            (dr.d_jichu_shuxing, 1.163984 * factor),
+            (dr.d_jichu_gongji, 0.593869 * factor),
+            (dr.d_huixin_dengji, 0.119766 * factor),
+            (dr.d_huixin_xiaoguo, 0.038300 * factor),
+            (dr.d_pofang_dengji, 0.105450 * factor),
+        ];
+        for (got, want) in want_pairs {
+            assert!(
+                (got - want).abs() < 1e-3,
+                "DOT 导数不匹配: got {got} want {want}"
+            );
+        }
+        assert_eq!(dr.d_wuqi_shanghai, 0.0);
     }
 
     #[test]

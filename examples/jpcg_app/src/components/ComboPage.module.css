@@ -358,3 +358,19 @@
 .comboDetailTable tr:hover {
   background: var(--glass-highlight);
 }
+
+.comboDotJumps {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.comboDotJumps span {
+  background: rgba(234, 179, 8, 0.08);
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}

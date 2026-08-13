@@ -75,14 +75,25 @@ pub struct Skilltype {
     #[serde(skip_serializing_if = "is_zero_u8")]
     pub dot_flag: u8, // Dot 标签（0=非Dot, 1=Dot）
     #[serde(skip_serializing_if = "is_zero_u8")]
-    pub dot_num: u8, // Dot 总跳数
+    pub dot_interval: u8, // Dot 每跳间隔（秒）
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub dot_duration: u8, // Dot 持续时长（秒）
     #[serde(skip_serializing_if = "is_zero_f32")]
-    pub dot_up: f32, // Dot 递增系数（每跳递增比例）
+    pub dot_up: f32, // Dot 递增系数（每跳递增比例，等比）
 }
 
 impl Skilltype {
     /// 计算技能基础攻击（base_damage1 和 base_damage2 的平均值）
     pub fn base_atk(&self) -> u32 {
         (self.base_damage1 + self.base_damage2) / 2
+    }
+
+    /// Dot 总跳数 = 持续时长 / 每跳间隔（均为 0 或数据非法时返回 0，即非 Dot）
+    pub fn dot_jump_count(&self) -> u32 {
+        if self.dot_interval > 0 && self.dot_duration >= self.dot_interval {
+            self.dot_duration as u32 / self.dot_interval as u32
+        } else {
+            0
+        }
     }
 }

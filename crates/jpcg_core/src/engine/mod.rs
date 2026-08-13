@@ -108,6 +108,9 @@ pub struct CalculateResult {
     pub n: u32,             // 普通命中伤害（N 段，常规命中）
     pub h: u32,             // 会心伤害（H 段）
     pub q: u32,             // 期望伤害（Q 段，考虑会心概率的加权值）
+    /// Dot 每跳期望伤害（非 Dot 技能为空；q 为各跳之和）
+    #[serde(default)]
+    pub dot_jumps: Vec<u32>,
 }
 
 impl CalculateResult {
@@ -122,6 +125,7 @@ impl CalculateResult {
             n,
             h,
             q,
+            dot_jumps: Vec::new(),
         }
     }
 
@@ -168,7 +172,7 @@ fn call_back(
         .q_cal();
 
         // 将 5 段伤害数组映射为 CalculateResult
-        let calculate_result = CalculateResult::new(
+        let mut calculate_result = CalculateResult::new(
             skill.skill_name.clone(),
             damage_result.y,        // Y: 破防系数段
             damage_result.b,        // B: 基础攻击段
@@ -177,6 +181,7 @@ fn call_back(
             damage_result.h_damage, // H: 会心段
             damage_result.q_damage, // Q: 期望值段
         );
+        calculate_result.dot_jumps = damage_result.dot_jumps;
         calculate_result.get_message();
         results.push(calculate_result);
     }

@@ -277,6 +277,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         n: Math.floor(base * 1.5),
         h: Math.floor(base * 2.8),
         q: Math.floor(base * 2.1),
+        dot_jumps: [],
       }));
     }
     case "load_config_cmd": {
@@ -348,7 +349,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
           kind_type: 0, cast_mode: 0, guaranteed_hit: false, has_critical_strike: false,
           effect_type: 0, jihuoqixue: "", watk_xishu: 0, hit_up: 0,
           huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0,
-          wushijianshang: 0, zhenshishanghai: 0, dot_flag: 0, dot_num: 0, dot_up: 0,
+          wushijianshang: 0, zhenshishanghai: 0, dot_flag: 0, dot_interval: 0, dot_duration: 0, dot_up: 0,
         })),
       };
     }

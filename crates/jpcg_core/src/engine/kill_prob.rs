@@ -16,6 +16,7 @@ pub struct ComboStepResult {
     pub cumulative_mean: f64,
     pub cumulative_std: f64,
     pub kill_prob: f64,
+    pub dot_jumps: Vec<u32>,
 }
 
 pub struct ComboResult {
@@ -74,6 +75,7 @@ pub fn calculate_combo(
             cumulative_mean: cum_mean,
             cumulative_std: cum_std,
             kill_prob,
+            dot_jumps: damage.dot_jumps,
         });
     }
 

@@ -32,7 +32,8 @@ const EMPTY_SKILL = (): SkillEditorItemDTO => ({
   wushijianshang: 0,
   zhenshishanghai: 0,
   dot_flag: 0,
-  dot_num: 0,
+  dot_interval: 0,
+  dot_duration: 0,
   dot_up: 0,
 });
 
@@ -329,7 +330,8 @@ export default function SkillEditorPage({ addToast }: Props) {
                       <option value={1}>Dot</option>
                     </select>
                   </div>
-                  {renderField("Dot跳数", "dot_num")}
+                  {renderField("每跳间隔(秒)", "dot_interval")}
+                  {renderField("持续时长(秒)", "dot_duration")}
                   {renderField("Dot递增系数", "dot_up", "number", { step: 0.000001 })}
                 </div>
               </details>

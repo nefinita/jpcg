@@ -105,6 +105,9 @@ pub struct SkillResultDTO {
     pub n: u32,
     pub h: u32,
     pub q: u32,
+    /// Dot 每跳期望伤害（非 Dot 技能为空；q 为各跳之和）
+    #[serde(default)]
+    pub dot_jumps: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -160,6 +163,9 @@ pub struct ComboStepResultDTO {
     pub crit_rate: f32,
     pub cumulative_mean_wan: f64,
     pub kill_prob: f64,
+    /// Dot 每跳期望伤害（非 Dot 技能为空；q_damage 为各跳之和）
+    #[serde(default)]
+    pub dot_jumps: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,7 +248,8 @@ pub struct SkillEditorItemDTO {
     pub wushijianshang: u32,
     pub zhenshishanghai: u32,
     pub dot_flag: u8,
-    pub dot_num: u8,
+    pub dot_interval: u8,
+    pub dot_duration: u8,
     pub dot_up: f32,
 }
 

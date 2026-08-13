@@ -381,7 +381,18 @@ function ComboResultDisplay({ result }: { result: ComboResultDTO }) {
           <tbody>
             {result.steps.map((s, i) => (
               <tr key={i}>
-                <td>{s.skill_name}</td>
+                <td>
+                  {s.skill_name}
+                  {s.dot_jumps?.length > 0 && (
+                    <div className={styles.comboDotJumps}>
+                      {s.dot_jumps.map((j, k) => (
+                        <span key={k} title={`第${k + 1}跳`}>
+                          {Math.round(j / 10000 * 10) / 10}万
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
                 <td>{Math.round(s.g_damage / 10000 * 10) / 10}万</td>
                 <td>{Math.round(s.h_damage / 10000 * 10) / 10}万</td>
                 <td>{Math.round(s.q_damage / 10000 * 10) / 10}万</td>

@@ -74,7 +74,7 @@ export default function ResultTable({ results, calculating }: Props) {
         <tbody>
           {results.map((r, i) => {
             const isBest = r.q === maxQ;
-            const dot = isDot(r.skill_name);
+            const dot = isDot(r.skill_name) || (r.dot_jumps?.length ?? 0) > 0;
             return (
               <tr
                 key={i}
@@ -89,7 +89,16 @@ export default function ResultTable({ results, calculating }: Props) {
                 <td className={styles.colNum}>{formatNumber(r.i)}</td>
                 <td className={styles.colNum}>{formatNumber(r.n)}</td>
                 <td className={styles.colNum}>{formatNumber(r.h)}</td>
-                <td className={styles.colNum}>{formatNumber(r.q)}</td>
+                <td className={styles.colNum}>
+                  {formatNumber(r.q)}
+                  {r.dot_jumps?.length > 0 && (
+                    <div className={styles.dotJumps}>
+                      {r.dot_jumps.map((j, k) => (
+                        <span key={k} title={`第${k + 1}跳`}>{formatNumber(j)}</span>
+                      ))}
+                    </div>
+                  )}
+                </td>
               </tr>
             );
           })}

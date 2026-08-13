@@ -62,6 +62,7 @@ export interface SkillResultDTO {
   n: number;
   h: number;
   q: number;
+  dot_jumps: number[];
 }
 
 export interface SkillPoolItemDTO {
@@ -108,6 +109,7 @@ export interface ComboStepResultDTO {
   crit_rate: number;
   cumulative_mean_wan: number;
   kill_prob: number;
+  dot_jumps: number[];
 }
 
 export interface ComboResultDTO {
@@ -196,7 +198,8 @@ export interface SkillEditorItemDTO {
   wushijianshang: number;
   zhenshishanghai: number;
   dot_flag: number;
-  dot_num: number;
+  dot_interval: number;
+  dot_duration: number;
   dot_up: number;
 }
 

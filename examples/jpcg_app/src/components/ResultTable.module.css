@@ -83,6 +83,22 @@
   font-family: var(--font-sans);
 }
 
+.dotJumps {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.dotJumps span {
+  background: rgba(234, 179, 8, 0.08);
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
