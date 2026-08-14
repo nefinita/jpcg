@@ -8,14 +8,6 @@ interface Props {
   calculating: boolean;
 }
 
-function isDot(name: string): boolean {
-  return name.includes("（dot）") || name.includes("(dot)") || name.includes("dot");
-}
-
-function isUltimate(name: string): boolean {
-  return name.includes("相依");
-}
-
 export default function ResultTable({ results, calculating }: Props) {
   if (calculating) {
     return (
@@ -51,6 +43,13 @@ export default function ResultTable({ results, calculating }: Props) {
   const critSkills = results.filter((r) => r.h > r.n);
   const critRatio = results.length > 0 ? critSkills.length / results.length : 0;
 
+  // DOT 技能展开为每跳一行（dotIndex = 跳序 0..n-1）；非 DOT 技能保持原行
+  const rows = results.flatMap((r) => {
+    const jumps = r.dot_jumps ?? [];
+    if (jumps.length === 0) return [{ ...r, dotIndex: null as number | null }];
+    return jumps.map((_, k) => ({ ...r, dotIndex: k }));
+  });
+
   return (
     <div className={styles.card}>
       <div className={styles.header}>
@@ -72,33 +71,44 @@ export default function ResultTable({ results, calculating }: Props) {
           </tr>
         </thead>
         <tbody>
-          {results.map((r, i) => {
-            const isBest = r.q === maxQ;
-            const dot = isDot(r.skill_name) || (r.dot_jumps?.length ?? 0) > 0;
+          {rows.map((row, i) => {
+            const jumps = row.dot_jumps ?? [];
+            const isDotRow = row.dotIndex !== null;
+            const q = isDotRow ? jumps[row.dotIndex!] : row.q;
+            const isBest = !isDotRow && row.q === maxQ;
+            const isFixed = row.has_critical_strike || (row.zhenshishanghai ?? 0) > 0;
             return (
               <tr
                 key={i}
                 className={clsx(isBest && styles.highlightRow)}
               >
                 <td>
-                  {r.skill_name}
-                  {dot && <span className={styles.dotTag}>DOT</span>}
-                </td>
-                <td className={styles.colNum}>{formatNumber(r.y)}</td>
-                <td className={styles.colNum}>{formatNumber(r.b)}</td>
-                <td className={styles.colNum}>{formatNumber(r.i)}</td>
-                <td className={styles.colNum}>{formatNumber(r.n)}</td>
-                <td className={styles.colNum}>{formatNumber(r.h)}</td>
-                <td className={styles.colNum}>
-                  {formatNumber(r.q)}
-                  {r.dot_jumps?.length > 0 && (
-                    <div className={styles.dotJumps}>
-                      {r.dot_jumps.map((j, k) => (
-                        <span key={k} title={`第${k + 1}跳`}>{formatNumber(j)}</span>
-                      ))}
-                    </div>
+                  {row.skill_name}
+                  {row.has_critical_strike && (
+                    <span className={styles.wuzhiTag}>无质</span>
+                  )}
+                  {(row.zhenshishanghai ?? 0) > 0 && (
+                    <span className={styles.wuzhiTag}>真实</span>
+                  )}
+                  {isDotRow && (
+                    <span className={styles.dotTag}>DOT{row.dotIndex! + 1}</span>
                   )}
                 </td>
+                <td className={styles.colNum}>{formatNumber(row.y)}</td>
+                <td className={styles.colNum}>{formatNumber(row.b)}</td>
+                <td className={styles.colNum}>{formatNumber(row.i)}</td>
+                {isFixed ? (
+                  <>
+                    <td className={styles.colNum}>-</td>
+                    <td className={styles.colNum}>-</td>
+                  </>
+                ) : (
+                  <>
+                    <td className={styles.colNum}>{formatNumber(row.n)}</td>
+                    <td className={styles.colNum}>{formatNumber(row.h)}</td>
+                  </>
+                )}
+                <td className={styles.colNum}>{formatNumber(q)}</td>
               </tr>
             );
           })}

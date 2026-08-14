@@ -151,7 +151,11 @@ impl<'a> JpcgConfig<'a> {
         let up = self.skilltype.dot_up;
         let mut jumps = Vec::with_capacity(n as usize);
         for k in 0..n {
-            let factor = if up > 0.0 { (1.0 + up).powi(k as i32) } else { 1.0 };
+            let factor = if up > 0.0 {
+                (1.0 + up).powi(k as i32)
+            } else {
+                1.0
+            };
             jumps.push((base_q as f32 * factor) as u32);
         }
         jumps
@@ -341,6 +345,7 @@ pub struct DamageResultWithDerivatives {
 #[cfg(test)]
 mod golden_tests {
     use crate::engine::atkcal::JpcgConfig;
+    use crate::engine::kill_prob::calculate_combo;
     use crate::type_set::buff::BuffConfig;
     use crate::type_set::coefficient::CoefficientConfig;
     use crate::type_set::hostilepile::HostilepileConfig;
@@ -389,7 +394,7 @@ mod golden_tests {
             yujin_dengji: 5047,
             huajin_dengji: 59402,
             jianshang_bili: 0,
-            target_hp: 200,
+            target_hp: 2_000_000,
         }
     }
 
@@ -515,8 +520,8 @@ mod golden_tests {
     fn golden_shang_dot() {
         let mut sk = skill("商（dot）", 58, 58, 0.20833333, 0, 0, 0);
         sk.dot_flag = 1;
-        sk.dot_interval = 3;
-        sk.dot_duration = 18;
+        sk.dot_interval = 3.0;
+        sk.dot_duration = 18.0;
         let p = player();
         let h = hostile();
         let x = xinfa();
@@ -530,15 +535,19 @@ mod golden_tests {
             "非递增条目每跳应相等: {:?}",
             d.dot_jumps
         );
-        assert_eq!(d.q_damage, d.dot_jumps.iter().sum::<u32>(), "总期望 = Σ 每跳");
+        assert_eq!(
+            d.q_damage,
+            d.dot_jumps.iter().sum::<u32>(),
+            "总期望 = Σ 每跳"
+        );
     }
 
     #[test]
     fn golden_shang_dot_shuqu() {
         let mut sk = skill("商（dot）疏曲", 58, 58, 0.20833333, 0, 0, 0);
         sk.dot_flag = 1;
-        sk.dot_interval = 2;
-        sk.dot_duration = 18;
+        sk.dot_interval = 2.0;
+        sk.dot_duration = 18.0;
         sk.dot_up = 0.12;
         let p = player();
         let h = hostile();
@@ -557,7 +566,11 @@ mod golden_tests {
                 k + 1
             );
         }
-        assert_eq!(d.q_damage, d.dot_jumps.iter().sum::<u32>(), "总期望 = Σ 每跳");
+        assert_eq!(
+            d.q_damage,
+            d.dot_jumps.iter().sum::<u32>(),
+            "总期望 = Σ 每跳"
+        );
     }
 
     #[test]
@@ -677,6 +690,137 @@ mod golden_tests {
                 d_pf: 0.42871556,
                 d_wq: 0.39694357,
             },
+        );
+    }
+
+    /// 无质金标准：伤害固定为期望 Q（含会心加权），与普通技能输出完全一致。
+    /// 相依（莫问无质技能）数据以 has_critical_strike = true 标记。
+    #[test]
+    fn golden_gong_wuzhi() {
+        let mut sk = skill("宫", 160, 200, 2.609375, 0, 0, 0);
+        sk.has_critical_strike = true;
+        assert_golden(
+            "gong_wuzhi",
+            &sk,
+            &BuffConfig::default(),
+            Golden {
+                y: 1355,
+                b: 277337,
+                i: 106216,
+                n: 78378,
+                h: 138727,
+                q: 95725,
+                d_js: 1.765283,
+                d_jg: 0.90065455,
+                d_hxd: 0.3052508,
+                d_hxg: 0.30143535,
+                d_pf: 0.2857653,
+                d_wq: 0.000000,
+            },
+        );
+    }
+
+    /// 无质连招：每击固定期望 Q → 方差 0（累积 std 恒为 0）；普通技能方差 > 0
+    #[test]
+    fn combo_wuzhi_zero_variance() {
+        let p = player();
+        let h = hostile();
+        let x = xinfa();
+        let b = BuffConfig::default();
+        let c = CoefficientConfig::default();
+
+        let normal = calculate_combo(
+            &[skill("宫", 160, 200, 2.609375, 0, 0, 0)],
+            &p,
+            &h,
+            &x,
+            &b,
+            &c,
+        );
+        assert!(
+            normal.steps[0].cumulative_std > 0.0,
+            "普通技能应存在伤害波动"
+        );
+
+        let mut wuzhi = skill("宫", 160, 200, 2.609375, 0, 0, 0);
+        wuzhi.has_critical_strike = true;
+        let combo = calculate_combo(&[wuzhi.clone(), wuzhi], &p, &h, &x, &b, &c);
+        assert_eq!(combo.steps[0].cumulative_mean, 95725.0, "无质期望 = Q");
+        assert_eq!(combo.steps[0].cumulative_std, 0.0, "无质方差应为 0");
+        assert_eq!(combo.steps[1].cumulative_std, 0.0, "无质累计方差应为 0");
+        assert_eq!(combo.steps[1].cumulative_mean, 191450.0, "两次无质期望翻倍");
+    }
+
+    /// 追加真伤（已损失生命值 × 系数）：
+    /// - 满血目标首击追加为 0；已损失越多追加越大（斩杀机制）
+    /// - 追加只加期望不加方差（确定性伤害）
+    #[test]
+    fn combo_lost_hp_zhenshi_dynamic() {
+        let p = player();
+        let h = hostile();
+        let x = xinfa();
+        let b = BuffConfig::default();
+        let c = CoefficientConfig::default();
+
+        let mut sk = skill("怒锋倾涛·破绽3层", 35, 40, 5.15625, 0, 200, 0);
+        sk.lost_hp_zhenshishanghai = 0.18;
+        sk.has_critical_strike = true; // 无质主伤害，便于精确断言
+
+        // 满血目标（target_hp 200万）：首击主伤害即造成损失 → 追加 = 已损失(主Q) × 系数
+        let combo = calculate_combo(&[sk.clone(), sk.clone()], &p, &h, &x, &b, &c);
+        let s0 = &combo.steps[0];
+        let q0 = s0.q_damage as f64;
+        let expect_append_0 = (h.target_hp as f64 - q0).max(0.0) * 0.18;
+        assert!(
+            (s0.lost_hp_zhenshi_damage - expect_append_0).abs() < 1.0,
+            "首击追加 = 已损失(主Q)×0.18: got {} expect {}",
+            s0.lost_hp_zhenshi_damage,
+            expect_append_0
+        );
+        // 第一步累计期望 = 主Q + 追加
+        assert!(
+            (s0.cumulative_mean - (q0 + expect_append_0)).abs() < 1.0,
+            "首击累计应含追加真伤: got {} expect {}",
+            s0.cumulative_mean,
+            q0 + expect_append_0
+        );
+        // 追加确定性：方差不受影响（主伤害无质 → 方差 0）
+        assert_eq!(s0.cumulative_std, 0.0, "无质主伤害 + 确定性追加 → 方差 0");
+
+        // 追加也计入已损失（几何收敛）：后续步骤追加递减但总期望逼近并击穿目标血
+        let s1 = &combo.steps[1];
+        assert!(
+            s1.lost_hp_zhenshi_damage >= 0.0
+                && s1.lost_hp_zhenshi_damage < s0.lost_hp_zhenshi_damage,
+            "追加随血量损耗几何收敛: 首 {} -> 次 {}",
+            s0.lost_hp_zhenshi_damage,
+            s1.lost_hp_zhenshi_damage
+        );
+        // 追加为 0 的形态不改变行为
+        let mut sk0 = sk.clone();
+        sk0.lost_hp_zhenshishanghai = 0.0;
+        let combo0 = calculate_combo(&[sk0.clone(), sk0.clone()], &p, &h, &x, &b, &c);
+        assert_eq!(
+            combo0.steps[1].cumulative_mean,
+            (q0 * 2.0).round(),
+            "无追加形态累计 = 2×主Q"
+        );
+        // 多步连招：追加提升斩杀效率；8 连击应击穿目标血量且不超杀
+        let combo_plain = calculate_combo(&vec![sk0; 8], &p, &h, &x, &b, &c);
+        let combo_kill = calculate_combo(&vec![sk.clone(); 8], &p, &h, &x, &b, &c);
+        assert!(
+            combo_kill.total_expected_damage > combo_plain.total_expected_damage,
+            "追加真伤应提升累计伤害"
+        );
+        assert!(
+            combo_kill.total_expected_damage >= h.target_hp as f64,
+            "8 连击应击穿目标血: {}",
+            combo_kill.total_expected_damage
+        );
+        assert!(
+            combo_kill.total_expected_damage <= h.target_hp as f64 * 1.6,
+            "追加不超杀（几何收敛）: {}",
+            combo_kill.total_expected_damage
         );
     }
 }

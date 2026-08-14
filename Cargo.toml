@@ -4,7 +4,8 @@ members = [
     "crates/*",
     "examples/jpcg_app/src-tauri",
     "server_tools/manifest-gen",
-    "server_tools/forum"
+    "server_tools/forum",
+    "server_tools/json-to-toml"
 ]
 
 [workspace.package]

@@ -88,6 +88,7 @@ pub fn calculate_combo(
     let skilltypes: Vec<_> = steps
         .iter()
         .map(|s| {
+            // 注：预设加载经 ComboPresetDTO 还原完整技能属性，此处 DTO 直转即可
             let mut st = super::calc::skill_dto_to_skilltype(&s.skill);
             if let Some(ref o) = s.overrides {
                 if let Some(v) = o.base_damage_override {
@@ -153,4 +154,157 @@ pub fn export_config() -> Result<String, String> {
 /// 导入配置 TOML 字符串
 pub fn import_config(toml_str: String) -> Result<(), String> {
     store::import_config_toml(&toml_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jpcg_api::{ComboStepResultDTO, SkillPoolItemDTO};
+
+    fn pool_item(name: &str, lost_hp: f32) -> SkillPoolItemDTO {
+        SkillPoolItemDTO {
+            skill_name: name.into(),
+            skill_id: 32614,
+            sub_id: 32616,
+            base_damage1: 35,
+            base_damage2: 40,
+            atk_xishu: 5.15625,
+            watk_xishu: 0,
+            hit_up: 0,
+            huixin_up: 0,
+            huixiao_up: 0,
+            wushifangyu: 0,
+            wushihuajin: 0,
+            dot_flag: 0,
+            has_critical_strike: true,
+            lost_hp_zhenshishanghai: lost_hp,
+        }
+    }
+
+    fn dto(
+        player: &PlayerConfigDTO,
+        hostile: &HostileConfigDTO,
+        xinfa: &XinfaConfigDTO,
+    ) -> (PlayerConfigDTO, HostileConfigDTO, XinfaConfigDTO) {
+        (player.clone(), hostile.clone(), xinfa.clone())
+    }
+
+    fn player() -> PlayerConfigDTO {
+        PlayerConfigDTO {
+            jcsx: "gengu".into(),
+            jichu_shuxing: 21371,
+            jichu_gongji: 64329,
+            huixin_dengji: 61877,
+            huixin_xiaoguo: 2925,
+            pofang_dengji: 109160,
+            wuqi_shanghai: 0,
+        }
+    }
+
+    fn hostile() -> HostileConfigDTO {
+        HostileConfigDTO {
+            waigong_fangyu: 15176,
+            neigong_fangyu: 21388,
+            yujin_dengji: 5047,
+            huajin_dengji: 59402,
+            jianshang_bili: 0,
+            target_hp: 2_000_000,
+        }
+    }
+
+    fn xinfa() -> XinfaConfigDTO {
+        XinfaConfigDTO {
+            profession: "mowen".into(),
+            xinfa_name: "莫问".into(),
+            xinfa_nom: "gengu".into(),
+            atk_up: 1.96,
+            pofang_up: 2.0,
+            huixin_up: 0.0,
+        }
+    }
+
+    fn buff_coeff() -> (BuffConfigDTO, CoefficientConfigDTO) {
+        (
+            BuffConfigDTO::default(),
+            // DTO Default 全 0 → 除法溢出；填 core 层默认换算系数
+            CoefficientConfigDTO {
+                pofang_xishu: 225957.6,
+                huixin_xishu: 197703.0,
+                huixiao_xishu: 72844.2,
+                huajin_xishu: 30115.8,
+                fangyu_xishu: 126007.2,
+                pvp_global_jianshang: 0.9,
+            },
+        )
+    }
+
+    /// 预设往返：DTO → ComboStep(快照) → 预设 TOML → DTO，技能全属性（含追加真伤）不丢失
+    #[test]
+    fn preset_roundtrip_keeps_full_skill() {
+        let step_dto = ComboStepDTO {
+            skill: pool_item("怒锋倾涛·单持·破绽3层", 0.18),
+            overrides: None,
+        };
+        let core: ComboStep = ComboStep::from(step_dto.clone());
+        assert!(core.skill_snapshot.is_some(), "保存时应写入技能快照");
+
+        let toml_str = toml::to_string_pretty(&ComboPreset {
+            name: "test".into(),
+            steps: vec![core],
+        })
+        .expect("序列化");
+        let loaded: ComboPreset = toml::from_str(&toml_str).expect("反序列化");
+        let back_dto = ComboPresetDTO::from(loaded);
+        let skill = &back_dto.steps[0].skill;
+        assert_eq!(skill.skill_name, "怒锋倾涛·单持·破绽3层");
+        assert_eq!(skill.base_damage1, 35);
+        assert_eq!(skill.atk_xishu, 5.15625);
+        assert_eq!(
+            skill.lost_hp_zhenshishanghai, 0.18,
+            "追加真伤应随预设往返保留"
+        );
+    }
+
+    /// 加载预设后计算：追加真伤按已损失生命值生效（快照丢失则本步追加为 0）
+    #[test]
+    fn loaded_preset_applies_lost_hp_zhenshi() {
+        let step_dto = ComboStepDTO {
+            skill: pool_item("怒锋倾涛·单持·破绽3层", 0.18),
+            overrides: None,
+        };
+        let core: ComboStep = ComboStep::from(step_dto);
+        let rounds: ComboPresetDTO = ComboPresetDTO::from(ComboPreset {
+            name: "test".into(),
+            steps: vec![core],
+        });
+        let (b, c) = buff_coeff();
+        let (p, h, x) = dto(&player(), &hostile(), &xinfa());
+        let result: ComboResultDTO = calculate_combo(rounds.steps, p, h, x, b, c).expect("计算");
+        let s0: &ComboStepResultDTO = &result.steps[0];
+        assert!(
+            s0.lost_hp_zhenshi_damage > 0.0,
+            "加载预设后首击追加真伤应 > 0: got {}",
+            s0.lost_hp_zhenshi_damage
+        );
+        assert!(
+            s0.cumulative_mean_wan > s0.q_damage as f64 / 10000.0,
+            "累计期望应含追加真伤"
+        );
+    }
+
+    /// 旧存档（无快照）兼容：回退 DTO 重建，不 panic
+    #[test]
+    fn old_preset_without_snapshot_parses() {
+        let legacy_toml = r#"
+name = "旧存档"
+[[steps]]
+skill_id = 32614
+sub_id = 32616
+skill_name = "怒锋倾涛·单持·破绽0层"
+"#;
+        let loaded: ComboPreset = toml::from_str(legacy_toml).expect("旧存档可解析");
+        assert!(loaded.steps[0].skill_snapshot.is_none());
+        let back = ComboPresetDTO::from(loaded);
+        assert_eq!(back.steps[0].skill.skill_name, "怒锋倾涛·单持·破绽0层");
+    }
 }

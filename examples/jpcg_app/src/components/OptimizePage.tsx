@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import type { FormData, DerivativesOutputDTO } from "../types";
 import * as api from "../api/commands";
+import { toCalculateRequest } from "../utils/normalize";
 import { IconClose } from "./icons";
 import styles from "./OptimizePage.module.css";
 
@@ -20,28 +21,7 @@ export default function OptimizePage({ formData }: Props) {
     setError(null);
     setLoading(true);
     try {
-      const req = {
-        player: {
-          jcsx: formData.xinfa_config.xinfa_nom,
-          jichu_shuxing: formData.player.jichu_shuxing ?? 0,
-          jichu_gongji: formData.player.jichu_gongji ?? 0,
-          huixin_dengji: formData.player.huixin_dengji ?? 0,
-          huixin_xiaoguo: formData.player.huixin_xiaoguo ?? 0,
-          pofang_dengji: formData.player.pofang_dengji ?? 0,
-          wuqi_shanghai: formData.player.wuqi_shanghai ?? 0,
-        },
-        hostile: {
-          waigong_fangyu: formData.hostile.waigong_fangyu ?? 0,
-          neigong_fangyu: formData.hostile.neigong_fangyu ?? 0,
-          yujin_dengji: formData.hostile.yujin_dengji ?? 0,
-          huajin_dengji: formData.hostile.huajin_dengji ?? 0,
-          jianshang_bili: formData.hostile.jianshang_bili ?? 0,
-          target_hp: formData.hostile.target_hp ?? 0,
-        },
-        xinfa_config: formData.xinfa_config,
-        buff: formData.buff,
-        coefficient: formData.coefficient,
-      };
+      const req = toCalculateRequest(formData);
       const data = await api.computeDerivatives(req);
       setOutput(data);
     } catch (err) {

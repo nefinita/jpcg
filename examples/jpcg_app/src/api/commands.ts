@@ -14,6 +14,9 @@ import type {
   SkillEditorDataDTO,
   DerivativesOutputDTO,
   ModuleVersions,
+  PlayerConfigDTO,
+  HostileConfigDTO,
+  XinfaConfigDTO,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -170,9 +173,9 @@ export async function loadSkillPool(profession: string): Promise<SkillPoolItemDT
 
 export async function calculateCombo(
   steps: ComboStepDTO[],
-  player: Record<string, unknown>,
-  hostile: Record<string, unknown>,
-  xinfa: Record<string, unknown>,
+  player: PlayerConfigDTO,
+  hostile: HostileConfigDTO,
+  xinfa: XinfaConfigDTO,
   buff: BuffConfigDTO,
   coefficient: CoefficientConfigDTO,
 ): Promise<ComboResultDTO> {
@@ -268,17 +271,31 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
     case "calculate_damage": {
       const req = args?.req as CalculateRequest | undefined;
       const base = (req?.player?.jichu_gongji ?? 1000) * 2;
-      const skills = ["剑气纵横", "流风回雪", "万剑归宗", "听雷诀", "九溪弥烟"];
-      return skills.map((name) => ({
-        skill_name: name,
-        y: 1024 + Math.floor(Math.random() * 200),
-        b: base + Math.floor(Math.random() * 500),
-        i: Math.floor(base * 1.2),
-        n: Math.floor(base * 1.5),
-        h: Math.floor(base * 2.8),
-        q: Math.floor(base * 2.1),
-        dot_jumps: [],
-      }));
+      // 模拟技能（dev 模式兜底数据）：dot=跳数、wuzhi=无质标记，由标记生成，不依赖技能名判定
+      const skills = [
+        { name: "剑气纵横" },
+        { name: "流风回雪" },
+        { name: "万剑归宗" },
+        { name: "听雷诀" },
+        { name: "九溪弥烟" },
+        { name: "商（dot）", dot: 6 },
+        { name: "相依", wuzhi: true },
+      ];
+      return skills.map(({ name, dot, wuzhi }) => {
+        const jumps = dot ? Array.from({ length: dot }, () => Math.floor(base * 1.2)) : [];
+        return {
+          skill_name: name,
+          y: 1024 + Math.floor(Math.random() * 200),
+          b: base + Math.floor(Math.random() * 500),
+          i: Math.floor(base * 1.2),
+          n: Math.floor(base * 1.5),
+          h: Math.floor(base * 2.8),
+          q: jumps.length > 0 ? jumps.reduce((s, j) => s + j, 0) : Math.floor(base * 2.1),
+          dot_jumps: jumps,
+          has_critical_strike: !!wuzhi,
+          zhenshishanghai: 0,
+        };
+      });
     }
     case "load_config_cmd": {
       const saved = typeof localStorage !== "undefined"
@@ -301,9 +318,14 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       return ["shuxing", "combo"];
     case "load_skill_pool":
       return [
-        { skill_name: "宫", skill_id: 10447, base_damage1: 160, base_damage2: 200, atk_xishu: 501, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0 },
-        { skill_name: "商", skill_id: 10448, base_damage1: 120, base_damage2: 160, atk_xishu: 400, watk_xishu: 0, hit_up: 0, huixin_up: 5, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0 },
-        { skill_name: "角", skill_id: 10449, base_damage1: 100, base_damage2: 140, atk_xishu: 350, watk_xishu: 0, hit_up: 10, huixin_up: 0, huixiao_up: 0, wushifangyu: 512, wushihuajin: 0, dot_flag: 0 },
+        { skill_name: "宫", skill_id: 10447, sub_id: 14474, base_damage1: 160, base_damage2: 200, atk_xishu: 501, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "商", skill_id: 10448, sub_id: 14475, base_damage1: 120, base_damage2: 160, atk_xishu: 400, watk_xishu: 0, hit_up: 0, huixin_up: 5, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "角", skill_id: 10449, sub_id: 14476, base_damage1: 100, base_damage2: 140, atk_xishu: 350, watk_xishu: 0, hit_up: 10, huixin_up: 0, huixiao_up: 0, wushifangyu: 512, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "引窍·0点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 3.51, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "引窍·50点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 10.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "引窍·100点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 17.55, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "破·0点能量", skill_id: 38014, sub_id: 38093, base_damage1: 20, base_damage2: 20, atk_xishu: 8.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "破·50点能量", skill_id: 38014, sub_id: 38093, base_damage1: 20, base_damage2: 20, atk_xishu: 8.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
       ];
     case "calculate_combo_cmd": {
       const steps = (args?.steps as ComboStepDTO[]) || [];
@@ -322,6 +344,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
             crit_rate: 0.35,
             cumulative_mean_wan: cum / 10000,
             kill_prob: Math.min(1, (i + 1) * 0.2),
+            has_critical_strike: s.skill.has_critical_strike,
           };
         }),
       };

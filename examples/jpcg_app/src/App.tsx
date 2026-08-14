@@ -15,6 +15,7 @@ import SkillEditorPage from "./components/SkillEditorPage";
 import StatusBar from "./components/StatusBar";
 import Toast from "./components/Toast";
 import { IconBug, IconCalc } from "./components/icons";
+import { toCalculateRequest } from "./utils/normalize";
 import styles from "./App.module.css";
 
 export default function App() {
@@ -33,28 +34,7 @@ export default function App() {
       setCalculating(true);
       setStatus("计算中...");
       try {
-        const req = {
-          player: {
-            jcsx: form.xinfa_config.xinfa_nom,
-            jichu_shuxing: form.player.jichu_shuxing ?? 0,
-            jichu_gongji: form.player.jichu_gongji ?? 0,
-            huixin_dengji: form.player.huixin_dengji ?? 0,
-            huixin_xiaoguo: form.player.huixin_xiaoguo ?? 0,
-            pofang_dengji: form.player.pofang_dengji ?? 0,
-            wuqi_shanghai: form.player.wuqi_shanghai ?? 0,
-          },
-          hostile: {
-            waigong_fangyu: form.hostile.waigong_fangyu ?? 0,
-            neigong_fangyu: form.hostile.neigong_fangyu ?? 0,
-            yujin_dengji: form.hostile.yujin_dengji ?? 0,
-            huajin_dengji: form.hostile.huajin_dengji ?? 0,
-            jianshang_bili: form.hostile.jianshang_bili ?? 0,
-            target_hp: form.hostile.target_hp ?? 0,
-          },
-          xinfa_config: form.xinfa_config,
-          buff: form.buff,
-          coefficient: form.coefficient,
-        };
+        const req = toCalculateRequest(form);
         const data = await api.calculateDamage(req);
         setResults(data);
         setStatus(`计算完成 — ${data.length} 个技能`);

@@ -31,6 +31,7 @@ const EMPTY_SKILL = (): SkillEditorItemDTO => ({
   wushihuajin: 0,
   wushijianshang: 0,
   zhenshishanghai: 0,
+  lost_hp_zhenshishanghai: 0,
   dot_flag: 0,
   dot_interval: 0,
   dot_duration: 0,
@@ -88,7 +89,39 @@ export default function SkillEditorPage({ addToast }: Props) {
     if (!data) return;
     setSaving(true);
     try {
-      await api.saveSkillData(profession, data);
+      // 空输入归一为 0，防止空串打穿 core 的 u32/f32 反序列化
+      const toNum = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const numKeys = [
+        "skill_id", "sub_id", "group", "weapon_request", "design_effect", "kind_type",
+        "cast_mode", "effect_type", "base_damage1", "base_damage2", "atk_xishu",
+        "watk_xishu", "hit_up", "huixin_up", "huixiao_up", "wushifangyu", "wushihuajin",
+        "wushijianshang", "zhenshishanghai", "lost_hp_zhenshishanghai",
+        "dot_flag", "dot_interval", "dot_duration", "dot_up",
+      ] as const;
+      const skills = data.skills.map((s) => {
+        const out = { ...s };
+        for (const k of numKeys) {
+          out[k] = toNum(out[k]) as never;
+        }
+        return out;
+      });
+      await api.saveSkillData(profession, {
+        xinfa: {
+          ...data.xinfa,
+          atk_up: toNum(data.xinfa.atk_up),
+          pofang_up: toNum(data.xinfa.pofang_up),
+          huixin_up: toNum(data.xinfa.huixin_up),
+        },
+        version: data.version ? {
+          level: toNum(data.version.level),
+          season: toNum(data.version.season),
+          modified: toNum(data.version.modified),
+        } : null,
+        skills,
+      });
       addToast?.("技能数据已保存", "success");
       api.listProfessions().then(setProfessionOptions).catch(() => {});
     } catch (err) {
@@ -180,8 +213,8 @@ export default function SkillEditorPage({ addToast }: Props) {
             type="number"
             min={opts?.min ?? 0}
             step={opts?.step ?? (field === "atk_xishu" || field === "dot_up" ? 0.000001 : 1)}
-            value={value as number}
-            onChange={(e) => updateSkill(idx, field, e.target.value === "" ? 0 : Number(e.target.value))}
+            value={value === "" ? "" : (value as number)}
+            onChange={(e) => updateSkill(idx, field, e.target.value === "" ? "" : Number(e.target.value))}
           />
         )}
       </div>
@@ -283,6 +316,7 @@ export default function SkillEditorPage({ addToast }: Props) {
                   {renderField("无视化劲", "wushihuajin")}
                   {renderField("无视减伤", "wushijianshang")}
                   {renderField("真实伤害", "zhenshishanghai")}
+                  {renderField("追加真伤(已损失×系数)", "lost_hp_zhenshishanghai")}
                 </div>
               </details>
 
@@ -319,7 +353,7 @@ export default function SkillEditorPage({ addToast }: Props) {
                   </div>
                   {renderField("效果类型", "effect_type")}
                   {renderField("必然命中", "guaranteed_hit", "checkbox")}
-                  {renderField("可暴击", "has_critical_strike", "checkbox")}
+                  {renderField("无质（固定期望）", "has_critical_strike", "checkbox")}
                 </div>
                 <div className={styles.divider} />
                 <div className={styles.grid}>

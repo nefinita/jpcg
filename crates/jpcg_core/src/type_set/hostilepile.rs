@@ -17,7 +17,7 @@ pub struct HostilepileConfig {
     pub yujin_dengji: u32,   // 御劲等级（影响会心率和会心效果减免）
     pub huajin_dengji: u32,  // 化劲等级（影响伤害减免）
     pub jianshang_bili: u32, // 减伤比例（百分比，如 10 表示 10%）
-    pub target_hp: u32,      // 目标血量（万），用于击杀概率计算
+    pub target_hp: u32,      // 目标血量（精确到个位），用于击杀概率计算
 }
 
 impl HostilepileConfig {

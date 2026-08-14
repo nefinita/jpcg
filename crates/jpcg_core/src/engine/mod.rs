@@ -111,6 +111,15 @@ pub struct CalculateResult {
     /// Dot 每跳期望伤害（非 Dot 技能为空；q 为各跳之和）
     #[serde(default)]
     pub dot_jumps: Vec<u32>,
+    /// 无质（伤害固定 = 期望 Q，含会心加权）
+    #[serde(default)]
+    pub has_critical_strike: bool,
+    /// 真实伤害（数据源 custom_damage_base 标签，无视防御减免）
+    #[serde(default)]
+    pub zhenshishanghai: u32,
+    /// 追加真伤系数（已损失生命值 × 系数，连招中动态结算，单技能面板满血为 0）
+    #[serde(default)]
+    pub lost_hp_zhenshishanghai: f32,
 }
 
 impl CalculateResult {
@@ -126,15 +135,21 @@ impl CalculateResult {
             h,
             q,
             dot_jumps: Vec::new(),
+            has_critical_strike: false,
+            zhenshishanghai: 0,
+            lost_hp_zhenshishanghai: 0.0,
         }
     }
 
-    /// 打印当前伤害计算结果到日志
+    /// 打印当前伤害计算结果到日志（Dot 技能逐跳一行）
     pub fn get_message(&self) {
         success(&format!(
             "技能: {}, Y: {}, B: {}, I: {}, N: {}, H: {}, Q: {}",
             self.skill_name, self.y, self.b, self.i, self.n, self.h, self.q
         ));
+        for (k, j) in self.dot_jumps.iter().enumerate() {
+            success(&format!("DOT 第{}跳: {}", k + 1, j));
+        }
     }
 }
 
@@ -182,6 +197,9 @@ fn call_back(
             damage_result.q_damage, // Q: 期望值段
         );
         calculate_result.dot_jumps = damage_result.dot_jumps;
+        calculate_result.has_critical_strike = skill.has_critical_strike;
+        calculate_result.zhenshishanghai = skill.zhenshishanghai;
+        calculate_result.lost_hp_zhenshishanghai = skill.lost_hp_zhenshishanghai;
         calculate_result.get_message();
         results.push(calculate_result);
     }

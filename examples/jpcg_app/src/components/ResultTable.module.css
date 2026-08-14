@@ -83,20 +83,15 @@
   font-family: var(--font-sans);
 }
 
-.dotJumps {
-  display: flex;
-  gap: 2px;
-  flex-wrap: wrap;
-  margin-top: 2px;
+.wuzhiTag {
+  display: inline-block;
   font-size: 0.65rem;
-  color: var(--text-muted);
-}
-
-.dotJumps span {
-  background: rgba(234, 179, 8, 0.08);
-  padding: 0 4px;
+  padding: 1px 6px;
   border-radius: 3px;
-  white-space: nowrap;
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+  margin-left: var(--space-xs);
+  font-family: var(--font-sans);
 }
 
 .stats {

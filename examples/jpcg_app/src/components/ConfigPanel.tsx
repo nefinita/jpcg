@@ -88,47 +88,69 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const updateField = useCallback(
     (section: "player" | "hostile", id: string, value: string) => {
-      const num = value === "" ? 0 : Number(value);
+      const num = Number(value);
+      const stored = value === "" || isNaN(num) ? "" : num;
       setForm((prev) => ({
         ...prev,
-        [section]: { ...prev[section], [id]: isNaN(num) ? 0 : num },
+        [section]: { ...prev[section], [id]: stored },
       }));
     },
     [],
   );
 
   const updateBuff = useCallback((id: string, value: string) => {
-    const num = value === "" ? 0 : Number(value);
+    const num = Number(value);
+    const stored = value === "" || isNaN(num) ? "" : num;
     setForm((prev) => ({
       ...prev,
-      buff: { ...prev.buff, [id]: isNaN(num) ? 0 : num },
+      buff: { ...prev.buff, [id]: stored },
     }));
   }, []);
 
   const updateCoefficient = useCallback((id: string, value: string) => {
-    const num = value === "" ? 0 : Number(value);
+    const num = Number(value);
+    const stored = value === "" || isNaN(num) ? "" : num;
     setForm((prev) => ({
       ...prev,
-      coefficient: { ...prev.coefficient, [id]: isNaN(num) ? 0 : num },
+      coefficient: { ...prev.coefficient, [id]: stored },
     }));
   }, []);
 
+  // 数字兜底：空串/NaN → 0（提交 core 前统一 normalize）
+  const normalizeNum = useCallback((v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }, []);
+
+  const normalizeForm = useCallback((f: typeof form) => {
+    const num = (o: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(o).map(([k, v]) => [k, normalizeNum(v)]));
+    return {
+      ...f,
+      player: num(f.player),
+      hostile: num(f.hostile),
+      buff: num(f.buff),
+      coefficient: num(f.coefficient),
+    } as typeof form;
+  }, [normalizeNum]);
+
   const handleCalculate = useCallback(() => {
-    onCalculate(form);
-  }, [form, onCalculate]);
+    onCalculate(normalizeForm(form));
+  }, [form, onCalculate, normalizeForm]);
 
   const handleSave = useCallback(async () => {
     try {
+      const norm = normalizeForm(form);
       await api.saveConfig({
-        player: form.player as never,
-        hostile: form.hostile as never,
-        xinfa_config: form.xinfa_config,
+        player: norm.player as never,
+        hostile: norm.hostile as never,
+        xinfa_config: norm.xinfa_config,
       });
       addToast("配置已保存", "success");
     } catch (err) {
       addToast(String(err), "error");
     }
-  }, [form, addToast]);
+  }, [form, addToast, normalizeForm]);
 
   const handleLoad = useCallback(async () => {
     try {
@@ -158,8 +180,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           target_hp: cfg.hostile.target_hp,
         },
         xinfa_config: cfg.xinfa_config,
-        buff: cfg.buff || { ...DEFAULT_BUFF },
-        coefficient: cfg.coefficient || { ...DEFAULT_COEFFICIENT },
+        buff: cfg.buff ? { ...cfg.buff } : { ...DEFAULT_BUFF },
+        coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
       });
       addToast("配置已加载", "success");
     } catch (err) {
@@ -309,14 +331,14 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const playerStats = React.useMemo(() => {
     const pct = (v: number) => (v * 100).toFixed(1) + "%";
-    const huixinRate = form.player.huixin_dengji / (form.coefficient.huixin_xishu || 197703);
-    const pofangRate = form.player.pofang_dengji / (form.coefficient.pofang_xishu || 225957.6);
+    const huixinRate = normalizeNum(form.player.huixin_dengji) / (normalizeNum(form.coefficient.huixin_xishu) || 197703);
+    const pofangRate = normalizeNum(form.player.pofang_dengji) / (normalizeNum(form.coefficient.pofang_xishu) || 225957.6);
     return {
-      huixinRate: pct(huixinRate + form.buff.huixin_pct / 100),
-      pofangRate: pct(pofangRate + form.buff.pofang_pct / 100),
-      jianshang: form.hostile.jianshang_bili + "%",
+      huixinRate: pct(huixinRate + normalizeNum(form.buff.huixin_pct) / 100),
+      pofangRate: pct(pofangRate + normalizeNum(form.buff.pofang_pct) / 100),
+      jianshang: normalizeNum(form.hostile.jianshang_bili) + "%",
     };
-  }, [form]);
+  }, [form, normalizeNum]);
 
   return (
     <div className={styles.card}>

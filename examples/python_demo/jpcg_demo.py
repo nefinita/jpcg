@@ -97,7 +97,7 @@ def main():
             "hostile": {
                 "waigong_fangyu": 21000, "neigong_fangyu": 21000,
                 "yujin_dengji": 8500, "huajin_dengji": 35000,
-                "jianshang_bili": 35, "target_hp": 200,
+                "jianshang_bili": 35, "target_hp": 2000000,
             },
             "xinfa_config": {
                 "profession": "mowen", "xinfa_name": "莫问", "xinfa_nom": "根骨",

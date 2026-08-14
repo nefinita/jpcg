@@ -73,7 +73,7 @@ export const HOSTILE_FIELDS = [
   { id: "yujin_dengji",    label: "御劲等级",     min: 0, step: 1 },
   { id: "huajin_dengji",   label: "化劲等级",     min: 0, step: 1 },
   { id: "jianshang_bili",  label: "减伤比例(%)",  min: 0, max: 100, step: 0.1 },
-  { id: "target_hp",       label: "目标血量(万)", min: 0, step: 1 },
+  { id: "target_hp",       label: "目标血量", min: 0, step: 1 },
 ];
 
 export const STORAGE_KEYS = {

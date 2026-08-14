@@ -7,9 +7,11 @@
 
 功能：
     1. 全量计算 mowen.toml 所有技能（calculate）
-    2. DOT 专项断言：商/角 普通 6 跳每跳相等 q=Σ；疏曲 9 跳等比 ×1.12^k
+    2. DOT 专项断言：跳数按 toml 的 dot_duration/dot_interval 推导（浮点秒，支持 0.25s），
+       dot_up>0 等比递增 ×(1+up)^k，否则每跳相等；q = Σ jumps；非 dot 空
     3. 面板百分比对照（化劲/御劲/防御，校验引擎系数）
-    4. 输出完整 JSON（供金标准回填）
+    4. 无质断言（has_critical_strike=true 技能自动收集，q 固定=期望 Q）
+    5. 输出完整 JSON（供金标准回填）
 
 退出码：0 全部通过 / 1 有失败
 """
@@ -19,7 +21,6 @@ import ctypes
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 # 预设属性（用户真实面板 + 木桩目标 + pvp 0.9）
@@ -73,12 +74,6 @@ PANEL_EXPECT = [
     ("内防", "neigong_fangyu", lambda h: h / (h + 126007.2) * 100, 14.51),
 ]
 
-# DOT 期望规则: (技能名子串, 跳数, dot_up)
-DOT_RULES = [
-    ("商（dot）", 6, 0.0, "普通"),
-    ("角（dot）", 6, 0.0, "普通"),
-]
-
 
 class Core:
     def __init__(self, path: str):
@@ -127,10 +122,36 @@ def find_lib(arg: str | None) -> str:
     raise SystemExit("找不到 core 库，请先 cargo build -p jpcg_core 或传 --lib")
 
 
-def check_dot(results: list[dict]) -> list[str]:
-    """DOT 专项断言：普通 6 跳相等；疏曲 9 跳等比 1.12；q = Σ jumps；非 dot 空。
-    同名条目（商（dot）普通/疏曲）按 TOML 出现顺序区分：第 1 次=普通，第 2 次=疏曲。"""
+def load_data() -> tuple[list[dict], bool]:
+    """读取 mowen.toml 全部 [[skill]] 条目（按文件顺序）。返回 (skills, skipped)。
+    缺 tomllib 或找不到 toml 时 skipped=True，调用方跳过依赖数据的断言。"""
+    base = Path(os.environ["JPCG_DATA_DIR"])
+    cand = [base / "shuxing" / "mowen.toml", base / "mowen.toml"]
+    path = next((c for c in cand if c.is_file()), None)
+    if path is None:
+        return [], True
+    try:
+        import tomllib
+    except ImportError:
+        return [], True
+    with open(path, "rb") as f:
+        return tomllib.load(f).get("skill", []), False
+
+
+def check_dot(results: list[dict], data: list[dict]) -> list[str]:
+    """DOT 专项断言：期望跳数按 toml 的 dot_duration/dot_interval 推导（浮点秒），
+    dot_up>0 等比递增 ×(1+up)^k，否则每跳相等；q = Σ jumps；非 dot 返回空集合。
+    同名条目（商（dot）普通/疏曲）按 TOML 出现顺序与 results 同名顺序匹配。"""
     errors: list[str] = []
+    expected: dict[str, list[tuple[float, float, float]]] = {}
+    for sk in data:
+        if not sk.get("dot_flag"):
+            continue
+        dur = sk.get("dot_duration")
+        itv = sk.get("dot_interval")
+        if dur is None or itv is None or itv <= 0:
+            continue
+        expected.setdefault(sk["skill_name"], []).append((dur, itv, sk.get("dot_up", 0.0)))
     seen: dict[str, int] = {}
 
     for r in results:
@@ -144,10 +165,14 @@ def check_dot(results: list[dict]) -> list[str]:
 
         idx = seen.get(name, 0) + 1
         seen[name] = idx
-        up = 0.12 if idx > 1 else 0.0
-        n = 9 if idx > 1 else 6
+        queue = expected.get(name, [])
+        if not queue:
+            errors.append(f"[{name}#{idx}] toml 中无对应 dot 条目")
+            continue
+        dur, itv, up = queue.pop(0)
+        n = round(dur / itv)
         if len(jumps) != n:
-            errors.append(f"[{name}#{idx}] 跳数 {len(jumps)} != {n}")
+            errors.append(f"[{name}#{idx}] 跳数 {len(jumps)} != 期望 {n}（duration {dur}/interval {itv}）")
             continue
         first = jumps[0]
         if up == 0.0:
@@ -160,6 +185,10 @@ def check_dot(results: list[dict]) -> list[str]:
                     errors.append(f"[{name}#{idx}] 第{k + 1}跳 {j} != {expect} (±1)")
         if r["q"] != sum(jumps):
             errors.append(f"[{name}#{idx}] q={r['q']} != Σjumps={sum(jumps)}")
+
+    for name, rest in expected.items():
+        for i in range(len(rest)):
+            errors.append(f"[{name}#{i + 1}] toml 有条目但 results 未匹配")
     return errors
 
 
@@ -170,6 +199,27 @@ def check_panel() -> list[str]:
         got = fn(h[field])
         if abs(got - expect) > 0.5:
             errors.append(f"[面板] {label} 引擎换算 {got:.2f}% != 面板 {expect}%")
+    return errors
+
+
+def check_wuzhi(results: list[dict], wuzhi_names: list[str]) -> list[str]:
+    """无质断言：无质技能 q 满足期望公式 q ≈ N×(1-p) + H×p
+    （p = 玩家会心率 61877/197703 − 目标御劲减免 5047/197703，buff 全 0）
+    wuzhi_names 由 toml 自动收集（has_critical_strike=true），须全部在 results 中出现。"""
+    errors: list[str] = []
+    crit = 61877 / 197703.0 - 5047 / 197703.0
+    seen: set[str] = set()
+    for r in results:
+        if r["skill_name"] not in wuzhi_names:
+            continue
+        seen.add(r["skill_name"])
+        n, h, q = r["n"], r["h"], r["q"]
+        expect = n * (1.0 - crit) + h * crit
+        if abs(q - expect) > 100:
+            errors.append(f"[无质] {r['skill_name']} q={q} != 期望公式 {expect:.0f} (±100)")
+    for name in wuzhi_names:
+        if name not in seen:
+            errors.append(f"[无质] {name} 未出现在计算结果中")
     return errors
 
 
@@ -208,14 +258,27 @@ def main():
                 json.dump(results, f, ensure_ascii=False, indent=1)
             print(f"\n==> 结果已写入 {args.out}")
 
-        errors = check_panel() + check_dot(results)
+        data, data_skipped = load_data()
+        wuzhi_names = [sk["skill_name"] for sk in data if sk.get("has_critical_strike")]
+        errors = check_panel()
+        if not data_skipped:
+            errors += check_dot(results, data) + check_wuzhi(results, wuzhi_names)
+        else:
+            print("（跳过 DOT/无质数据断言：缺 tomllib 或找不到 mowen.toml）")
         print("\n==> 面板对照")
         for label, field, fn, expect in PANEL_EXPECT:
             print(f"    {label}: 引擎 {fn(PRESET["hostile"][field]):.2f}% 期望 {expect}%")
         print("==> DOT 断言")
         for r in results:
-            if r.get("dot_jumps"):
-                print(f"    {r['skill_name']}: {len(r['dot_jumps'])} 跳, q={r['q']}")
+            jumps = r.get("dot_jumps") or []
+            if jumps:
+                print(f"    {r['skill_name']}: {len(jumps)} 跳, q={r['q']}")
+                for k, j in enumerate(jumps):
+                    print(f"        第{k + 1}跳: {j}")
+        print("==> 无质断言（has_critical_strike=true 技能）")
+        for r in results:
+            if r["skill_name"] in wuzhi_names:
+                print(f"    {r['skill_name']}: N={r['n']} H={r['h']} Q={r['q']}（应固定=期望Q）")
         if errors:
             print("\n!!! 失败:")
             for e in errors:

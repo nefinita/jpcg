@@ -2319,6 +2319,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-to-toml"
+version = "2.1.0-alpha.1"
+dependencies = [
+ "clap",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "jsonptr"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

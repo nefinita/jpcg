@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
   SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData,
 } from "../types";
 import * as api from "../api/commands";
+import { toCalculateRequest } from "../utils/normalize";
 import { IconGear, IconClose, IconSave, IconTrash, IconStar } from "./icons";
 import styles from "./ComboPage.module.css";
 
@@ -16,13 +17,15 @@ interface Props {
 export default function ComboPage({ xinfaName, formData }: Props) {
   const [skillPool, setSkillPool] = useState<SkillPoolItemDTO[]>([]);
   const [sequence, setSequence] = useState<ComboStepDTO[]>([]);
-  const [favorites, setFavorites] = useState<Set<number>>(new Set());
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [presets, setPresets] = useState<string[]>([]);
   const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
   const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
   const [presetName, setPresetName] = useState("");
+  const [poolQuery, setPoolQuery] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (xinfaName) {
@@ -31,16 +34,26 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     api.listComboPresets().then(setPresets).catch(() => {});
     const stored = localStorage.getItem("jpcg_favorites");
     if (stored) {
-      try { setFavorites(new Set(JSON.parse(stored))); } catch {}
+      try {
+        const raw = JSON.parse(stored);
+        // 兼容旧格式（纯 skill_id 数组）与新格式（"skill_id-sub_id" 字符串）
+        const favs = new Set<string>((Array.isArray(raw) ? raw : []).map((v: unknown) =>
+          typeof v === "number" ? String(v) : String(v),
+        ));
+        setFavorites(favs);
+      } catch {}
     }
   }, [xinfaName]);
 
-  const saveFavorites = useCallback((favs: Set<number>) => {
+  const saveFavorites = useCallback((favs: Set<string>) => {
     setFavorites(favs);
     localStorage.setItem("jpcg_favorites", JSON.stringify([...favs]));
   }, []);
 
   const pool = skillPool;
+
+  // 技能唯一标识（同 skill_id 不同 sub_id 形态区分）
+  const skillKey = useCallback((s: SkillPoolItemDTO) => `${s.skill_id}-${s.sub_id ?? 0}`, []);
 
   const addToSequence = useCallback((skill: SkillPoolItemDTO) => {
     setSequence((prev) => [...prev, { skill, overrides: null }]);
@@ -55,8 +68,9 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     setComboResult(null);
   }, []);
 
-  const toggleFavorite = useCallback((skillId: number) => {
-    saveFavorites(new Set(favorites.has(skillId) ? [...favorites].filter((id) => id !== skillId) : [...favorites, skillId]));
+  const toggleFavorite = useCallback((s: SkillPoolItemDTO) => {
+    const key = `${s.skill_id}-${s.sub_id ?? 0}`;
+    saveFavorites(new Set(favorites.has(key) ? [...favorites].filter((k) => k !== key) : [...favorites, key]));
   }, [favorites, saveFavorites]);
 
   const onDragEnd = useCallback((result: any) => {
@@ -76,17 +90,18 @@ export default function ComboPage({ xinfaName, formData }: Props) {
   }, []);
 
   const handleCalculate = useCallback(async () => {
-    if (sequence.length === 0) return;
+    if (sequence.length === 0 || !formData) return;
     setComputing(true);
     try {
-      const data = formData || { player: {}, hostile: {}, xinfa_config: {} } as FormData;
+      const data = formData;
+      const req = toCalculateRequest(data);
       const result = await api.calculateCombo(
         sequence,
-        data.player || {},
-        data.hostile || {},
-        data.xinfa_config || {},
-        data.buff || { base_atk_pct: 0, huixin_pct: 0, huixiao_pct: 0, pofang_pct: 0, wushi_fangyu_pct: 0, shanghai_pct: 0, mode_is_point: false },
-        data.coefficient || { pofang_xishu: 225957.6, huixin_xishu: 197703, huixiao_xishu: 72844.2, huajin_xishu: 30115.8, fangyu_xishu: 126007.2, pvp_global_jianshang: 0.9 },
+        req.player,
+        req.hostile,
+        req.xinfa_config,
+        req.buff,
+        req.coefficient,
       );
       setComboResult(result);
     } catch (err) {
@@ -126,6 +141,54 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     }
   }, []);
 
+  // ===== 技能池：搜索 + 按基础名分组折叠 =====
+  const baseNameOf = useCallback((s: SkillPoolItemDTO) => {
+    // 基础名 = 去掉「·形态后缀」（如 引窍·0点任脉 → 引窍）或 (lvN)/（dot）等后缀
+    let n = s.skill_name;
+    const dot = n.indexOf("（dot）");
+    if (dot !== -1) n = n.slice(0, dot) + "·dot";
+    const lv = n.search(/[\(（]lv\d+[\)）]$/);
+    if (lv !== -1) n = n.slice(0, lv);
+    const sep = n.lastIndexOf("·");
+    if (sep !== -1) n = n.slice(0, sep);
+    return n || s.skill_name;
+  }, []);
+
+  const filteredPool = useMemo(() => {
+    const q = poolQuery.trim().toLowerCase();
+    if (!q) return pool;
+    return pool.filter((s) => s.skill_name.toLowerCase().includes(q));
+  }, [pool, poolQuery]);
+
+  const groups = useMemo(() => {
+    const m = new Map<string, SkillPoolItemDTO[]>();
+    for (const s of filteredPool) {
+      const key = baseNameOf(s);
+      const arr = m.get(key) || [];
+      arr.push(s);
+      m.set(key, arr);
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh-CN"));
+  }, [filteredPool, baseNameOf]);
+
+  const toggleGroup = useCallback((name: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const expandAll = useCallback(() => setCollapsedGroups(new Set()), []);
+  const collapseAll = useCallback(() => {
+    setCollapsedGroups(new Set(groups.filter(([, items]) => items.length > 1).map(([name]) => name)));
+  }, [groups]);
+
+  // 需先同步面板属性（未计算过时 formData 为 null，全 0 提交会让追加真伤恒为 0）
+  const noForm = !formData;
+  const targetHp = Number(formData?.hostile?.target_hp) || 0;
+  const hasLostHpSkills = sequence.some((s) => (s.skill.lost_hp_zhenshishanghai ?? 0) > 0);
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -133,7 +196,8 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         <div className={styles.headerActions}>
           {sequence.length > 0 && (
             <>
-              <button className={styles.primaryBtn} onClick={handleCalculate} disabled={computing}>
+              <button className={styles.primaryBtn} onClick={handleCalculate} disabled={computing || noForm}
+                title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
                 {computing ? "计算中..." : "计算连招"}
               </button>
               <button className={styles.btn} onClick={clearSequence}>清空</button>
@@ -141,6 +205,22 @@ export default function ComboPage({ xinfaName, formData }: Props) {
           )}
         </div>
       </div>
+
+      {noForm && (
+        <div className={styles.warnBanner}>
+          尚未同步面板属性：请先在「计算器」页输入属性并点击计算，再回来排轴（否则以 0 属性提交，追加真伤不会生效）。
+        </div>
+      )}
+      {!noForm && targetHp <= 0 && (
+        <div className={styles.warnBanner}>
+          目标血量 = 0：追加真伤（已损失生命值 × 系数）不会生效，请在计算器页设置目标血量。
+        </div>
+      )}
+      {hasLostHpSkills && !noForm && targetHp > 0 && (
+        <div className={styles.zhenshiHint}>
+          连招含追加真伤技能（已损失生命值 × 系数，无视防御）：首击满血追加为 0，随血量损耗递增，见逐步骤「追加真伤」列。
+        </div>
+      )}
 
       {/* Sequence */}
       <section className={styles.section}>
@@ -154,7 +234,7 @@ export default function ComboPage({ xinfaName, formData }: Props) {
                 {(provided) => (
                   <div className={styles.sequenceRow} ref={provided.innerRef} {...provided.droppableProps}>
                     {sequence.map((item, i) => (
-                      <Draggable key={`${item.skill.skill_id}-${i}`} draggableId={`seq-${i}`} index={i}>
+                      <Draggable key={`${item.skill.skill_id}-${item.skill.sub_id ?? 0}-${i}`} draggableId={`seq-${i}`} index={i}>
                         {(provided, snapshot) => (
                           <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                             className={`${styles.comboItem} ${snapshot.isDragging ? styles.dragging : ""}`}>
@@ -225,18 +305,59 @@ export default function ComboPage({ xinfaName, formData }: Props) {
           技能池
           <span className={styles.poolCount}>{pool.length}个</span>
         </div>
+        <div className={styles.poolToolbar}>
+          <input
+            className={styles.poolSearch}
+            type="search"
+            placeholder="搜索技能（如 引窍 / 0点任脉）..."
+            value={poolQuery}
+            onChange={(e) => setPoolQuery(e.target.value)}
+          />
+          <button className={styles.smallBtn} onClick={expandAll} title="展开全部组">展开</button>
+          <button className={styles.smallBtn} onClick={collapseAll} title="折叠全部组">折叠</button>
+        </div>
         <div className={styles.comboPool}>
-          {pool.map((s, i) => (
-            <button key={s.skill_id || i}
-              className={`${styles.skillChip} ${favorites.has(s.skill_id) ? styles.favoriteChip : ""}`}
-              onClick={() => addToSequence(s)}
-              onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s.skill_id); }}
-              title={`基础伤害 ${s.base_damage1}-${s.base_damage2} | 系数 ${s.atk_xishu}${favorites.has(s.skill_id) ? " · 已收藏" : " · 右键标记收藏"}`}>
-              {s.skill_name}
-              {favorites.has(s.skill_id) && <span className={styles.starIcon}><IconStar size={12} /></span>}
-            </button>
-          ))}
-          {pool.length === 0 && <span className={styles.emptyHint}>先选择心法加载技能池</span>}
+          {groups.map(([name, items]) => {
+            const collapsed = collapsedGroups.has(name);
+            const hasMulti = items.length > 1;
+            return (
+              <div key={name} className={styles.poolGroup}>
+                <button
+                  className={styles.poolGroupHeader}
+                  onClick={() => hasMulti && toggleGroup(name)}
+                  title={hasMulti ? "点击折叠/展开" : ""}
+                >
+                  <span className={styles.poolGroupArrow}>{hasMulti ? (collapsed ? "▸" : "▾") : ""}</span>
+                  <span className={styles.poolGroupName}>{name}</span>
+                  {hasMulti && <span className={styles.poolGroupCount}>{items.length}种形态</span>}
+                </button>
+                {!collapsed && (
+                  <div className={styles.poolGroupItems}>
+                    {items.map((s) => {
+                      const key = skillKey(s);
+                      const fav = favorites.has(key);
+                      return (
+                        <button key={key}
+                          className={`${styles.skillChip} ${fav ? styles.favoriteChip : ""}`}
+                          onClick={() => addToSequence(s)}
+                          onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}
+                          title={`${s.skill_name} | 基础伤害 ${s.base_damage1}-${s.base_damage2} | 系数 ${s.atk_xishu}${s.lost_hp_zhenshishanghai > 0 ? ` | 追加真伤 ${(s.lost_hp_zhenshishanghai * 100).toFixed(0)}%已损失` : ""}${fav ? " · 已收藏" : " · 右键标记收藏"}`}>
+                          {s.skill_name}
+                          {s.lost_hp_zhenshishanghai > 0 && (
+                            <span className={styles.comboZhenshiTag}>真伤{(s.lost_hp_zhenshishanghai * 100).toFixed(0)}%</span>
+                          )}
+                          {fav && <span className={styles.starIcon}><IconStar size={12} /></span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {groups.length === 0 && (
+            <span className={styles.emptyHint}>{pool.length === 0 ? "先选择心法加载技能池" : "没有匹配的技能"}</span>
+          )}
         </div>
       </section>
     </div>
@@ -328,12 +449,17 @@ function ComboResultDisplay({ result }: { result: ComboResultDTO }) {
     name: s.skill_name.length > 4 ? s.skill_name.slice(0, 4) + ".." : s.skill_name,
     期望: Math.round(s.q_damage / 10000 * 10) / 10,
     会心: Math.round(s.h_damage / 10000 * 10) / 10,
+    真伤: Math.round((s.lost_hp_zhenshi_damage ?? 0) / 10000 * 10) / 10,
   }));
+
+  const zhenshiTotal = result.steps.reduce((sum, s) => sum + (s.lost_hp_zhenshi_damage ?? 0), 0);
+  const hasZhenshi = zhenshiTotal > 0;
 
   return (
     <section className={styles.comboResult}>
       <div className={styles.comboResultSummary}>
         <span>总期望: <strong>{result.total_expected_damage_wan.toFixed(1)}万</strong></span>
+        {hasZhenshi && <span>追加真伤: <strong>{(zhenshiTotal / 10000).toFixed(1)}万</strong></span>}
         <span>击杀概率: <strong>{(result.final_kill_prob * 100).toFixed(1)}%</strong></span>
         <span>技能数: {result.steps.length}</span>
       </div>
@@ -364,6 +490,7 @@ function ComboResultDisplay({ result }: { result: ComboResultDTO }) {
               <Tooltip formatter={(v: any) => Number(v).toFixed(1) + "万"} />
               <Bar dataKey="期望" fill="var(--primary-500)" radius={[3, 3, 0, 0]} />
               <Bar dataKey="会心" fill="var(--accent-500)" radius={[3, 3, 0, 0]} />
+              {hasZhenshi && <Bar dataKey="真伤" fill="#ef8354" stackId="zhenshi" radius={[3, 3, 0, 0]} />}
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -375,31 +502,60 @@ function ComboResultDisplay({ result }: { result: ComboResultDTO }) {
           <thead>
             <tr>
               <th>技能</th><th>普伤</th><th>会心</th><th>期望</th>
+              {hasZhenshi && <th>追加真伤</th>}
               <th>累计(万)</th><th>击杀概率</th>
             </tr>
           </thead>
           <tbody>
-            {result.steps.map((s, i) => (
+            {result.steps.map((s, i) => {
+              const isFixed = s.has_critical_strike || (s.zhenshishanghai ?? 0) > 0;
+              return (
               <tr key={i}>
                 <td>
                   {s.skill_name}
+                  {s.has_critical_strike && (
+                    <span className={styles.comboWuzhiTag}>无质</span>
+                  )}
+                  {(s.zhenshishanghai ?? 0) > 0 && (
+                    <span className={styles.comboWuzhiTag}>真实</span>
+                  )}
+                  {(s.lost_hp_zhenshi_damage ?? 0) > 0 && (
+                    <span className={styles.comboZhenshiTag}>追加真伤</span>
+                  )}
                   {s.dot_jumps?.length > 0 && (
                     <div className={styles.comboDotJumps}>
                       {s.dot_jumps.map((j, k) => (
                         <span key={k} title={`第${k + 1}跳`}>
-                          {Math.round(j / 10000 * 10) / 10}万
+                          {k + 1}:{Math.round(j / 10000 * 10) / 10}万
                         </span>
                       ))}
                     </div>
                   )}
                 </td>
-                <td>{Math.round(s.g_damage / 10000 * 10) / 10}万</td>
-                <td>{Math.round(s.h_damage / 10000 * 10) / 10}万</td>
+                {isFixed ? (
+                  <>
+                    <td>-</td>
+                    <td>-</td>
+                  </>
+                ) : (
+                  <>
+                    <td>{Math.round(s.g_damage / 10000 * 10) / 10}万</td>
+                    <td>{Math.round(s.h_damage / 10000 * 10) / 10}万</td>
+                  </>
+                )}
                 <td>{Math.round(s.q_damage / 10000 * 10) / 10}万</td>
+                {hasZhenshi && (
+                  <td>
+                    {(s.lost_hp_zhenshi_damage ?? 0) > 0
+                      ? `${Math.round(s.lost_hp_zhenshi_damage / 10000 * 10) / 10}万`
+                      : "-"}
+                  </td>
+                )}
                 <td>{s.cumulative_mean_wan.toFixed(1)}</td>
                 <td>{(s.kill_prob * 100).toFixed(1)}%</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

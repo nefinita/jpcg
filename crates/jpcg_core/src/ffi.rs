@@ -518,7 +518,7 @@ mod ffi_tests {
         // 不落盘验证 JSON 契约，仅确认方法可达（会写 saved_config.toml 到 CWD）
         let req = r#"{
             "player": {"jcsx":"gengu","jichu_shuxing":18888,"jichu_gongji":4666,"huixin_dengji":33000,"huixin_xiaoguo":22000,"pofang_dengji":25000,"wuqi_shanghai":2800},
-            "hostile": {"waigong_fangyu":21000,"neigong_fangyu":21000,"yujin_dengji":8500,"huajin_dengji":35000,"jianshang_bili":35,"target_hp":200},
+            "hostile": {"waigong_fangyu":21000,"neigong_fangyu":21000,"yujin_dengji":8500,"huajin_dengji":35000,"jianshang_bili":35,"target_hp":2000000},
             "xinfa": {"profession":"mowen","xinfa_name":"莫问","xinfa_nom":"根骨","atk_up":1.96,"pofang_up":2.0,"huixin_up":0.0}
         }"#;
         let out = unsafe { call_owned("save_config", req) }.expect("调用失败");

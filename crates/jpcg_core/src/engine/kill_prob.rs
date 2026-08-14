@@ -17,6 +17,12 @@ pub struct ComboStepResult {
     pub cumulative_std: f64,
     pub kill_prob: f64,
     pub dot_jumps: Vec<u32>,
+    /// 无质（伤害固定 = 期望 Q，含会心加权）
+    pub has_critical_strike: bool,
+    /// 真实伤害（数据源 custom_damage_base 标签，无视防御减免）
+    pub zhenshishanghai: u32,
+    /// 追加真伤（已损失生命值 × 系数，无视防御，确定性只加期望）
+    pub lost_hp_zhenshi_damage: f64,
 }
 
 pub struct ComboResult {
@@ -38,7 +44,7 @@ pub fn calculate_combo(
     let mut steps = Vec::new();
     let mut cum_mean = 0.0f64;
     let mut cum_var = 0.0f64;
-    let target_hp = (hostilepile.target_hp as f64) * 10000.0;
+    let target_hp = hostilepile.target_hp as f64;
 
     for skill in skills {
         let calc = JpcgConfig::new_with_config(player, hostilepile, skill, xinfa, buff, coeff);
@@ -51,16 +57,33 @@ pub fn calculate_combo(
         let q = damage.q_damage as f64;
         let p = crit_rate as f64;
         let mean = q;
-        let variance = (h - g).powi(2) * p * (1.0 - p);
+        // 无质技能伤害固定（恒为期望 Q，含会心加权），无随机浮动 → 方差为 0
+        let variance = if skill.has_critical_strike {
+            0.0
+        } else {
+            (h - g).powi(2) * p * (1.0 - p)
+        };
 
-        cum_mean += mean;
+        // 追加真伤（已损失生命值 × 系数，无视防御，确定性只加期望不加方差）：
+        // 按本步结算后目标的期望已损失血量一次性结算，不迭代
+        let lost_hp_zhenshi_damage = if skill.lost_hp_zhenshishanghai > 0.0 && target_hp > 0.0 {
+            let lost = (target_hp - (cum_mean + mean)).max(0.0);
+            lost * skill.lost_hp_zhenshishanghai as f64
+        } else {
+            0.0
+        };
+
+        cum_mean += mean + lost_hp_zhenshi_damage;
         cum_var += variance;
         let cum_std = cum_var.sqrt();
 
-        let kill_prob = if cum_std > 0.0 && target_hp > 0.0 {
+        let kill_prob = if target_hp <= 0.0 {
+            1.0
+        } else if cum_std > 0.0 {
             let z = (cum_mean - target_hp) / cum_std;
             1.0 - normal_cdf(-z)
-        } else if target_hp <= 0.0 {
+        } else if cum_mean >= target_hp {
+            // 确定性伤害（会心率 0 / 全无质连招）：期望 ≥ 血量即必杀
             1.0
         } else {
             0.0
@@ -76,6 +99,9 @@ pub fn calculate_combo(
             cumulative_std: cum_std,
             kill_prob,
             dot_jumps: damage.dot_jumps,
+            has_critical_strike: skill.has_critical_strike,
+            zhenshishanghai: skill.zhenshishanghai,
+            lost_hp_zhenshi_damage,
         });
     }
 

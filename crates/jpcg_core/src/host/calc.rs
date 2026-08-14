@@ -93,6 +93,7 @@ pub(crate) fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltyp
     Skilltype {
         skill_name: s.skill_name.clone(),
         skill_id: s.skill_id,
+        sub_id: s.sub_id,
         base_damage1: s.base_damage1,
         base_damage2: s.base_damage2,
         atk_xishu: s.atk_xishu,
@@ -103,6 +104,8 @@ pub(crate) fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltyp
         wushifangyu: s.wushifangyu,
         wushihuajin: s.wushihuajin,
         dot_flag: s.dot_flag,
+        has_critical_strike: s.has_critical_strike,
+        lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
         ..Default::default()
     }
 }
