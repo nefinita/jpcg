@@ -131,9 +131,9 @@ pub struct AtkConfig {
 }
 
 impl AtkConfig {
-    /// 总攻击力（基础 + 额外）
+    /// 总攻击力（基础攻击 + 属性转化；不含武器伤害——武器伤害单独经 watk_xishu 参与技能伤害，避免双算）
     pub fn total(&self) -> u32 {
-        self.base + self.extra
+        self.base
     }
 
     /// 仅获取基础攻击部分

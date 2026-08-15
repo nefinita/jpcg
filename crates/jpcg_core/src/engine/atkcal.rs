@@ -45,13 +45,17 @@ impl<'a> JpcgConfig<'a> {
     fn guo_fangyu(&self) -> u32 {
         let wushifangyu_total =
             self.skilltype.wushifangyu + (self.buff.wushi_fangyu_pct * 1024.0 / 100.0) as u32;
-        match self.xinfa.xinfa_nom.as_str() {
-            "gengu" | "yuanqi" => self
-                .hostilepile
-                .guo_nfangyu_with(wushifangyu_total, &self.coeff),
-            _ => self
-                .hostilepile
-                .guo_wfangyu_with(wushifangyu_total, &self.coeff),
+        // 根骨/元气职业为内功（数据文件 xinfa_nom 为中文，测试兼容英文）
+        let is_neigong = matches!(
+            self.xinfa.xinfa_nom.as_str(),
+            "根骨" | "元气" | "gengu" | "yuanqi"
+        );
+        if is_neigong {
+            self.hostilepile
+                .guo_nfangyu_with(wushifangyu_total, &self.coeff)
+        } else {
+            self.hostilepile
+                .guo_wfangyu_with(wushifangyu_total, &self.coeff)
         }
     }
 
@@ -498,17 +502,17 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 1355,
+                y: 1299,
                 b: 277337,
                 i: 106216,
-                n: 78378,
-                h: 138727,
-                q: 95725,
-                d_js: 1.765283,
-                d_jg: 0.90065455,
-                d_hxd: 0.3052508,
-                d_hxg: 0.30143535,
-                d_pf: 0.2857653,
+                n: 75138,
+                h: 132992,
+                q: 91768,
+                d_js: 1.6923265,
+                d_jg: 0.8634319,
+                d_hxd: 0.29263085,
+                d_hxg: 0.28897458,
+                d_pf: 0.27388445,
                 d_wq: 0.000000,
             },
         );
@@ -581,17 +585,17 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1382,
+                y: 1325,
                 b: 305051,
                 i: 116837,
-                n: 93204,
-                h: 172236,
-                q: 119873,
-                d_js: 2.210735,
-                d_jg: 1.127926,
-                d_hxd: 0.39975113,
-                d_hxg: 0.42080545,
-                d_pf: 0.35086095,
+                n: 89359,
+                h: 165130,
+                q: 114928,
+                d_js: 2.1195543,
+                d_jg: 1.0814053,
+                d_hxd: 0.3832567,
+                d_hxg: 0.40344572,
+                d_pf: 0.33627373,
                 d_wq: 0.000000,
             },
         );
@@ -605,17 +609,17 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 1355,
+                y: 1299,
                 b: 188844,
                 i: 106216,
-                n: 64042,
-                h: 113353,
-                q: 78216,
-                d_js: 1.4418241,
-                d_jg: 0.7356245,
-                d_hxd: 0.24941957,
-                d_hxg: 0.24630027,
-                d_pf: 0.2334996,
+                n: 61395,
+                h: 108667,
+                q: 74983,
+                d_js: 1.3822356,
+                d_jg: 0.70522225,
+                d_hxd: 0.23910613,
+                d_hxg: 0.23612013,
+                d_pf: 0.22379173,
                 d_wq: 0.000000,
             },
         );
@@ -629,17 +633,17 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1382,
+                y: 1325,
                 b: 207707,
                 i: 116837,
-                n: 76153,
-                h: 140726,
-                q: 97943,
-                d_js: 1.8056543,
-                d_jg: 0.92125213,
-                d_hxd: 0.32661617,
-                d_hxg: 0.34382215,
-                d_pf: 0.2866784,
+                n: 73012,
+                h: 134922,
+                q: 93903,
+                d_js: 1.7311809,
+                d_jg: 0.88325554,
+                d_hxd: 0.31314647,
+                d_hxg: 0.3296409,
+                d_pf: 0.2747596,
                 d_wq: 0.000000,
             },
         );
@@ -653,18 +657,18 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 1369,
+                y: 1315,
                 b: 335584,
                 i: 106216,
-                n: 95818,
-                h: 169595,
-                q: 117025,
-                d_js: 2.157314,
-                d_jg: 1.1006705,
-                d_hxd: 0.37317085,
-                d_hxg: 0.36850816,
-                d_pf: 0.34918728,
-                d_wq: 0.34872726,
+                n: 92039,
+                h: 162907,
+                q: 112410,
+                d_js: 2.0722191,
+                d_jg: 1.0572547,
+                d_hxd: 0.35845688,
+                d_hxg: 0.35397443,
+                d_pf: 0.33556786,
+                d_wq: 0.3349718,
             },
         );
     }
@@ -677,18 +681,18 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1396,
+                y: 1341,
                 b: 369106,
                 i: 116837,
-                n: 113917,
-                h: 210512,
-                q: 146513,
-                d_js: 2.7011516,
-                d_jg: 1.3781385,
-                d_hxd: 0.4885864,
-                d_hxg: 0.5143223,
-                d_pf: 0.42871556,
-                d_wq: 0.39694357,
+                n: 109429,
+                h: 202219,
+                q: 140741,
+                d_js: 2.594731,
+                d_jg: 1.3238423,
+                d_hxd: 0.46934035,
+                d_hxg: 0.4940595,
+                d_pf: 0.41199425,
+                d_wq: 0.3813047,
             },
         );
     }
@@ -704,17 +708,17 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 1355,
+                y: 1299,
                 b: 277337,
                 i: 106216,
-                n: 78378,
-                h: 138727,
-                q: 95725,
-                d_js: 1.765283,
-                d_jg: 0.90065455,
-                d_hxd: 0.3052508,
-                d_hxg: 0.30143535,
-                d_pf: 0.2857653,
+                n: 75138,
+                h: 132992,
+                q: 91768,
+                d_js: 1.6923265,
+                d_jg: 0.8634319,
+                d_hxd: 0.29263085,
+                d_hxg: 0.28897458,
+                d_pf: 0.27388445,
                 d_wq: 0.000000,
             },
         );
@@ -745,10 +749,10 @@ mod golden_tests {
         let mut wuzhi = skill("宫", 160, 200, 2.609375, 0, 0, 0);
         wuzhi.has_critical_strike = true;
         let combo = calculate_combo(&[wuzhi.clone(), wuzhi], &p, &h, &x, &b, &c);
-        assert_eq!(combo.steps[0].cumulative_mean, 95725.0, "无质期望 = Q");
+        assert_eq!(combo.steps[0].cumulative_mean, 91768.0, "无质期望 = Q");
         assert_eq!(combo.steps[0].cumulative_std, 0.0, "无质方差应为 0");
         assert_eq!(combo.steps[1].cumulative_std, 0.0, "无质累计方差应为 0");
-        assert_eq!(combo.steps[1].cumulative_mean, 191450.0, "两次无质期望翻倍");
+        assert_eq!(combo.steps[1].cumulative_mean, 183536.0, "两次无质期望翻倍");
     }
 
     /// 追加真伤（已损失生命值 × 系数）：

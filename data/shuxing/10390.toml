@@ -1,7 +1,7 @@
 [xinfa]
 xinfa_name = "分山劲"
 xinfa_nom = "身法"
-atk_up = 1
+atk_up = 1.88
 pofang_up = 1
 huixin_up = 0
 
@@ -14,7 +14,7 @@ modified = 20260814
 skill_name = "卷雪刀"           #名字
 skill_id = 10390            #技能ID（数据源池内 id）
 sub_id = 13039              #子ID
-atk_xishu = 0.15        #伤害系数
+watk_xishu = 1        #伤害系数
 
 [[skill]]
 skill_name = "盾刀"           #名字
@@ -411,4 +411,3 @@ atk_xishu = 0        #伤害系数
 dot_flag = 1                #dot伤害标签
 dot_interval = 2          #每跳间隔（秒，16帧=1秒）
 dot_duration = 26          #持续时长（秒，总跳数×间隔）
-

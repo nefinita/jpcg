@@ -1,7 +1,7 @@
 [xinfa]
 xinfa_name = "花间游"
 xinfa_nom = "元气"
-atk_up = 1
+atk_up = 2.03
 pofang_up = 1
 huixin_up = 0
 
@@ -379,4 +379,3 @@ atk_xishu = 1.0442709        #伤害系数
 dot_flag = 1                #dot伤害标签
 dot_interval = 3          #每跳间隔（秒，16帧=1秒）
 dot_duration = 18          #持续时长（秒，总跳数×间隔）
-
