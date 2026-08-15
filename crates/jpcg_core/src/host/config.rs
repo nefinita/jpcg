@@ -27,6 +27,8 @@ pub fn save_config(player: PlayerConfigDTO, hostilepile: HostileConfigDTO, xinfa
         huajin_dengji: hostilepile.huajin_dengji,
         jianshang_bili: hostilepile.jianshang_bili,
         target_hp: hostilepile.target_hp,
+        max_hp: hostilepile.max_hp,
+        current_hp: hostilepile.current_hp,
     };
     let xinfa_core = crate::type_set::xinfa::XinfaConfig::new(
         xinfa.profession,
@@ -59,6 +61,8 @@ pub fn load_config() -> jpcg_api::ConfigDataDTO {
             huajin_dengji: saved.hostilepile.huajin_dengji,
             jianshang_bili: saved.hostilepile.jianshang_bili,
             target_hp: saved.hostilepile.target_hp,
+            max_hp: saved.hostilepile.max_hp,
+            current_hp: saved.hostilepile.current_hp,
         },
         xinfa_config: XinfaConfigDTO {
             profession: saved.xinfa.profession,

@@ -36,6 +36,8 @@ pub(crate) fn into_core(
         huajin_dengji: req.hostile.huajin_dengji,
         jianshang_bili: req.hostile.jianshang_bili,
         target_hp: req.hostile.target_hp,
+        max_hp: req.hostile.max_hp,
+        current_hp: req.hostile.current_hp,
     };
     let xinfa = XinfaConfig::new(
         req.xinfa_config.profession,

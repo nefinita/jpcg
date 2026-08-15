@@ -31,10 +31,11 @@ jpcg_const = { workspace = true }
 #   dynamic        — dlopen libjpcg_core.{dylib,so,dll}，经 jpcg_call JSON 调用
 # jpcg_update 两模式均依赖（命令签名与进度事件 DTO 需要；计算逻辑在 core）
 jpcg_core = { workspace = true, optional = true }
+jpcg_combo = { workspace = true, optional = true }
 jpcg_update = { workspace = true }
 libloading = { version = "0.8", optional = true }
 
 [features]
 default = ["static"]
-static = ["dep:jpcg_core"]
+static = ["dep:jpcg_core", "dep:jpcg_combo"]
 dynamic = ["dep:libloading"]

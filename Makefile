@@ -40,22 +40,22 @@ build-static:
 build-dynamic:
 	$(CARGO) build -p jpcg_app --no-default-features --features dynamic $(CARGO_BUILD_FLAGS)
 
-## 三个模块 dylib（jpcg_core / jpcg_update / jpcg_const）
+## 四个模块 dylib（jpcg_core / jpcg_combo / jpcg_update / jpcg_const）
 build-modules:
-	$(CARGO) build -p jpcg_core -p jpcg_update -p jpcg_const $(CARGO_BUILD_FLAGS)
+	$(CARGO) build -p jpcg_core -p jpcg_combo -p jpcg_update -p jpcg_const $(CARGO_BUILD_FLAGS)
 
-## 把三个 dylib 复制到与 app 相同目录（动态模式运行所需）
+## 把各模块 dylib 复制到与 app 相同目录（动态模式运行所需）
 modules-dir: build-dynamic build-modules
 	@BIN_DIR="target/$(BUILD)"; \
 	echo "==> 复制模块库到 $$BIN_DIR"; \
-	for lib in libjpcg_core libjpcg_update libjpcg_const; do \
+	for lib in libjpcg_core libjpcg_combo libjpcg_update libjpcg_const; do \
 	  if [ -f "target/$(BUILD)/$$lib.dylib" ]; then \
 	    cp "target/$(BUILD)/$$lib.dylib" "$$BIN_DIR/"; \
 	  elif [ -f "target/$(BUILD)/$$lib.so" ]; then \
 	    cp "target/$(BUILD)/$$lib.so" "$$BIN_DIR/"; \
 	  fi; \
 	done; \
-	ls -la "$$BIN_DIR" | grep -E "jpcg_(core|update|const)|jpcg_app"
+	ls -la "$$BIN_DIR" | grep -E "jpcg_(core|combo|update|const)|jpcg_app"
 
 ## 全量测试（含 dynamic 端到端冒烟）
 test:

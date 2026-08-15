@@ -128,6 +128,28 @@ impl<'a> JpcgConfig<'a> {
         [i[0], i[1], i[2], i[3], x]
     }
 
+    /// 追加真伤公式（core 实现，combo 传入 hp）：
+    /// 目标已损失生命 = max_hp - 结算后当前血量（封顶 max_hp），× lost_hp_zhenshishanghai 系数。
+    /// 语义 A（结算后）：current_hp_after 为本步伤害扣完后剩余血量。
+    pub fn lost_hp_append(&self, max_hp: u32, current_hp_after: u32) -> f64 {
+        if self.skilltype.lost_hp_zhenshishanghai <= 0.0 {
+            return 0.0;
+        }
+        let lost = (max_hp as f64 - current_hp_after as f64).max(0.0);
+        lost * self.skilltype.lost_hp_zhenshishanghai as f64
+    }
+
+    /// 期望通道 + 可选 hp：q_cal() 基础上结算追加真伤。
+    /// 未提供 hp（0）时真伤恒 0（调用方负责 target_hp 满血回退语义）。
+    pub fn q_cal_with_hp(&self, current_hp: Option<u32>, max_hp: Option<u32>) -> DamageResult {
+        let mut result = self.q_cal();
+        if let (Some(current), Some(max)) = (current_hp, max_hp) {
+            let after = current.saturating_sub(result.q_damage);
+            result.lost_hp_zhenshi_damage = self.lost_hp_append(max, after);
+        }
+        result
+    }
+
     /// Q 段: 期望伤害（最终结果）
     /// crit_rate = 自身会心率 - 目标御劲减免 + 技能增益
     /// buff.huixin_pct 已在 guo_huixin() 中计入，此处不再重复
@@ -302,6 +324,9 @@ pub struct DamageResult {
     pub q_damage: u32,
     /// Dot 每跳期望伤害（非 Dot 技能为空；q_damage 为各跳之和）
     pub dot_jumps: Vec<u32>,
+    /// 追加真伤（目标已损失生命 × 系数，无视防御，确定性）。
+    /// 仅显式提供 hp（max/current）时结算；否则恒 0（由连招层维护回退语义）。
+    pub lost_hp_zhenshi_damage: f64,
 }
 
 impl DamageResult {
@@ -314,6 +339,7 @@ impl DamageResult {
             h_damage: i[4],
             q_damage: x,
             dot_jumps: Vec::new(),
+            lost_hp_zhenshi_damage: 0.0,
         }
     }
 }
@@ -349,7 +375,6 @@ pub struct DamageResultWithDerivatives {
 #[cfg(test)]
 mod golden_tests {
     use crate::engine::atkcal::JpcgConfig;
-    use crate::engine::kill_prob::calculate_combo;
     use crate::type_set::buff::BuffConfig;
     use crate::type_set::coefficient::CoefficientConfig;
     use crate::type_set::hostilepile::HostilepileConfig;
@@ -399,6 +424,8 @@ mod golden_tests {
             huajin_dengji: 59402,
             jianshang_bili: 0,
             target_hp: 2_000_000,
+            max_hp: 0,
+            current_hp: 0,
         }
     }
 
@@ -721,110 +748,6 @@ mod golden_tests {
                 d_pf: 0.27388445,
                 d_wq: 0.000000,
             },
-        );
-    }
-
-    /// 无质连招：每击固定期望 Q → 方差 0（累积 std 恒为 0）；普通技能方差 > 0
-    #[test]
-    fn combo_wuzhi_zero_variance() {
-        let p = player();
-        let h = hostile();
-        let x = xinfa();
-        let b = BuffConfig::default();
-        let c = CoefficientConfig::default();
-
-        let normal = calculate_combo(
-            &[skill("宫", 160, 200, 2.609375, 0, 0, 0)],
-            &p,
-            &h,
-            &x,
-            &b,
-            &c,
-        );
-        assert!(
-            normal.steps[0].cumulative_std > 0.0,
-            "普通技能应存在伤害波动"
-        );
-
-        let mut wuzhi = skill("宫", 160, 200, 2.609375, 0, 0, 0);
-        wuzhi.has_critical_strike = true;
-        let combo = calculate_combo(&[wuzhi.clone(), wuzhi], &p, &h, &x, &b, &c);
-        assert_eq!(combo.steps[0].cumulative_mean, 91768.0, "无质期望 = Q");
-        assert_eq!(combo.steps[0].cumulative_std, 0.0, "无质方差应为 0");
-        assert_eq!(combo.steps[1].cumulative_std, 0.0, "无质累计方差应为 0");
-        assert_eq!(combo.steps[1].cumulative_mean, 183536.0, "两次无质期望翻倍");
-    }
-
-    /// 追加真伤（已损失生命值 × 系数）：
-    /// - 满血目标首击追加为 0；已损失越多追加越大（斩杀机制）
-    /// - 追加只加期望不加方差（确定性伤害）
-    #[test]
-    fn combo_lost_hp_zhenshi_dynamic() {
-        let p = player();
-        let h = hostile();
-        let x = xinfa();
-        let b = BuffConfig::default();
-        let c = CoefficientConfig::default();
-
-        let mut sk = skill("怒锋倾涛·破绽3层", 35, 40, 5.15625, 0, 200, 0);
-        sk.lost_hp_zhenshishanghai = 0.18;
-        sk.has_critical_strike = true; // 无质主伤害，便于精确断言
-
-        // 满血目标（target_hp 200万）：首击主伤害即造成损失 → 追加 = 已损失(主Q) × 系数
-        let combo = calculate_combo(&[sk.clone(), sk.clone()], &p, &h, &x, &b, &c);
-        let s0 = &combo.steps[0];
-        let q0 = s0.q_damage as f64;
-        let expect_append_0 = (h.target_hp as f64 - q0).max(0.0) * 0.18;
-        assert!(
-            (s0.lost_hp_zhenshi_damage - expect_append_0).abs() < 1.0,
-            "首击追加 = 已损失(主Q)×0.18: got {} expect {}",
-            s0.lost_hp_zhenshi_damage,
-            expect_append_0
-        );
-        // 第一步累计期望 = 主Q + 追加
-        assert!(
-            (s0.cumulative_mean - (q0 + expect_append_0)).abs() < 1.0,
-            "首击累计应含追加真伤: got {} expect {}",
-            s0.cumulative_mean,
-            q0 + expect_append_0
-        );
-        // 追加确定性：方差不受影响（主伤害无质 → 方差 0）
-        assert_eq!(s0.cumulative_std, 0.0, "无质主伤害 + 确定性追加 → 方差 0");
-
-        // 追加也计入已损失（几何收敛）：后续步骤追加递减但总期望逼近并击穿目标血
-        let s1 = &combo.steps[1];
-        assert!(
-            s1.lost_hp_zhenshi_damage >= 0.0
-                && s1.lost_hp_zhenshi_damage < s0.lost_hp_zhenshi_damage,
-            "追加随血量损耗几何收敛: 首 {} -> 次 {}",
-            s0.lost_hp_zhenshi_damage,
-            s1.lost_hp_zhenshi_damage
-        );
-        // 追加为 0 的形态不改变行为
-        let mut sk0 = sk.clone();
-        sk0.lost_hp_zhenshishanghai = 0.0;
-        let combo0 = calculate_combo(&[sk0.clone(), sk0.clone()], &p, &h, &x, &b, &c);
-        assert_eq!(
-            combo0.steps[1].cumulative_mean,
-            (q0 * 2.0).round(),
-            "无追加形态累计 = 2×主Q"
-        );
-        // 多步连招：追加提升斩杀效率；8 连击应击穿目标血量且不超杀
-        let combo_plain = calculate_combo(&vec![sk0; 8], &p, &h, &x, &b, &c);
-        let combo_kill = calculate_combo(&vec![sk.clone(); 8], &p, &h, &x, &b, &c);
-        assert!(
-            combo_kill.total_expected_damage > combo_plain.total_expected_damage,
-            "追加真伤应提升累计伤害"
-        );
-        assert!(
-            combo_kill.total_expected_damage >= h.target_hp as f64,
-            "8 连击应击穿目标血: {}",
-            combo_kill.total_expected_damage
-        );
-        assert!(
-            combo_kill.total_expected_damage <= h.target_hp as f64 * 1.6,
-            "追加不超杀（几何收敛）: {}",
-            combo_kill.total_expected_damage
         );
     }
 }

@@ -18,6 +18,12 @@ pub struct HostilepileConfig {
     pub huajin_dengji: u32,  // 化劲等级（影响伤害减免）
     pub jianshang_bili: u32, // 减伤比例（百分比，如 10 表示 10%）
     pub target_hp: u32,      // 目标血量（精确到个位），用于击杀概率计算
+    /// 目标最大血量（追加真伤/击杀率用；0=未提供，回退 target_hp 满血模型）
+    #[serde(default)]
+    pub max_hp: u32,
+    /// 目标当前血量（开局剩余；0=未提供，回退 target_hp 满血模型）
+    #[serde(default)]
+    pub current_hp: u32,
 }
 
 impl HostilepileConfig {
@@ -37,6 +43,8 @@ impl HostilepileConfig {
             huajin_dengji,
             jianshang_bili,
             target_hp: 0,
+            max_hp: 0,
+            current_hp: 0,
         }
     }
 
@@ -49,6 +57,8 @@ impl HostilepileConfig {
             huajin_dengji: 1,
             jianshang_bili: 10,
             target_hp: 0,
+            max_hp: 0,
+            current_hp: 0,
         }
     }
 

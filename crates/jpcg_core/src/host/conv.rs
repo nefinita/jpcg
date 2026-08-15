@@ -5,10 +5,9 @@
 // ============================================================================
 
 use jpcg_api::{
-    ComboPresetDTO, ComboResultDTO, ComboStepDTO, ComboStepResultDTO, CritVsPofangDTO,
-    DerivativeEntryDTO, DerivativesOutputDTO, OptimizeRecommendationDTO, SkillDerivativeDTO,
-    SkillEditorDataDTO, SkillEditorItemDTO, SkillPoolItemDTO, SkillResultDTO, TopAttrDTO,
-    VersionInfoDTO, XinfaSummaryDTO,
+    ComboPresetDTO, ComboStepDTO, CritVsPofangDTO, DerivativeEntryDTO, DerivativesOutputDTO,
+    OptimizeRecommendationDTO, SkillDerivativeDTO, SkillEditorDataDTO, SkillEditorItemDTO,
+    SkillPoolItemDTO, SkillResultDTO, TopAttrDTO, VersionInfoDTO, XinfaSummaryDTO,
 };
 
 use crate::engine;
@@ -258,6 +257,11 @@ fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
         wushifangyu: s.wushifangyu,
         wushihuajin: s.wushihuajin,
         dot_flag: s.dot_flag,
+        dot_interval: s.dot_interval,
+        dot_duration: s.dot_duration,
+        dot_up: s.dot_up,
+        wushijianshang: s.wushijianshang,
+        zhenshishanghai: s.zhenshishanghai,
         has_critical_strike: s.has_critical_strike,
         lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
     }
@@ -305,35 +309,6 @@ impl From<ComboPreset> for ComboPresetDTO {
                     }
                 })
                 .collect(),
-        }
-    }
-}
-
-impl From<engine::kill_prob::ComboStepResult> for ComboStepResultDTO {
-    fn from(s: engine::kill_prob::ComboStepResult) -> Self {
-        ComboStepResultDTO {
-            skill_name: s.skill_name,
-            g_damage: s.g_damage,
-            h_damage: s.h_damage,
-            q_damage: s.q_damage,
-            crit_rate: s.crit_rate,
-            cumulative_mean_wan: s.cumulative_mean / 10000.0,
-            kill_prob: s.kill_prob,
-            dot_jumps: s.dot_jumps,
-            has_critical_strike: s.has_critical_strike,
-            zhenshishanghai: s.zhenshishanghai,
-            lost_hp_zhenshi_damage: s.lost_hp_zhenshi_damage,
-        }
-    }
-}
-
-impl From<engine::kill_prob::ComboResult> for ComboResultDTO {
-    fn from(r: engine::kill_prob::ComboResult) -> Self {
-        ComboResultDTO {
-            total_expected_damage_wan: r.total_expected_damage_wan,
-            final_kill_prob: r.final_kill_prob,
-            kill_prob_curve: r.kill_prob_curve,
-            steps: r.steps.into_iter().map(ComboStepResultDTO::from).collect(),
         }
     }
 }

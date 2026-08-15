@@ -25,6 +25,8 @@ export function toCalculateRequest(f: FormData): CalculateRequest {
       huajin_dengji: toNum(f.hostile.huajin_dengji),
       jianshang_bili: toNum(f.hostile.jianshang_bili),
       target_hp: toNum(f.hostile.target_hp),
+      max_hp: toNum(f.hostile.max_hp),
+      current_hp: toNum(f.hostile.current_hp),
     },
     xinfa_config: {
       profession: f.xinfa_config.profession,

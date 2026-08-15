@@ -56,6 +56,11 @@ pub fn load_skill_pool(profession: String) -> Vec<jpcg_api::SkillPoolItemDTO> {
             wushifangyu: s.wushifangyu,
             wushihuajin: s.wushihuajin,
             dot_flag: s.dot_flag,
+            dot_interval: s.dot_interval,
+            dot_duration: s.dot_duration,
+            dot_up: s.dot_up,
+            wushijianshang: s.wushijianshang,
+            zhenshishanghai: s.zhenshishanghai,
             has_critical_strike: s.has_critical_strike,
             lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
         })

@@ -1,19 +1,20 @@
 // ============================================================================
-// host::combo — 连招计算与预设 CRUD 入口
+// host — 连招 DTO 层：计算入口 + 预设 CRUD + 配置导出导入
+// 存储与单技能公式全部委托 jpcg_core（combo_io/config_io/JpcgConfig 单源）。
 // ============================================================================
 
 use jpcg_api::{
     BuffConfigDTO, CoefficientConfigDTO, ComboPresetDTO, ComboResultDTO, ComboStepDTO,
     HostileConfigDTO, PlayerConfigDTO, XinfaConfigDTO,
 };
-
-use crate::engine;
-use crate::store;
-use crate::type_set::combo::{ComboPreset, ComboStep};
-use crate::type_set::{
+use jpcg_core::type_set::combo::{ComboPreset, ComboStep};
+use jpcg_core::type_set::{
     buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
     player::PlayerConfig, xinfa::XinfaConfig,
 };
+
+use crate::conv;
+use crate::engine::{self, ComboConfig};
 
 fn into_core(
     player: PlayerConfigDTO,
@@ -44,6 +45,8 @@ fn into_core(
         huajin_dengji: hostile.huajin_dengji,
         jianshang_bili: hostile.jianshang_bili,
         target_hp: hostile.target_hp,
+        max_hp: hostile.max_hp,
+        current_hp: hostile.current_hp,
     };
     let xinfa = XinfaConfig::new(
         xinfa.profession,
@@ -73,7 +76,7 @@ fn into_core(
     (player, hostile, xinfa, buff, coeff)
 }
 
-/// 连招伤害计算
+/// 连招伤害计算（含击杀率蒙特卡洛，host 层默认采样数）
 pub fn calculate_combo(
     steps: Vec<ComboStepDTO>,
     player: PlayerConfigDTO,
@@ -81,6 +84,7 @@ pub fn calculate_combo(
     xinfa: XinfaConfigDTO,
     buff: BuffConfigDTO,
     coefficient: CoefficientConfigDTO,
+    config: ComboConfig,
 ) -> Result<ComboResultDTO, String> {
     let (player, hostile, xinfa, buff, coeff) =
         into_core(player, hostile, xinfa, buff, coefficient);
@@ -88,8 +92,8 @@ pub fn calculate_combo(
     let skilltypes: Vec<_> = steps
         .iter()
         .map(|s| {
-            // 注：预设加载经 ComboPresetDTO 还原完整技能属性，此处 DTO 直转即可
-            let mut st = super::calc::skill_dto_to_skilltype(&s.skill);
+            // 注：预设加载经 ComboPresetDTO 还原完整技能属性（快照），此处 DTO 直转即可
+            let mut st = conv::skill_dto_to_skilltype(&s.skill);
             if let Some(ref o) = s.overrides {
                 if let Some(v) = o.base_damage_override {
                     st.base_damage1 = v as u32;
@@ -115,8 +119,15 @@ pub fn calculate_combo(
         })
         .collect();
 
-    let result =
-        engine::kill_prob::calculate_combo(&skilltypes, &player, &hostile, &xinfa, &buff, &coeff);
+    let result = engine::calculate_combo(
+        &skilltypes,
+        &player,
+        &hostile,
+        &xinfa,
+        &buff,
+        &coeff,
+        &config,
+    );
     Ok(ComboResultDTO::from(result))
 }
 
@@ -127,39 +138,40 @@ pub fn save_combo_preset(name: String, steps: Vec<ComboStepDTO>) -> Result<(), S
         name,
         steps: core_steps,
     };
-    store::save_combo_preset(&preset)
+    jpcg_core::combo_io::save_preset(&preset)
 }
 
 /// 列出所有连招预设
 pub fn list_combo_presets() -> Vec<String> {
-    store::list_combo_presets()
+    jpcg_core::combo_io::list_presets()
 }
 
 /// 加载连招预设
 pub fn load_combo_preset(name: String) -> Result<ComboPresetDTO, String> {
-    let preset = store::load_combo_preset(&name).ok_or_else(|| "预设不存在".to_string())?;
+    let preset = jpcg_core::combo_io::load_preset(&name).ok_or_else(|| "预设不存在".to_string())?;
     Ok(ComboPresetDTO::from(preset))
 }
 
 /// 删除连招预设
 pub fn delete_combo_preset(name: String) -> Result<(), String> {
-    store::delete_combo_preset(&name)
+    jpcg_core::combo_io::delete_preset(&name)
 }
 
 /// 导出当前配置为 TOML 字符串
 pub fn export_config() -> Result<String, String> {
-    store::export_config_toml()
+    jpcg_core::config_io::export_config()
 }
 
 /// 导入配置 TOML 字符串
 pub fn import_config(toml_str: String) -> Result<(), String> {
-    store::import_config_toml(&toml_str)
+    jpcg_core::config_io::import_config(&toml_str)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use jpcg_api::{ComboStepResultDTO, SkillPoolItemDTO};
+    use jpcg_core::type_set::combo::ComboStep;
 
     fn pool_item(name: &str, lost_hp: f32) -> SkillPoolItemDTO {
         SkillPoolItemDTO {
@@ -169,24 +181,9 @@ mod tests {
             base_damage1: 35,
             base_damage2: 40,
             atk_xishu: 5.15625,
-            watk_xishu: 0,
-            hit_up: 0,
-            huixin_up: 0,
-            huixiao_up: 0,
-            wushifangyu: 0,
-            wushihuajin: 0,
-            dot_flag: 0,
-            has_critical_strike: true,
             lost_hp_zhenshishanghai: lost_hp,
+            ..Default::default()
         }
-    }
-
-    fn dto(
-        player: &PlayerConfigDTO,
-        hostile: &HostileConfigDTO,
-        xinfa: &XinfaConfigDTO,
-    ) -> (PlayerConfigDTO, HostileConfigDTO, XinfaConfigDTO) {
-        (player.clone(), hostile.clone(), xinfa.clone())
     }
 
     fn player() -> PlayerConfigDTO {
@@ -209,6 +206,8 @@ mod tests {
             huajin_dengji: 59402,
             jianshang_bili: 0,
             target_hp: 2_000_000,
+            max_hp: 0,
+            current_hp: 0,
         }
     }
 
@@ -278,8 +277,9 @@ mod tests {
             steps: vec![core],
         });
         let (b, c) = buff_coeff();
-        let (p, h, x) = dto(&player(), &hostile(), &xinfa());
-        let result: ComboResultDTO = calculate_combo(rounds.steps, p, h, x, b, c).expect("计算");
+        let (p, h, x) = (player(), hostile(), xinfa());
+        let result: ComboResultDTO =
+            calculate_combo(rounds.steps, p, h, x, b, c, ComboConfig::default()).expect("计算");
         let s0: &ComboStepResultDTO = &result.steps[0];
         assert!(
             s0.lost_hp_zhenshi_damage > 0.0,

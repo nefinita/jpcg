@@ -16,6 +16,10 @@ export interface HostileConfigDTO {
   huajin_dengji: number;
   jianshang_bili: number;
   target_hp: number;
+  /** 目标最大血量（追加真伤斩杀线基座）；0 = 未提供，回退 target_hp 满血模型 */
+  max_hp: number;
+  /** 目标当前血量（连招初始血量）；0 或 > max_hp = 满血 */
+  current_hp: number;
 }
 
 export interface BuffConfigDTO {
@@ -152,6 +156,7 @@ export interface ModuleVersions {
   core: string;
   update: string;
   const: string;
+  combo: string;
   app: string;
 }
 

@@ -63,6 +63,8 @@ sub_id = 13106              #子ID
 base_damage1 = 104          #基本伤害
 base_damage2 = 114          #基本伤害2
 atk_xishu = 1.91875        #伤害系数
+watk_xishu = 100
+wushifangyu = 501
 
 [[skill]]
 skill_name = "盾击"           #名字

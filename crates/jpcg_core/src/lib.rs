@@ -150,15 +150,4 @@ pub mod calculate {
     ) -> Result<Vec<cal::CalculateResult>, Error> {
         cal::start_calculation_with_config(player, hostilepile, xinfa, buff, coeff)
     }
-
-    pub fn start_combo(
-        skills: &[crate::type_set::skilltype::Skilltype],
-        player: &PlayerConfig,
-        hostilepile: &HostilepileConfig,
-        xinfa: &XinfaConfig,
-        buff: &BuffConfig,
-        coeff: &CoefficientConfig,
-    ) -> cal::kill_prob::ComboResult {
-        cal::kill_prob::calculate_combo(skills, player, hostilepile, xinfa, buff, coeff)
-    }
 }

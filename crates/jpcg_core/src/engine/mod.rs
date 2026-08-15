@@ -7,7 +7,6 @@
 
 pub mod atkcal;
 pub mod derivatives;
-pub mod kill_prob;
 
 use std::io::Error;
 

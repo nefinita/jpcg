@@ -37,6 +37,12 @@ pub struct HostileConfigDTO {
     pub huajin_dengji: u32,
     pub jianshang_bili: u32,
     pub target_hp: u32,
+    /// 目标最大血量（追加真伤/击杀率用；0=未提供，回退 target_hp 满血模型）
+    #[serde(default)]
+    pub max_hp: u32,
+    /// 目标当前血量（开局剩余；0=未提供，回退 target_hp 满血模型）
+    #[serde(default)]
+    pub current_hp: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -137,6 +143,21 @@ pub struct SkillPoolItemDTO {
     pub wushifangyu: u32,
     pub wushihuajin: u32,
     pub dot_flag: u8,
+    /// Dot 每跳间隔（秒）
+    #[serde(default)]
+    pub dot_interval: f32,
+    /// Dot 持续时长（秒）
+    #[serde(default)]
+    pub dot_duration: f32,
+    /// Dot 递增系数（每跳递增比例，等比）
+    #[serde(default)]
+    pub dot_up: f32,
+    /// 无视减伤
+    #[serde(default)]
+    pub wushijianshang: u32,
+    /// 真实伤害（无视所有防御减免）
+    #[serde(default)]
+    pub zhenshishanghai: u32,
     /// 无质（伤害固定 = 期望 Q，含会心加权）
     #[serde(default)]
     pub has_critical_strike: bool,

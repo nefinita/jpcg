@@ -115,6 +115,7 @@ sub_id = 32235              #子ID
 base_damage1 = 1450          #基本伤害
 base_damage2 = 1525          #基本伤害2
 atk_xishu = 5.90625        #伤害系数
+watk_xishu = 300
 
 [[skill]]
 skill_name = "孤锋破浪·1层破绽"           #名字
@@ -437,4 +438,3 @@ atk_xishu = 0        #伤害系数
 dot_flag = 1                #dot伤害标签
 dot_interval = 2          #每跳间隔（秒，16帧=1秒）
 dot_duration = 12          #持续时长（秒，总跳数×间隔）
-
