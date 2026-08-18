@@ -1,7 +1,8 @@
 .page {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  height: 100%;
+  min-height: 0;
   gap: var(--space-md);
 }
 
@@ -137,6 +138,7 @@
 
 .detailPanel {
   flex: 1;
+  min-height: 0;
   background: var(--glass-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
