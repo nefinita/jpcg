@@ -52,16 +52,16 @@ impl<'a> JpcgConfig<'a> {
         );
         if is_neigong {
             self.hostilepile
-                .guo_nfangyu_with(wushifangyu_total, &self.coeff)
+                .guo_nfangyu_with(wushifangyu_total, self.coeff)
         } else {
             self.hostilepile
-                .guo_wfangyu_with(wushifangyu_total, &self.coeff)
+                .guo_wfangyu_with(wushifangyu_total, self.coeff)
         }
     }
 
     pub fn guo_huixin(&self) -> f32 {
-        let player_crit = self.player.guo_huixin_with(&self.coeff) + self.buff.huixin_pct / 100.0;
-        let enemy_crit_reduce = self.hostilepile.guo_yujin_huixin_with(&self.coeff);
+        let player_crit = self.player.guo_huixin_with(self.coeff) + self.buff.huixin_pct / 100.0;
+        let enemy_crit_reduce = self.hostilepile.guo_yujin_huixin_with(self.coeff);
         if player_crit >= enemy_crit_reduce {
             player_crit - enemy_crit_reduce
         } else {
@@ -70,7 +70,7 @@ impl<'a> JpcgConfig<'a> {
     }
 
     fn y_cal(&self) -> u32 {
-        let pofang = self.player.guo_pofang_with(&self.coeff)
+        let pofang = self.player.guo_pofang_with(self.coeff)
             + (self.buff.pofang_pct * 1024.0 / 100.0) as u32;
         1024 + pofang - ((1024.0 + pofang as f32) * (self.guo_fangyu() as f32 / 1024.0)) as u32
     }
@@ -94,7 +94,7 @@ impl<'a> JpcgConfig<'a> {
         let y = self.y_cal();
         let i_hit = i[2];
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(&self.coeff);
+        let huajin = self.hostilepile.guo_huajin_with(self.coeff);
         let pvp = self.coeff.pvp_global_jianshang;
 
         // 游戏实测截断点（顺序与取整策略源自实际检测结果，勿改动逻辑）
@@ -116,8 +116,8 @@ impl<'a> JpcgConfig<'a> {
     fn h_cal(&self) -> [u32; 5] {
         let i = self.g_cal();
         let g_damage = i[3];
-        let huixiao = self.player.guo_huixinxiaoguo_with(&self.coeff);
-        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(&self.coeff);
+        let huixiao = self.player.guo_huixinxiaoguo_with(self.coeff);
+        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(self.coeff);
         let buff_huixiao = self.buff.huixiao_pct * 1024.0 / 100.0;
         let x = g_damage
             + (g_damage as f32
@@ -216,12 +216,12 @@ impl<'a> JpcgConfig<'a> {
 
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
         let hit_up = self.skilltype.hit_up as f32 / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(&self.coeff) as f32;
+        let huajin = self.hostilepile.guo_huajin_with(self.coeff) as f32;
         let pvp = self.coeff.pvp_global_jianshang;
         let jianshang_bili = self.hostilepile.jianshang_bili as f32 / 100.0;
 
-        let huixiao = self.player.guo_huixinxiaoguo_with(&self.coeff) as f32;
-        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(&self.coeff) as f32;
+        let huixiao = self.player.guo_huixinxiaoguo_with(self.coeff) as f32;
+        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(self.coeff) as f32;
         let buff_huixiao_f = self.buff.huixiao_pct * 1024.0 / 100.0;
 
         // ---- 公共导数因子 ----
@@ -630,7 +630,7 @@ mod golden_tests {
 
     #[test]
     fn golden_zheng_default() {
-        let sk = skill("徵(豪情)", 190, 210, 1.7760416666666667, 20, 0, 0);
+        let sk = skill("徵(豪情)", 190, 210, 1.776_041_6, 20, 0, 0);
         assert_golden(
             "zheng_default",
             &sk,
@@ -654,7 +654,7 @@ mod golden_tests {
 
     #[test]
     fn golden_zheng_buff() {
-        let sk = skill("徵(豪情)", 190, 210, 1.7760416666666667, 20, 0, 0);
+        let sk = skill("徵(豪情)", 190, 210, 1.776_041_6, 20, 0, 0);
         assert_golden(
             "zheng_buff",
             &sk,

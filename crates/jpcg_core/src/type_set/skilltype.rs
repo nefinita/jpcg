@@ -18,6 +18,8 @@ fn is_zero_f32(n: &f32) -> bool {
 fn is_false(b: &bool) -> bool {
     !b
 }
+// serde skip_serializing_if 要求 `&String` 签名，保持原样
+#[allow(clippy::ptr_arg)]
 fn is_string_empty(s: &String) -> bool {
     s.is_empty()
 }

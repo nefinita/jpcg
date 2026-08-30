@@ -109,13 +109,11 @@ fn workspace_version() -> Option<String> {
         if t.starts_with('[') {
             in_workspace_package = false;
         }
-        if in_workspace_package {
-            if let Some(rest) = t.strip_prefix("version") {
-                let v = rest.trim_start_matches([' ', '=']);
-                let v = v.trim_matches([' ', '"']);
-                if !v.is_empty() {
-                    return Some(v.to_string());
-                }
+        if in_workspace_package && let Some(rest) = t.strip_prefix("version") {
+            let v = rest.trim_start_matches([' ', '=']);
+            let v = v.trim_matches([' ', '"']);
+            if !v.is_empty() {
+                return Some(v.to_string());
             }
         }
     }

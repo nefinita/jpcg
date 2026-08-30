@@ -20,10 +20,10 @@ pub fn list_combo_presets() -> Vec<String> {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("toml") {
-                if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                    presets.push(name.to_string());
-                }
+            if path.extension().and_then(|e| e.to_str()) == Some("toml")
+                && let Some(name) = path.file_stem().and_then(|n| n.to_str())
+            {
+                presets.push(name.to_string());
             }
         }
     }

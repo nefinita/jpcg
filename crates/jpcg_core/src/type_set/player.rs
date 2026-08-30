@@ -47,20 +47,6 @@ impl PlayerConfig {
         }
     }
 
-    /// 默认配置（模拟基础装备水平）
-    pub fn default() -> Self {
-        Self {
-            jcsx: "gengu".to_string(),
-            jichu_shuxing: 100,
-            jichu_gongji: 200,
-            huixin_dengji: 1,
-            huixin_xiaoguo: 10,
-            pofang_dengji: 1,
-            wuqi_shanghai: 50,
-            zuizhong_gongji: 0,
-        }
-    }
-
     /// 计算实际攻击力
     /// 公式: (基础攻击+基础属性) × (1 + 心法攻击加成)
     /// - `shuxing_atk_up`: 基础属性提供的攻击加成

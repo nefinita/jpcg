@@ -48,12 +48,15 @@ pub struct DerivativesOutput {
     pub recommendation: OptimizeRecommendation,
 }
 
-const ATTR_META: [(
-    &str,
-    &str,
+/// 属性元数据项：显示名 / 字段名 / 求导闭包 / 取属性闭包
+type AttrMeta = (
+    &'static str,
+    &'static str,
     fn(&DerivativeSet) -> f32,
     fn(&PlayerConfig) -> f32,
-); 6] = [
+);
+
+const ATTR_META: [AttrMeta; 6] = [
     (
         "基础属性",
         "jichu_shuxing",

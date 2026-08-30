@@ -29,6 +29,9 @@ pub extern "C" fn jpcg_update_abi_version() -> u32 {
 
 /// 返回本 update 模块库版本号（如 "2.1.0"）
 /// 返回字符串需 jpcg_update_free_string 释放。
+///
+/// # Safety
+/// - 返回指针需由 jpcg_update_free_string 释放
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_update_version() -> *mut c_char {
     CString::new(crate::UPDATE_VERSION)
@@ -51,6 +54,9 @@ pub extern "C" fn jpcg_update_last_error() -> *mut c_char {
 }
 
 /// 释放由本模块分配的 C 字符串
+///
+/// # Safety
+/// - `ptr` 必须为本模块返回的指针或 null
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_update_free_string(ptr: *mut c_char) {
     if ptr.is_null() {
@@ -81,6 +87,10 @@ unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
 /// 检查更新（同步封装）
 /// request: JSON `{"base_path":".","beta":false,"force":false}`
 /// 返回: JSON 序列化的 UpdateCheckResult
+///
+/// # Safety
+/// - `request` 必须为 null 结尾的 UTF-8 字符串（可 null）
+/// - 返回指针需由 jpcg_update_free_string 释放
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_update_check(request: *const c_char) -> *mut c_char {
     let result = std::panic::catch_unwind(|| {
@@ -130,6 +140,10 @@ pub unsafe extern "C" fn jpcg_update_check(request: *const c_char) -> *mut c_cha
 /// 获取应用更新信息（同步封装）
 /// request: JSON `{"base_path":".","beta":false,"force":false}`
 /// 返回: JSON 序列化的 AppUpdateInfo 或 "null"
+///
+/// # Safety
+/// - `request` 必须为 null 结尾的 UTF-8 字符串（可 null）
+/// - 返回指针需由 jpcg_update_free_string 释放
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_update_fetch_app_info(request: *const c_char) -> *mut c_char {
     let result = std::panic::catch_unwind(|| {
@@ -180,6 +194,10 @@ pub unsafe extern "C" fn jpcg_update_fetch_app_info(request: *const c_char) -> *
 /// 计算文件 SHA256（同步封装）
 /// request: JSON `{"path":"/abs/path"}`
 /// 返回: JSON `{"hash":"..."}`
+///
+/// # Safety
+/// - `request` 必须为 null 结尾的 UTF-8 字符串（可 null）
+/// - 返回指针需由 jpcg_update_free_string 释放
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_update_file_sha256(request: *const c_char) -> *mut c_char {
     let result = std::panic::catch_unwind(|| {
@@ -198,9 +216,10 @@ pub unsafe extern "C" fn jpcg_update_file_sha256(request: *const c_char) -> *mut
         match block_on(crate::calculate_file_sha256(std::path::Path::new(
             &parsed.path,
         ))) {
-            Ok(hash) => match serde_json::json!({"hash": hash}).to_string() {
-                s => cstring_out(&s),
-            },
+            Ok(hash) => {
+                let s = serde_json::json!({"hash": hash}).to_string();
+                cstring_out(&s)
+            }
             Err(e) => {
                 set_last_error(&format!("计算哈希失败: {}", e));
                 std::ptr::null_mut()

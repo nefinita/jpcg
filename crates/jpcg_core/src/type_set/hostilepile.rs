@@ -48,20 +48,6 @@ impl HostilepileConfig {
         }
     }
 
-    /// 默认值（模拟 140 级木桩/基础 PVP 装）
-    pub fn default() -> Self {
-        Self {
-            waigong_fangyu: 100,
-            neigong_fangyu: 100,
-            yujin_dengji: 1,
-            huajin_dengji: 1,
-            jianshang_bili: 10,
-            target_hp: 0,
-            max_hp: 0,
-            current_hp: 0,
-        }
-    }
-
     /// 计算外功防御系数（已扣除无视防御后）
     /// 公式: 防御×1024/(防御+126007.2)
     /// - `guo_wsfangyu`: 技能的无视防御值（以 1024 为基准）

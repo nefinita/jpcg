@@ -204,15 +204,14 @@ pub async fn fetch_all_version_directories(
     let body = reqwest::get(base_url).await?.text().await?;
     // 匹配 <a href="..."> 中的链接文本
     let re = Regex::new(r#"(?i)<a\s+[^>]*href\s*=\s*["']([^"'/\s>]+)[^>]*>"#)?;
+    let version_re = Regex::new(r"^v\d+\.\d+\.\d+$")?;
     let mut version_dirs = Vec::new();
 
     for cap in re.captures_iter(&body) {
         if let Some(version_match) = cap.get(1) {
             let dir_name = version_match.as_str();
             // 过滤出版本号格式: v{major}.{minor}.{patch}
-            if dir_name.starts_with('v')
-                && Regex::new(r"^v\d+\.\d+\.\d+$").unwrap().is_match(dir_name)
-            {
+            if dir_name.starts_with('v') && version_re.is_match(dir_name) {
                 let manifest_url = format!(
                     "{}/{}/{}",
                     base_url.trim_end_matches('/'),
@@ -791,6 +790,7 @@ pub fn update_local_channel_only(
 /// 2. 询问用户是否继续
 /// 3. 逐文件下载、验证哈希、替换
 /// 4. 对不支持 OS/Arch 的场景尝试压缩包解压
+#[allow(clippy::too_many_arguments)]
 pub async fn prompt_and_perform_update(
     all_updates_needed: HashMap<String, String>,
     base_path: &Path,
@@ -817,12 +817,12 @@ pub async fn prompt_and_perform_update(
                 "不支持"
             }
         );
-        if let Some(bin) = target_binary {
-            if all_updates_needed.contains_key(&bin.path) {
-                println!(" - 应用程序: {}", bin.path);
-            }
+        if let Some(bin) = target_binary
+            && all_updates_needed.contains_key(&bin.path)
+        {
+            println!(" - 应用程序: {}", bin.path);
         }
-        for (rel_path, _) in &all_updates_needed {
+        for rel_path in all_updates_needed.keys() {
             if let Some(bin) = target_binary {
                 if rel_path != &bin.path {
                     println!(" - 其他文件: {}", rel_path);

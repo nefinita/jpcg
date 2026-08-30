@@ -270,23 +270,23 @@ pub async fn download_updates(
     };
 
     // 仅当有数据更新时执行下载
-    if let Some(ref data_ver) = check_result.latest_data_version {
-        if check_result.has_data_update {
-            // 重新获取 data_manifest（因为需要文件哈希进行验证）
-            let manifest = fetch_data_manifest(&file_base_url, data_ver, channel).await?;
-            let needed = check_data_updates(base_path, &manifest).await?;
-            if !needed.is_empty() {
-                // 下载并安装所有需要更新的 data 文件
-                download_and_install_data(
-                    &needed,
-                    base_path,
-                    data_ver,
-                    &file_base_url,
-                    channel,
-                    progress,
-                )
-                .await?;
-            }
+    if let Some(ref data_ver) = check_result.latest_data_version
+        && check_result.has_data_update
+    {
+        // 重新获取 data_manifest（因为需要文件哈希进行验证）
+        let manifest = fetch_data_manifest(&file_base_url, data_ver, channel).await?;
+        let needed = check_data_updates(base_path, &manifest).await?;
+        if !needed.is_empty() {
+            // 下载并安装所有需要更新的 data 文件
+            download_and_install_data(
+                &needed,
+                base_path,
+                data_ver,
+                &file_base_url,
+                channel,
+                progress,
+            )
+            .await?;
         }
     }
 
@@ -377,10 +377,10 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
             std::collections::HashMap::new();
 
         // 检查二进制是否需要更新（SHA256 对比）
-        if let Some(bin) = target_binary {
-            if check_binary_update_needed(&base_path, bin).await? {
-                all_updates_needed.insert(bin.path.clone(), bin.hash.clone());
-            }
+        if let Some(bin) = target_binary
+            && check_binary_update_needed(&base_path, bin).await?
+        {
+            all_updates_needed.insert(bin.path.clone(), bin.hash.clone());
         }
 
         // 检查其他附带文件是否需要更新

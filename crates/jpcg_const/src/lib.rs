@@ -28,6 +28,9 @@ pub extern "C" fn jpcg_const_abi_version() -> u32 {
 
 /// 返回本 const 模块库版本号（如 "130.3.20260602"，等级.赛季.日期）
 /// 返回字符串需 jpcg_const_free_string 释放。
+///
+/// # Safety
+/// - 返回指针需由 jpcg_const_free_string 释放
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_const_version() -> *mut c_char {
     CString::new(CONST_VERSION)
@@ -50,6 +53,9 @@ pub extern "C" fn jpcg_const_last_error() -> *mut c_char {
 }
 
 /// 释放由本模块分配的 C 字符串
+///
+/// # Safety
+/// - `ptr` 必须为本模块返回的指针或 null
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_const_free_string(ptr: *mut c_char) {
     if ptr.is_null() {

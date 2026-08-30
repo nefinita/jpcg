@@ -70,13 +70,12 @@ pub(crate) struct FfiHostEvents;
 impl crate::host::update::HostEvents for FfiHostEvents {
     fn on_progress(&self, event: &jpcg_update::UpdateProgressEvent) {
         let table = host_events_table();
-        if let Some(cb) = table.on_progress {
-            if let Ok(json) = serde_json::to_string(event) {
-                if let Ok(c) = CString::new(json) {
-                    unsafe {
-                        cb(c.as_ptr());
-                    }
-                }
+        if let Some(cb) = table.on_progress
+            && let Ok(json) = serde_json::to_string(event)
+            && let Ok(c) = CString::new(json)
+        {
+            unsafe {
+                cb(c.as_ptr());
             }
         }
     }
@@ -195,8 +194,8 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             }
             let req: SkillDataRequest =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::host::skill::save_skill_data(req.profession, req.data)?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
+            crate::host::skill::save_skill_data(req.profession, req.data)?;
+            serde_json::to_string(&()).map_err(|e| format!("响应序列化失败: {}", e))
         }
         "load_skill_pool" => {
             #[derive(serde::Deserialize)]
@@ -351,6 +350,9 @@ pub unsafe extern "C" fn jpcg_free_string(s: *mut c_char) {
 }
 
 /// 读取上次错误信息（jpcg_call 返回 null 后调用），返回字符串需 jpcg_free_string 释放
+///
+/// # Safety
+/// - 返回指针需由 jpcg_free_string 释放（可为 null）
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_last_error() -> *mut c_char {
     let s = match LAST_ERROR.lock() {
@@ -371,6 +373,9 @@ pub extern "C" fn jpcg_abi_version() -> u32 {
 
 /// 返回本 core 模块库版本号（如 "2.1.0"），返回字符串需 jpcg_free_string 释放
 /// 供宿主 UI 展示各 dll 版本。
+///
+/// # Safety
+/// - 返回指针需由 jpcg_free_string 释放
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_core_version() -> *mut c_char {
     cstring_out(crate::CORE_VERSION)

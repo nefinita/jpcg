@@ -29,17 +29,6 @@ impl XinfaConfig {
             huixin_up,
         }
     }
-
-    pub fn default() -> Self {
-        Self {
-            profession: "mowen".to_string(),
-            xinfa_name: "莫问".to_string(),
-            xinfa_nom: "根骨".to_string(),
-            atk_up: 0.0,
-            pofang_up: 0.0,
-            huixin_up: 0.0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
