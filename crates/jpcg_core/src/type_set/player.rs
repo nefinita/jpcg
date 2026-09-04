@@ -60,23 +60,23 @@ impl PlayerConfig {
     }
 
     /// 计算破防系数（1024 制）
-    /// 公式: 破防等级 × 1024 / 225957.6
+    /// 公式: 破防等级 × 1024 / 破防系数（默认等级常数）
     /// 返回值为 1024 为基准的系数
     pub fn guo_pofang(&self) -> u32 {
-        ((self.pofang_dengji * 1024) as f32 / 225957.6) as u32
+        self.guo_pofang_with(&CoefficientConfig::default())
     }
 
     /// 计算会心效果系数（1024 制）
-    /// 公式: 会效等级 × 1024 / 72844.2
+    /// 公式: 会效等级 × 1024 / 会效系数（默认等级常数）
     pub fn guo_huixinxiaoguo(&self) -> u32 {
-        (self.huixin_xiaoguo as f32 * 1024.0 / 72844.2) as u32
+        self.guo_huixinxiaoguo_with(&CoefficientConfig::default())
     }
 
     /// 计算会心率（小数）
-    /// 公式: 会心等级 / 197703
+    /// 公式: 会心等级 / 会心系数（默认等级常数）
     /// 返回值为 0~1 之间的小数
     pub fn guo_huixin(&self) -> f32 {
-        self.huixin_dengji as f32 / 197703.0
+        self.guo_huixin_with(&CoefficientConfig::default())
     }
 
     /// 使用可配置系数的破防计算

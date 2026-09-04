@@ -65,14 +65,7 @@ fn into_core(
         shanghai_pct: buff.shanghai_pct,
         mode_is_point: buff.mode_is_point,
     };
-    let coeff = CoefficientConfig {
-        pofang_xishu: coeff.pofang_xishu,
-        huixin_xishu: coeff.huixin_xishu,
-        huixiao_xishu: coeff.huixiao_xishu,
-        huajin_xishu: coeff.huajin_xishu,
-        fangyu_xishu: coeff.fangyu_xishu,
-        pvp_global_jianshang: coeff.pvp_global_jianshang,
-    };
+    let coeff = CoefficientConfig::from(&coeff);
     (player, hostile, xinfa, buff, coeff)
 }
 
@@ -225,11 +218,13 @@ mod tests {
     fn buff_coeff() -> (BuffConfigDTO, CoefficientConfigDTO) {
         (
             BuffConfigDTO::default(),
-            // DTO Default 全 0 → 除法溢出；填 core 层默认换算系数
+            // DTO Default 全 0 → 除法溢出；填真源默认换算系数（From 亦会回退）
             CoefficientConfigDTO {
                 pofang_xishu: 225957.6,
                 huixin_xishu: 197703.0,
                 huixiao_xishu: 72844.2,
+                yujin_xishu: 197703.0,
+                yuhui_xishu: 55123.2,
                 huajin_xishu: 30115.8,
                 fangyu_xishu: 126007.2,
                 pvp_global_jianshang: 0.9,

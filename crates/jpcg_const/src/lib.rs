@@ -1,5 +1,6 @@
 pub mod drug;
 pub mod food;
+pub mod level_constant;
 
 /// 本 const 模块库版本（等级.赛季.日期，如 130.3.20260602）
 pub const CONST_VERSION: &str = env!("CARGO_PKG_VERSION");

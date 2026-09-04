@@ -49,43 +49,38 @@ impl HostilepileConfig {
     }
 
     /// 计算外功防御系数（已扣除无视防御后）
-    /// 公式: 防御×1024/(防御+126007.2)
+    /// 公式: 防御×1024/(防御+防御系数)；防御系数 = 默认等级常数
     /// - `guo_wsfangyu`: 技能的无视防御值（以 1024 为基准）
     /// - 返回: 以 1024 为基准的防御系数（值越大减伤越多）
     pub fn guo_wfangyu(&self, guo_wsfangyu: u32) -> u32 {
-        ((self.waigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0)) * 1024.0
-            / (self.waigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0) + 126007.2))
-            as u32
+        self.guo_wfangyu_with(guo_wsfangyu, &CoefficientConfig::default())
     }
 
     /// 计算内功防御系数（根骨/元气职业使用）
     /// 公式与外功防御相同，使用内功防御值计算
     pub fn guo_nfangyu(&self, guo_wsfangyu: u32) -> u32 {
-        ((self.neigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0)) * 1024.0
-            / (self.neigong_fangyu as f32 * (1.0 - guo_wsfangyu as f32 / 1024.0) + 126007.2))
-            as u32
+        self.guo_nfangyu_with(guo_wsfangyu, &CoefficientConfig::default())
     }
 
     /// 计算化劲减伤系数
-    /// 公式: 化劲/(化劲+30115.8) + 102/1024
+    /// 公式: 化劲/(化劲+化劲系数) + 102/1024；化劲系数 = 默认等级常数
     /// 返回值以 1024 为基准
     pub fn guo_huajin(&self) -> u32 {
-        ((self.huajin_dengji as f32 / (self.huajin_dengji as f32 + 30115.8) + 102.0 / 1024.0)
-            * 1024.0) as u32
+        self.guo_huajin_with(&CoefficientConfig::default())
     }
 
     /// 计算御劲会心效果减免
-    /// 公式: 御劲×1024/55123.2
+    /// 公式: 御劲×1024/yuhui_xishu（御劲会伤减免分母，默认等级常数）
     /// 返回值以 1024 为基准
     pub fn guo_yujin_huixiao(&self) -> u32 {
-        (self.yujin_dengji as f32 * 1024.0 / 55123.2) as u32
+        self.guo_yujin_huixiao_with(&CoefficientConfig::default())
     }
 
     /// 计算御劲会心率减免
-    /// 公式: 御劲/197703
+    /// 公式: 御劲/yujin_xishu（御劲会心减免分母，默认等级常数）
     /// 返回值为小数（如 0.05 表示 5%）
     pub fn guo_yujin_huixin(&self) -> f32 {
-        self.yujin_dengji as f32 / 197703.0
+        self.guo_yujin_huixin_with(&CoefficientConfig::default())
     }
 
     /// 使用可配置系数计算外功防御
@@ -108,12 +103,14 @@ impl HostilepileConfig {
     }
 
     /// 使用可配置系数的御劲会效减免
+    /// 公式: 御劲×1024/yuhui_xishu（御劲 → 目标会心伤害减免）
     pub fn guo_yujin_huixiao_with(&self, coeff: &CoefficientConfig) -> u32 {
-        (self.yujin_dengji as f32 * 1024.0 / coeff.huixin_xishu) as u32
+        (self.yujin_dengji as f32 * 1024.0 / coeff.yuhui_xishu) as u32
     }
 
     /// 使用可配置系数的御劲会心率减免
+    /// 公式: 御劲/yujin_xishu（御劲 → 目标会心率减免）
     pub fn guo_yujin_huixin_with(&self, coeff: &CoefficientConfig) -> f32 {
-        self.yujin_dengji as f32 / coeff.huixin_xishu
+        self.yujin_dengji as f32 / coeff.yujin_xishu
     }
 }

@@ -49,6 +49,8 @@ export function toCalculateRequest(f: FormData): CalculateRequest {
       pofang_xishu: toNum(f.coefficient.pofang_xishu),
       huixin_xishu: toNum(f.coefficient.huixin_xishu),
       huixiao_xishu: toNum(f.coefficient.huixiao_xishu),
+      yujin_xishu: toNum(f.coefficient.yujin_xishu),
+      yuhui_xishu: toNum(f.coefficient.yuhui_xishu),
       huajin_xishu: toNum(f.coefficient.huajin_xishu),
       fangyu_xishu: toNum(f.coefficient.fangyu_xishu),
       pvp_global_jianshang: toNum(f.coefficient.pvp_global_jianshang),
