@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 license = "GPL-3.0"
 readme = "README.md"
-version = "2.1.0-alpha.2"
+version = "2.1.0-beta.1"
 edition = "2024"
 
 [workspace.dependencies]
