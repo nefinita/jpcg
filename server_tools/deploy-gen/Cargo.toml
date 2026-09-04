@@ -1,0 +1,21 @@
+[package]
+name = "deploy-gen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+toml = { workspace = true }
+
+# 独立于 manifest-gen：把 GitHub Release 资产 + 仓库 data 编排成更新服务器
+# downloads 根的通道目录（update.toml / manifest.toml / 多平台合并
+# modules_manifest.toml / data 布局），供 CI deploy job 上传。
+
+[[bin]]
+name = "deploy-gen"
+path = "src/main.rs"

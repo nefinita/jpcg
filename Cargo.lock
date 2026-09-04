@@ -923,6 +923,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "deploy-gen"
+version = "2.1.0-alpha.2"
+dependencies = [
+ "clap",
+ "hex",
+ "serde",
+ "sha2 0.11.0",
+ "toml 1.1.4+spec-1.1.0",
+]
+
+[[package]]
 name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

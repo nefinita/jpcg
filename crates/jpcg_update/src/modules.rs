@@ -27,6 +27,20 @@ pub struct ModulesFileEntry {
 }
 
 impl ModulesFileEntry {
+    /// 该 dll 是否属于本机平台（按扩展名判定：mac=.dylib linux=.so windows=.dll）
+    fn matches_local_platform(name: &str) -> bool {
+        let ext = Path::new(name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        match std::env::consts::OS {
+            "macos" => ext == "dylib",
+            "linux" => ext == "so",
+            "windows" => ext == "dll",
+            _ => true,
+        }
+    }
+
     /// 是否应更新：本地快照缺该条目 / 版本不同 / 哈希不同
     fn needs_update(&self, local_manifest: &ModulesManifest, local_dir: &Path) -> bool {
         if !local_dir.join(&self.name).exists() {
@@ -165,6 +179,10 @@ pub async fn check_modules_update(
 
     let mut needed = Vec::new();
     for entry in &manifest.files {
+        // 跳过其他平台的 dll（服务器 modules_manifest 为三平台合并，platform="multi"）
+        if !ModulesFileEntry::matches_local_platform(&entry.name) {
+            continue;
+        }
         if force || entry.needs_update(&local_manifest, &local_dir) {
             needed.push(entry.clone());
         }
