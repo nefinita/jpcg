@@ -30,13 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 提取版本号（tag）
       - name: 提取版本号（tag）
         id: version
+        shell: bash
         run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       # 通道判定：tag 含 -beta → beta 通道；否则 stable 通道
       - name: 判断更新通道
         id: channel
+        shell: bash
         run: |
           if [[ "$GITHUB_REF_NAME" == *-beta* ]]; then
             echo "channel=beta" >> "$GITHUB_OUTPUT"
