@@ -4,13 +4,14 @@ members = [
     "crates/*",
     "examples/jpcg_app/src-tauri",
     "server_tools/manifest-gen",
-    "server_tools/forum"
+    "server_tools/forum",
+    "server_tools/json-to-toml"
 ]
 
 [workspace.package]
 license = "GPL-3.0"
 readme = "README.md"
-version = "2.1.0-alpha.1"
+version = "2.1.0-alpha.2"
 edition = "2024"
 
 [workspace.dependencies]
@@ -36,6 +37,8 @@ jpcg_core = { path = "crates/jpcg_core" }
 jpcg_update = { path = "crates/jpcg_update" }
 jpcg_api = { path = "crates/jpcg_api" }
 jpcg_const = { path = "crates/jpcg_const" }
+jpcg_combo = { path = "crates/jpcg_combo" }
+rand = "0.9.0"
 
 [workspace.lints.clippy]
 

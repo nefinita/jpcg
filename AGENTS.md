@@ -8,6 +8,7 @@ Rust workspace for a 剑网3 damage calculator. Edition 2024 (requires rustc >= 
 |------|------|
 | `crates/jpcg_api/` | 纯 DTO 类型契约 crate（serde 类型 + HostEventsTable，零依赖，双端单一来源） |
 | `crates/jpcg_core/` | Core calculation engine + `host/` JSON 入口 + FFI（句柄 + JSON 协议） |
+| `crates/jpcg_combo/` | 连招引擎（依赖 jpcg_core，排轴器后端）：编排 + MC 击杀率 + hp 步进真伤；cdylib+rlib，双产物（static 直调 / dynamic 经 ffi_bridge 加载 libjpcg_combo），dll 不进 modules_manifest |
 | `crates/jpcg_const/` | Drug/food buff constants (unused by other crates) |
 | `crates/jpcg_update/` | App + data + modules(dll) auto-update (fetches from `nefinita-ai.com`) |
 | `crates/jpcg_updater/` | Standalone updater binary — replaces main exe & relaunches |
@@ -25,7 +26,7 @@ cargo test --workspace
 # 双构建模式（app 静态链接 core vs dlopen core dll）
 cargo build-app-static               # 默认 static：编译期链接 jpcg_core
 cargo build-app-dynamic              # dynamic：dlopen libjpcg_core（更新只换 dll）
-cargo build-modules                  # 三个 cdylib（core/update/const）
+cargo build-modules                  # 四个 cdylib（core/combo/update/const）
 make build-static | build-dynamic | build-modules | modules-dir | test | check-all
 
 cargo run -p manifest-gen -- --version v2.0.X --data-dir ./data
@@ -83,8 +84,9 @@ cargo run -p forum                   # start forum (port 8080 by default)
 - **`saved_config.toml`** reads/writes from CWD, NOT exe parent dir.
 - **`toml_input()` appends `.toml`** — callers pass the path without the extension.
 - **Update server**: `https://nefinita-ai.com/updates/JPCG/` (stable) / `JPCG_beta/` (beta). `data_manifest.toml` at `https://nefinita-ai.com/files/JPCG/`. Modules(dll) manifest at `files/JPCG/{version}/modules/modules_manifest.toml` (beta: `files/JPCG_beta/modules/`).
-- **FFI 协议** (`jpcg_core`): 句柄 + JSON — `jpcg_handle_create` / `jpcg_call(handle, method, request_json)` / `jpcg_last_error` / `jpcg_free_string` / `jpcg_handle_free` / `jpcg_abi_version` (1)。方法名与 Tauri 命令一一对应。更新编排经 `jpcg_set_host_events` 回调表（HostEventsTable 定义在 jpcg_api）。
+- **FFI 协议** (`jpcg_core`): 句柄 + JSON — `jpcg_handle_create` / `jpcg_call(handle, method, request_json)` / `jpcg_last_error` / `jpcg_free_string` / `jpcg_handle_free` / `jpcg_abi_version` (1)。方法名与 Tauri 命令一一对应。更新编排经 `jpcg_set_host_events` 回调表（HostEventsTable 定义在 jpcg_api）。`jpcg_combo` 同协议独立 dll（`jpcg_combo_call` 等），combo 专属方法（calculate_combo/预设 CRUD/export/import_config）只在 combo dll，core ffi 不再含 combo 分支。
 - **core 分层**: `type_set/`(领域类型) → `engine/`(计算) → `store/`(文件) → `host/`(JSON 契约层，DTO↔core 转换在 `host/conv.rs`) → `ffi.rs`。金标准测试在 `engine/atkcal.rs::golden_tests`（不改行为）。
+- **combo 计算模型** (`jpcg_combo/engine.rs`): 双通道 — 期望通道（g/h/q/dot 期望 + 累计/方差，含追加真伤期望）/ 蒙特卡洛通道（50k 采样，dot 逐跳独立会心，真伤逐路径实时结算）。hp 语义：`max_hp>0` 用 max/current；否则 `target_hp` 满血；都 0 → 击杀率恒 1。追加真伤公式唯一实现在 core `JpcgConfig::lost_hp_append`（语义 A：`已损失=max-结算后剩余`，真伤与伤害同扣血）。
 - **DTO 单源**: `jpcg_api` crate；Tauri `commands/types.rs` 仅为 `pub use jpcg_api::*`。`load_config` 返回形状与 CalculateRequest 一致（player/hostile/xinfa_config/buff/coefficient）。
 - **Tauri 双模式**: `features: static`(默认)/`dynamic`。dynamic 时经 `commands/ffi_bridge.rs` dlopen（加载顺序: exe同目录/modules/ → exe同目录 → target → `JPCG_CORE_LIB` env），update 进度经 HostEvents/回调表。
 - **Tauri commands** split by domain: `commands/calculate.rs`, `config.rs`, `update.rs`, `forum.rs`. Tauri events use `"update-progress"`.

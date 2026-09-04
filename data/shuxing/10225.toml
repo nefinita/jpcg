@@ -1,0 +1,240 @@
+[xinfa]
+xinfa_name = "天罗诡道"
+xinfa_nom = "元气"
+atk_up = 1
+pofang_up = 1
+huixin_up = 0
+
+[version]
+level = 130
+season = 3
+modified = 20260814
+
+[[skill]]
+skill_name = "罡风镖法"           #名字
+skill_id = 10225            #技能ID（数据源池内 id）
+sub_id = 3121              #子ID
+atk_xishu = 0.1        #伤害系数
+
+[[skill]]
+skill_name = "破"           #名字
+skill_id = 10225            #技能ID（数据源池内 id）
+sub_id = 32885              #子ID
+atk_xishu = 8.534        #伤害系数
+
+[[skill]]
+skill_name = "化血迷心"           #名字
+skill_id = 18249            #技能ID（数据源池内 id）
+sub_id = 3304              #子ID
+atk_xishu = 1.7604166        #伤害系数
+
+[[skill]]
+skill_name = "千秋万劫"           #名字
+skill_id = 18675            #技能ID（数据源池内 id）
+sub_id = 18677              #子ID
+atk_xishu = 5.9166665        #伤害系数
+
+[[skill]]
+skill_name = "千秋万劫·飞天"           #名字
+skill_id = 18675            #技能ID（数据源池内 id）
+sub_id = 28441              #子ID
+atk_xishu = 5.9166665        #伤害系数
+
+[[skill]]
+skill_name = "重弩"           #名字
+skill_id = 20544            #技能ID（数据源池内 id）
+sub_id = 21850              #子ID
+atk_xishu = 2.3072917        #伤害系数
+
+[[skill]]
+skill_name = "惊魄夺锋"           #名字
+skill_id = 20544            #技能ID（数据源池内 id）
+sub_id = 21852              #子ID
+atk_xishu = 3.6354167        #伤害系数
+
+[[skill]]
+skill_name = "魂压怒涛"           #名字
+skill_id = 20544            #技能ID（数据源池内 id）
+sub_id = 21856              #子ID
+atk_xishu = 2.4895833        #伤害系数
+
+[[skill]]
+skill_name = "天绝地灭·引爆"           #名字
+skill_id = 20544            #技能ID（数据源池内 id）
+sub_id = 21963              #子ID
+atk_xishu = 0.78125        #伤害系数
+
+[[skill]]
+skill_name = "云翳灼星"           #名字
+skill_id = 20544            #技能ID（数据源池内 id）
+sub_id = 34672              #子ID
+atk_xishu = 5.1354165        #伤害系数
+
+[[skill]]
+skill_name = "雨骤"           #名字
+skill_id = 24037            #技能ID（数据源池内 id）
+sub_id = 26900              #子ID
+atk_xishu = 2.3489583        #伤害系数
+
+[[skill]]
+skill_name = "云奔"           #名字
+skill_id = 24037            #技能ID（数据源池内 id）
+sub_id = 26901              #子ID
+atk_xishu = 4.9479165        #伤害系数
+
+[[skill]]
+skill_name = "诡面埋伏"           #名字
+skill_id = 25151            #技能ID（数据源池内 id）
+sub_id = 25154              #子ID
+atk_xishu = 5.40625        #伤害系数
+
+[[skill]]
+skill_name = "千机连环"           #名字
+skill_id = 30723            #技能ID（数据源池内 id）
+sub_id = 31026              #子ID
+atk_xishu = 0.453125        #伤害系数
+
+[[skill]]
+skill_name = "千机连环"           #名字
+skill_id = 30723            #技能ID（数据源池内 id）
+sub_id = 31027              #子ID
+atk_xishu = 0.453125        #伤害系数
+
+[[skill]]
+skill_name = "孔雀翎"           #名字
+skill_id = 3091            #技能ID（数据源池内 id）
+sub_id = 3223              #子ID
+atk_xishu = 0.6770833        #伤害系数
+
+[[skill]]
+skill_name = "暴雨梨花针"           #名字
+skill_id = 3093            #技能ID（数据源池内 id）
+sub_id = 3228              #子ID
+atk_xishu = 0.49479166        #伤害系数
+
+[[skill]]
+skill_name = "蚀肌弹·飞天"           #名字
+skill_id = 3105            #技能ID（数据源池内 id）
+sub_id = 18776              #子ID
+atk_xishu = 1.34375        #伤害系数
+
+[[skill]]
+skill_name = "蚀肌弹"           #名字
+skill_id = 3105            #技能ID（数据源池内 id）
+sub_id = 3105              #子ID
+atk_xishu = 2.0260417        #伤害系数
+
+[[skill]]
+skill_name = "天女散花"           #名字
+skill_id = 3106            #技能ID（数据源池内 id）
+sub_id = 3393              #子ID
+atk_xishu = 0.8958333        #伤害系数
+
+[[skill]]
+skill_name = "天绝地灭"           #名字
+skill_id = 3108            #技能ID（数据源池内 id）
+sub_id = 36502              #子ID
+atk_xishu = 0.36458334        #伤害系数
+
+[[skill]]
+skill_name = "图穷匕见"           #名字
+skill_id = 3111            #技能ID（数据源池内 id）
+sub_id = 3313              #子ID
+atk_xishu = 3.6354167        #伤害系数
+
+[[skill]]
+skill_name = "荆天棘地"           #名字
+skill_id = 3115            #技能ID（数据源池内 id）
+sub_id = 3221              #子ID
+atk_xishu = 0.20833333        #伤害系数
+
+[[skill]]
+skill_name = "连弩"           #名字
+skill_id = 38879            #技能ID（数据源池内 id）
+sub_id = 3401              #子ID
+atk_xishu = 1.59375        #伤害系数
+
+[[skill]]
+skill_name = "连弩"           #名字
+skill_id = 38879            #技能ID（数据源池内 id）
+sub_id = 3404              #子ID
+atk_xishu = 2.8125        #伤害系数
+
+[[skill]]
+skill_name = "重弩"           #名字
+skill_id = 38880            #技能ID（数据源池内 id）
+sub_id = 3819              #子ID
+atk_xishu = 2.1614583        #伤害系数
+
+[[skill]]
+skill_name = "重弩"           #名字
+skill_id = 38880            #技能ID（数据源池内 id）
+sub_id = 3824              #子ID
+atk_xishu = 3.8802083        #伤害系数
+
+[[skill]]
+skill_name = "毒刹"           #名字
+skill_id = 38881            #技能ID（数据源池内 id）
+sub_id = 3367              #子ID
+atk_xishu = 0.703125        #伤害系数
+
+[[skill]]
+skill_name = "天风汲雨"           #名字
+skill_id = 42472            #技能ID（数据源池内 id）
+sub_id = 42484              #子ID
+atk_xishu = 0.9583333        #伤害系数
+
+[[skill]]
+skill_name = "星离雨散"           #名字
+skill_id = 42479            #技能ID（数据源池内 id）
+sub_id = 42664              #子ID
+atk_xishu = 4        #伤害系数
+
+[[skill]]
+skill_name = "困孤悬饵"           #名字
+skill_id = 42481            #技能ID（数据源池内 id）
+sub_id = 42483              #子ID
+atk_xishu = 1.6927084        #伤害系数
+
+[[skill]]
+skill_name = "狂雨穿心"           #名字
+skill_id = 44513            #技能ID（数据源池内 id）
+sub_id = 44512              #子ID
+atk_xishu = 2.9479167        #伤害系数
+
+[[skill]]
+skill_name = "化血（dot）"           #名字
+skill_id = 18675            #技能ID（数据源池内 id）
+sub_id = 3221              #子ID
+atk_xishu = 1.2460938        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 3          #每跳间隔（秒，16帧=1秒）
+dot_duration = 24          #持续时长（秒，总跳数×间隔）
+
+[[skill]]
+skill_name = "化血（dot）"           #名字
+skill_id = 18675            #技能ID（数据源池内 id）
+sub_id = 3221              #子ID
+atk_xishu = 1.2460938        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 1          #每跳间隔（秒，16帧=1秒）
+dot_duration = 24          #持续时长（秒，总跳数×间隔）
+
+[[skill]]
+skill_name = "化血（dot）"           #名字
+skill_id = 3106            #技能ID（数据源池内 id）
+sub_id = 3221              #子ID
+atk_xishu = 0.6223958        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 3          #每跳间隔（秒，16帧=1秒）
+dot_duration = 24          #持续时长（秒，总跳数×间隔）
+
+[[skill]]
+skill_name = "化血（dot）"           #名字
+skill_id = 42475            #技能ID（数据源池内 id）
+sub_id = 3221              #子ID
+atk_xishu = 0.62282985        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 1          #每跳间隔（秒，16帧=1秒）
+dot_duration = 24          #持续时长（秒，总跳数×间隔）
+

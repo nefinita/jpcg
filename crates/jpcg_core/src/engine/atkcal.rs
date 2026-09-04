@@ -45,19 +45,23 @@ impl<'a> JpcgConfig<'a> {
     fn guo_fangyu(&self) -> u32 {
         let wushifangyu_total =
             self.skilltype.wushifangyu + (self.buff.wushi_fangyu_pct * 1024.0 / 100.0) as u32;
-        match self.xinfa.xinfa_nom.as_str() {
-            "gengu" | "yuanqi" => self
-                .hostilepile
-                .guo_nfangyu_with(wushifangyu_total, &self.coeff),
-            _ => self
-                .hostilepile
-                .guo_wfangyu_with(wushifangyu_total, &self.coeff),
+        // 根骨/元气职业为内功（数据文件 xinfa_nom 为中文，测试兼容英文）
+        let is_neigong = matches!(
+            self.xinfa.xinfa_nom.as_str(),
+            "根骨" | "元气" | "gengu" | "yuanqi"
+        );
+        if is_neigong {
+            self.hostilepile
+                .guo_nfangyu_with(wushifangyu_total, self.coeff)
+        } else {
+            self.hostilepile
+                .guo_wfangyu_with(wushifangyu_total, self.coeff)
         }
     }
 
     pub fn guo_huixin(&self) -> f32 {
-        let player_crit = self.player.guo_huixin_with(&self.coeff) + self.buff.huixin_pct / 100.0;
-        let enemy_crit_reduce = self.hostilepile.guo_yujin_huixin_with(&self.coeff);
+        let player_crit = self.player.guo_huixin_with(self.coeff) + self.buff.huixin_pct / 100.0;
+        let enemy_crit_reduce = self.hostilepile.guo_yujin_huixin_with(self.coeff);
         if player_crit >= enemy_crit_reduce {
             player_crit - enemy_crit_reduce
         } else {
@@ -66,7 +70,7 @@ impl<'a> JpcgConfig<'a> {
     }
 
     fn y_cal(&self) -> u32 {
-        let pofang = self.player.guo_pofang_with(&self.coeff)
+        let pofang = self.player.guo_pofang_with(self.coeff)
             + (self.buff.pofang_pct * 1024.0 / 100.0) as u32;
         1024 + pofang - ((1024.0 + pofang as f32) * (self.guo_fangyu() as f32 / 1024.0)) as u32
     }
@@ -90,7 +94,7 @@ impl<'a> JpcgConfig<'a> {
         let y = self.y_cal();
         let i_hit = i[2];
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(&self.coeff);
+        let huajin = self.hostilepile.guo_huajin_with(self.coeff);
         let pvp = self.coeff.pvp_global_jianshang;
 
         // 游戏实测截断点（顺序与取整策略源自实际检测结果，勿改动逻辑）
@@ -112,8 +116,8 @@ impl<'a> JpcgConfig<'a> {
     fn h_cal(&self) -> [u32; 5] {
         let i = self.g_cal();
         let g_damage = i[3];
-        let huixiao = self.player.guo_huixinxiaoguo_with(&self.coeff);
-        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(&self.coeff);
+        let huixiao = self.player.guo_huixinxiaoguo_with(self.coeff);
+        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(self.coeff);
         let buff_huixiao = self.buff.huixiao_pct * 1024.0 / 100.0;
         let x = g_damage
             + (g_damage as f32
@@ -124,14 +128,63 @@ impl<'a> JpcgConfig<'a> {
         [i[0], i[1], i[2], i[3], x]
     }
 
+    /// 追加真伤公式（core 实现，combo 传入 hp）：
+    /// 目标已损失生命 = max_hp - 结算后当前血量（封顶 max_hp），× lost_hp_zhenshishanghai 系数。
+    /// 语义 A（结算后）：current_hp_after 为本步伤害扣完后剩余血量。
+    pub fn lost_hp_append(&self, max_hp: u32, current_hp_after: u32) -> f64 {
+        if self.skilltype.lost_hp_zhenshishanghai <= 0.0 {
+            return 0.0;
+        }
+        let lost = (max_hp as f64 - current_hp_after as f64).max(0.0);
+        lost * self.skilltype.lost_hp_zhenshishanghai as f64
+    }
+
+    /// 期望通道 + 可选 hp：q_cal() 基础上结算追加真伤。
+    /// 未提供 hp（0）时真伤恒 0（调用方负责 target_hp 满血回退语义）。
+    pub fn q_cal_with_hp(&self, current_hp: Option<u32>, max_hp: Option<u32>) -> DamageResult {
+        let mut result = self.q_cal();
+        if let (Some(current), Some(max)) = (current_hp, max_hp) {
+            let after = current.saturating_sub(result.q_damage);
+            result.lost_hp_zhenshi_damage = self.lost_hp_append(max, after);
+        }
+        result
+    }
+
     /// Q 段: 期望伤害（最终结果）
     /// crit_rate = 自身会心率 - 目标御劲减免 + 技能增益
     /// buff.huixin_pct 已在 guo_huixin() 中计入，此处不再重复
+    /// Dot 技能：返回总期望（各跳之和），并填充 dot_jumps 每跳期望
     pub fn q_cal(&self) -> DamageResult {
         let i = self.h_cal();
         let crit_rate = self.guo_huixin() + self.skilltype.huixin_up as f32 / 100.0;
-        let x = (i[3] as f32 * (1.0 - crit_rate) + i[4] as f32 * crit_rate) as u32;
-        DamageResult::new(i, x)
+        let base_q = (i[3] as f32 * (1.0 - crit_rate) + i[4] as f32 * crit_rate) as u32;
+        let mut result = DamageResult::new(i, base_q);
+        let jumps = self.dot_jump_expected(base_q);
+        result.dot_jumps = jumps.clone();
+        if !jumps.is_empty() {
+            result.q_damage = jumps.iter().sum();
+        }
+        result
+    }
+
+    /// Dot 每跳期望（等比递增）：首跳 = 单次期望，第 k 跳 × (1+dot_up)^(k-1)
+    /// 非 Dot 技能返回空集合
+    fn dot_jump_expected(&self, base_q: u32) -> Vec<u32> {
+        let n = self.skilltype.dot_jump_count();
+        if n == 0 {
+            return Vec::new();
+        }
+        let up = self.skilltype.dot_up;
+        let mut jumps = Vec::with_capacity(n as usize);
+        for k in 0..n {
+            let factor = if up > 0.0 {
+                (1.0 + up).powi(k as i32)
+            } else {
+                1.0
+            };
+            jumps.push((base_q as f32 * factor) as u32);
+        }
+        jumps
     }
 
     /// 正向计算伤害 + 反向求导（链式法则）
@@ -146,7 +199,14 @@ impl<'a> JpcgConfig<'a> {
 
         // 与 q_cal() 完全等价的 Q 段计算（不重复调用全链）
         let q = (g_arr[3] as f32 * (1.0 - crit_rate) + h_arr[4] as f32 * crit_rate) as u32;
-        let result = DamageResult::new([y, i_arr[1], i_arr[2], g_arr[3], h_arr[4]], q);
+        let jumps = self.dot_jump_expected(q);
+        let total_q = if jumps.is_empty() {
+            q
+        } else {
+            jumps.iter().sum()
+        };
+        let mut result = DamageResult::new([y, i_arr[1], i_arr[2], g_arr[3], h_arr[4]], total_q);
+        result.dot_jumps = jumps;
 
         // ---- intermediates (f32, 连续) ----
         let i_hit = i_arr[2] as f32;
@@ -156,12 +216,12 @@ impl<'a> JpcgConfig<'a> {
 
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
         let hit_up = self.skilltype.hit_up as f32 / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(&self.coeff) as f32;
+        let huajin = self.hostilepile.guo_huajin_with(self.coeff) as f32;
         let pvp = self.coeff.pvp_global_jianshang;
         let jianshang_bili = self.hostilepile.jianshang_bili as f32 / 100.0;
 
-        let huixiao = self.player.guo_huixinxiaoguo_with(&self.coeff) as f32;
-        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(&self.coeff) as f32;
+        let huixiao = self.player.guo_huixinxiaoguo_with(self.coeff) as f32;
+        let yujin_huixiao = self.hostilepile.guo_yujin_huixiao_with(self.coeff) as f32;
         let buff_huixiao_f = self.buff.huixiao_pct * 1024.0 / 100.0;
 
         // ---- 公共导数因子 ----
@@ -224,15 +284,28 @@ impl<'a> JpcgConfig<'a> {
         let di2_d_wq = self.skilltype.watk_xishu as f32 / 100.0;
         let d_wuqi_shanghai = dq_di2 * di2_d_wq;
 
+        // ---- Dot 等比和因子 ----
+        // 总期望 = Σ 首跳×(1+u)^(k-1)，∂Q/∂attr 整体按等比和缩放
+        //（dot_up=0 时退化为跳数倍；非 Dot 技能因子为 1）
+        let dot_n = self.skilltype.dot_jump_count() as f32;
+        let dot_up = self.skilltype.dot_up;
+        let dot_factor = if dot_n == 0.0 {
+            1.0
+        } else if dot_up == 0.0 {
+            dot_n
+        } else {
+            ((1.0 + dot_up).powi(dot_n as i32) - 1.0) / dot_up
+        };
+
         DamageResultWithDerivatives {
             result,
             derivatives: DerivativeSet {
-                d_jichu_shuxing,
-                d_jichu_gongji,
-                d_huixin_dengji,
-                d_huixin_xiaoguo,
-                d_pofang_dengji,
-                d_wuqi_shanghai,
+                d_jichu_shuxing: d_jichu_shuxing * dot_factor,
+                d_jichu_gongji: d_jichu_gongji * dot_factor,
+                d_huixin_dengji: d_huixin_dengji * dot_factor,
+                d_huixin_xiaoguo: d_huixin_xiaoguo * dot_factor,
+                d_pofang_dengji: d_pofang_dengji * dot_factor,
+                d_wuqi_shanghai: d_wuqi_shanghai * dot_factor,
             },
         }
     }
@@ -249,6 +322,11 @@ pub struct DamageResult {
     pub g_damage: u32,
     pub h_damage: u32,
     pub q_damage: u32,
+    /// Dot 每跳期望伤害（非 Dot 技能为空；q_damage 为各跳之和）
+    pub dot_jumps: Vec<u32>,
+    /// 追加真伤（目标已损失生命 × 系数，无视防御，确定性）。
+    /// 仅显式提供 hp（max/current）时结算；否则恒 0（由连招层维护回退语义）。
+    pub lost_hp_zhenshi_damage: f64,
 }
 
 impl DamageResult {
@@ -260,6 +338,8 @@ impl DamageResult {
             g_damage: i[3],
             h_damage: i[4],
             q_damage: x,
+            dot_jumps: Vec::new(),
+            lost_hp_zhenshi_damage: 0.0,
         }
     }
 }
@@ -287,8 +367,10 @@ pub struct DamageResultWithDerivatives {
 
 // ============================================================================
 // 金标准基准测试
-// 数值取自 2026-08-09 重构前（jpcg_core cd5b694 时代代码）在相同输入下的输出，
-// 用于锁定「P1 引用化/P2 截断显式化」前后行为逐位一致。
+// 输入为真实面板属性（2026-08-13 用户提供：基础 21371/攻击 64329/会心 61877/
+// 会效 2925/破防 109160，目标外防 15176/内防 21388/御劲 5047/化劲 59402，pvp 0.9），
+// 期望值由引擎输出回填（examples/python_demo/quick_calc_test.py 全量一致），
+// 锁定计算行为；待用户木桩实测后校准关键值。
 // ============================================================================
 #[cfg(test)]
 mod golden_tests {
@@ -324,24 +406,26 @@ mod golden_tests {
     fn player() -> PlayerConfig {
         PlayerConfig {
             jcsx: "gengu".into(),
-            jichu_shuxing: 18888,
-            jichu_gongji: 4666,
-            huixin_dengji: 33000,
-            huixin_xiaoguo: 22000,
-            pofang_dengji: 25000,
-            wuqi_shanghai: 2800,
+            jichu_shuxing: 21371,
+            jichu_gongji: 64329,
+            huixin_dengji: 61877,
+            huixin_xiaoguo: 2925,
+            pofang_dengji: 109160,
+            wuqi_shanghai: 0,
             zuizhong_gongji: 0,
         }
     }
 
     fn hostile() -> HostilepileConfig {
         HostilepileConfig {
-            waigong_fangyu: 21000,
-            neigong_fangyu: 21000,
-            yujin_dengji: 8500,
-            huajin_dengji: 35000,
-            jianshang_bili: 35,
-            target_hp: 200,
+            waigong_fangyu: 15176,
+            neigong_fangyu: 21388,
+            yujin_dengji: 5047,
+            huajin_dengji: 59402,
+            jianshang_bili: 0,
+            target_hp: 2_000_000,
+            max_hp: 0,
+            current_hp: 0,
         }
     }
 
@@ -445,19 +529,78 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 975,
-                b: 116260,
-                i: 44486,
-                n: 23524,
-                h: 47202,
-                q: 26458,
-                d_js: 1.163984,
-                d_jg: 0.593869,
-                d_hxd: 0.119766,
-                d_hxg: 0.038300,
-                d_pf: 0.105450,
+                y: 1299,
+                b: 277337,
+                i: 106216,
+                n: 75138,
+                h: 132992,
+                q: 91768,
+                d_js: 1.6923265,
+                d_jg: 0.8634319,
+                d_hxd: 0.29263085,
+                d_hxg: 0.28897458,
+                d_pf: 0.27388445,
                 d_wq: 0.000000,
             },
+        );
+    }
+
+    /// DOT 金标准（真实属性）：普通 6 跳每跳相等（18s/3s），疏曲 9 跳等比 1.12（18s/2s）。
+    /// 期望值由引擎回填（quick_calc_test.py 输出一致），待木桩实测校准。
+    #[test]
+    fn golden_shang_dot() {
+        let mut sk = skill("商（dot）", 58, 58, 0.20833333, 0, 0, 0);
+        sk.dot_flag = 1;
+        sk.dot_interval = 3.0;
+        sk.dot_duration = 18.0;
+        let p = player();
+        let h = hostile();
+        let x = xinfa();
+        let b = BuffConfig::default();
+        let c = CoefficientConfig::default();
+        let cfg = JpcgConfig::new_with_config(&p, &h, &sk, &x, &b, &c);
+        let d = cfg.q_cal();
+        assert_eq!(d.dot_jumps.len(), 6, "普通 dot 应为 6 跳");
+        assert!(
+            d.dot_jumps.iter().all(|j| *j == d.dot_jumps[0]),
+            "非递增条目每跳应相等: {:?}",
+            d.dot_jumps
+        );
+        assert_eq!(
+            d.q_damage,
+            d.dot_jumps.iter().sum::<u32>(),
+            "总期望 = Σ 每跳"
+        );
+    }
+
+    #[test]
+    fn golden_shang_dot_shuqu() {
+        let mut sk = skill("商（dot）疏曲", 58, 58, 0.20833333, 0, 0, 0);
+        sk.dot_flag = 1;
+        sk.dot_interval = 2.0;
+        sk.dot_duration = 18.0;
+        sk.dot_up = 0.12;
+        let p = player();
+        let h = hostile();
+        let x = xinfa();
+        let b = BuffConfig::default();
+        let c = CoefficientConfig::default();
+        let cfg = JpcgConfig::new_with_config(&p, &h, &sk, &x, &b, &c);
+        let d = cfg.q_cal();
+        assert_eq!(d.dot_jumps.len(), 9, "疏曲 dot 应为 9 跳");
+        let first = d.dot_jumps[0];
+        for (k, j) in d.dot_jumps.iter().enumerate() {
+            let expect = (first as f32 * 1.12_f32.powi(k as i32)) as u32;
+            assert!(
+                (*j as i64 - expect as i64).abs() <= 1,
+                "第{}跳 {j} != {expect} (±1)",
+                k + 1
+            );
+        }
+        assert_eq!(
+            d.q_damage,
+            d.dot_jumps.iter().sum::<u32>(),
+            "总期望 = Σ 每跳"
         );
     }
 
@@ -469,17 +612,17 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1001,
-                b: 127139,
-                i: 48655,
-                n: 27996,
-                h: 58319,
-                q: 33269,
-                d_js: 1.472244,
-                d_jg: 0.751145,
-                d_hxd: 0.153377,
-                d_hxg: 0.063971,
-                d_pf: 0.129154,
+                y: 1325,
+                b: 305051,
+                i: 116837,
+                n: 89359,
+                h: 165130,
+                q: 114928,
+                d_js: 2.1195543,
+                d_jg: 1.0814053,
+                d_hxd: 0.3832567,
+                d_hxg: 0.40344572,
+                d_pf: 0.33627373,
                 d_wq: 0.000000,
             },
         );
@@ -487,23 +630,23 @@ mod golden_tests {
 
     #[test]
     fn golden_zheng_default() {
-        let sk = skill("徵(豪情)", 190, 210, 1.7760416666666667, 20, 0, 0);
+        let sk = skill("徵(豪情)", 190, 210, 1.776_041_6, 20, 0, 0);
         assert_golden(
             "zheng_default",
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 975,
-                b: 79208,
-                i: 44486,
-                n: 19233,
-                h: 38592,
-                q: 21632,
-                d_js: 0.950703,
-                d_jg: 0.485052,
-                d_hxd: 0.097920,
-                d_hxg: 0.031313,
-                d_pf: 0.086212,
+                y: 1299,
+                b: 188844,
+                i: 106216,
+                n: 61395,
+                h: 108667,
+                q: 74983,
+                d_js: 1.3822356,
+                d_jg: 0.70522225,
+                d_hxd: 0.23910613,
+                d_hxg: 0.23612013,
+                d_pf: 0.22379173,
                 d_wq: 0.000000,
             },
         );
@@ -511,23 +654,23 @@ mod golden_tests {
 
     #[test]
     fn golden_zheng_buff() {
-        let sk = skill("徵(豪情)", 190, 210, 1.7760416666666667, 20, 0, 0);
+        let sk = skill("徵(豪情)", 190, 210, 1.776_041_6, 20, 0, 0);
         assert_golden(
             "zheng_buff",
             &sk,
             &buff_full(),
             Golden {
-                y: 1001,
-                b: 86613,
-                i: 48655,
-                n: 22887,
-                h: 47676,
-                q: 27198,
-                d_js: 1.202480,
-                d_jg: 0.613510,
-                d_hxd: 0.125385,
-                d_hxg: 0.052297,
-                d_pf: 0.105583,
+                y: 1325,
+                b: 207707,
+                i: 116837,
+                n: 73012,
+                h: 134922,
+                q: 93903,
+                d_js: 1.7311809,
+                d_jg: 0.88325554,
+                d_hxd: 0.31314647,
+                d_hxg: 0.3296409,
+                d_pf: 0.2747596,
                 d_wq: 0.000000,
             },
         );
@@ -541,18 +684,18 @@ mod golden_tests {
             &sk,
             &BuffConfig::default(),
             Golden {
-                y: 988,
-                b: 143548,
-                i: 44486,
-                n: 29433,
-                h: 59059,
-                q: 33104,
-                d_js: 1.426705,
-                d_jg: 0.727911,
-                d_hxd: 0.149851,
-                d_hxg: 0.047920,
-                d_pf: 0.131832,
-                d_wq: 0.230625,
+                y: 1315,
+                b: 335584,
+                i: 106216,
+                n: 92039,
+                h: 162907,
+                q: 112410,
+                d_js: 2.0722191,
+                d_jg: 1.0572547,
+                d_hxd: 0.35845688,
+                d_hxg: 0.35397443,
+                d_pf: 0.33556786,
+                d_wq: 0.3349718,
             },
         );
     }
@@ -565,18 +708,45 @@ mod golden_tests {
             &sk,
             &buff_full(),
             Golden {
-                y: 1014,
-                b: 156707,
-                i: 48655,
-                n: 34956,
-                h: 72817,
-                q: 41540,
-                d_js: 1.803926,
-                d_jg: 0.920370,
-                d_hxd: 0.191504,
-                d_hxg: 0.079875,
-                d_pf: 0.161185,
-                d_wq: 0.265093,
+                y: 1341,
+                b: 369106,
+                i: 116837,
+                n: 109429,
+                h: 202219,
+                q: 140741,
+                d_js: 2.594731,
+                d_jg: 1.3238423,
+                d_hxd: 0.46934035,
+                d_hxg: 0.4940595,
+                d_pf: 0.41199425,
+                d_wq: 0.3813047,
+            },
+        );
+    }
+
+    /// 无质金标准：伤害固定为期望 Q（含会心加权），与普通技能输出完全一致。
+    /// 相依（莫问无质技能）数据以 has_critical_strike = true 标记。
+    #[test]
+    fn golden_gong_wuzhi() {
+        let mut sk = skill("宫", 160, 200, 2.609375, 0, 0, 0);
+        sk.has_critical_strike = true;
+        assert_golden(
+            "gong_wuzhi",
+            &sk,
+            &BuffConfig::default(),
+            Golden {
+                y: 1299,
+                b: 277337,
+                i: 106216,
+                n: 75138,
+                h: 132992,
+                q: 91768,
+                d_js: 1.6923265,
+                d_jg: 0.8634319,
+                d_hxd: 0.29263085,
+                d_hxg: 0.28897458,
+                d_pf: 0.27388445,
+                d_wq: 0.000000,
             },
         );
     }

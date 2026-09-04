@@ -1,0 +1,1085 @@
+[xinfa]
+xinfa_name = "幽罗引"
+xinfa_nom = "根骨"
+atk_up = 1
+pofang_up = 1
+huixin_up = 0
+
+[version]
+level = 130
+season = 3
+modified = 20260814
+
+[[skill]]
+skill_name = "牵丝"           #名字
+skill_id = 10821            #技能ID（数据源池内 id）
+sub_id = 43087              #子ID
+base_damage1 = 20          #基本伤害
+base_damage2 = 30          #基本伤害2
+atk_xishu = 0        #伤害系数
+
+[[skill]]
+skill_name = "挑丝"           #名字
+skill_id = 41342            #技能ID（数据源池内 id）
+sub_id = 41465              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 2.5        #伤害系数
+
+[[skill]]
+skill_name = "千里急·壹"           #名字
+skill_id = 41439            #技能ID（数据源池内 id）
+sub_id = 41471              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 0.7291667        #伤害系数
+
+[[skill]]
+skill_name = "千里急·贰"           #名字
+skill_id = 41439            #技能ID（数据源池内 id）
+sub_id = 41472              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 1.09375        #伤害系数
+
+[[skill]]
+skill_name = "千里急·叁"           #名字
+skill_id = 41439            #技能ID（数据源池内 id）
+sub_id = 41473              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 1.4583334        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·0层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 1.0260416        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·1层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 170          #基本伤害
+base_damage2 = 175          #基本伤害2
+atk_xishu = 1.1822916        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·2层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 190          #基本伤害
+base_damage2 = 195          #基本伤害2
+atk_xishu = 1.3333334        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·3层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 210          #基本伤害
+base_damage2 = 215          #基本伤害2
+atk_xishu = 1.4895834        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·4层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 230          #基本伤害
+base_damage2 = 235          #基本伤害2
+atk_xishu = 1.6458334        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·5层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 250          #基本伤害
+base_damage2 = 260          #基本伤害2
+atk_xishu = 1.796875        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·6层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 270          #基本伤害
+base_damage2 = 280          #基本伤害2
+atk_xishu = 1.953125        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·7层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 290          #基本伤害
+base_damage2 = 300          #基本伤害2
+atk_xishu = 2.1041667        #伤害系数
+
+[[skill]]
+skill_name = "生地狱·8层缠绞(5帧-10帧-15帧)"           #名字
+skill_id = 41442            #技能ID（数据源池内 id）
+sub_id = 42021              #子ID
+base_damage1 = 310          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.2604167        #伤害系数
+
+[[skill]]
+skill_name = "四边静"           #名字
+skill_id = 41443            #技能ID（数据源池内 id）
+sub_id = 42084              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 2.0833333        #伤害系数
+
+[[skill]]
+skill_name = "绊线"           #名字
+skill_id = 41444            #技能ID（数据源池内 id）
+sub_id = 42265              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 3.75        #伤害系数
+
+[[skill]]
+skill_name = "笼绊·0根丝线"           #名字
+skill_id = 41446            #技能ID（数据源池内 id）
+sub_id = 42335              #子ID
+base_damage1 = 400          #基本伤害
+base_damage2 = 415          #基本伤害2
+atk_xishu = 1.3020834        #伤害系数
+
+[[skill]]
+skill_name = "笼绊·1根丝线"           #名字
+skill_id = 41446            #技能ID（数据源池内 id）
+sub_id = 42335              #子ID
+atk_xishu = 2.6041667        #伤害系数
+
+[[skill]]
+skill_name = "笼绊·2根丝线"           #名字
+skill_id = 41446            #技能ID（数据源池内 id）
+sub_id = 42335              #子ID
+atk_xishu = 3.90625        #伤害系数
+
+[[skill]]
+skill_name = "笼绊·3根丝线"           #名字
+skill_id = 41446            #技能ID（数据源池内 id）
+sub_id = 42335              #子ID
+atk_xishu = 5.2083335        #伤害系数
+
+[[skill]]
+skill_name = "笼绊·4根丝线"           #名字
+skill_id = 41446            #技能ID（数据源池内 id）
+sub_id = 42335              #子ID
+atk_xishu = 6.5104165        #伤害系数
+
+[[skill]]
+skill_name = "止足"           #名字
+skill_id = 41446            #技能ID（数据源池内 id）
+sub_id = 42936              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 2.5        #伤害系数
+
+[[skill]]
+skill_name = "障幕虚影"           #名字
+skill_id = 41451            #技能ID（数据源池内 id）
+sub_id = 42576              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 1.4583334        #伤害系数
+
+[[skill]]
+skill_name = "傀梦令"           #名字
+skill_id = 41452            #技能ID（数据源池内 id）
+sub_id = 42033              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 2.0833333        #伤害系数
+
+[[skill]]
+skill_name = "傀梦令·终"           #名字
+skill_id = 41452            #技能ID（数据源池内 id）
+sub_id = 42247              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 5.2083335        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增0次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.1979167        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增1次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.3125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增2次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.4270833        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增3次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.5416667        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增4次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.65625        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增5次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.7708333        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增6次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.8854167        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增7次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增8次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.1145833        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增9次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.2291667        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增0次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.546875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增1次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.6822917        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增2次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.8177083        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增3次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.953125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增4次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.09375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增5次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.2291666        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增6次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.3645834        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增7次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.5        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增8次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.640625        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增9次"           #名字
+skill_id = 41858            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.7760416        #伤害系数
+
+[[skill]]
+skill_name = "寄线"           #名字
+skill_id = 41986            #技能ID（数据源池内 id）
+sub_id = 42098              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 0.8854167        #伤害系数
+
+[[skill]]
+skill_name = "破"           #名字
+skill_id = 41986            #技能ID（数据源池内 id）
+sub_id = 42559              #子ID
+atk_xishu = 8.534        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增0次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.1979167        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增1次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.3125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增2次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.4270833        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增3次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.5416667        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增4次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.65625        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增5次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.7708333        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增6次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 2.8854167        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增7次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增8次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.1145833        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增9次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.2291667        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增10次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.34375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增11次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.4583333        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增12次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.5729167        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增13次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.6875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增14次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.8020833        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增15次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 3.9166667        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增16次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.03125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增17次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.1458335        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增18次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.2604165        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增19次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增20次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.4895835        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增21次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.6041665        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增22次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.71875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增23次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.8333335        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增24次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 4.9479165        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增25次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.0625        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增26次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.1770835        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增27次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.2916665        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增28次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.40625        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增29次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.5208335        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增30次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.6354165        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增31次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.75        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增32次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.8645835        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增33次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 5.9791665        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增34次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 6.09375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增35次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 6.2083335        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增36次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 6.3229165        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增37次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 6.4375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增38次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 6.5520835        #伤害系数
+
+[[skill]]
+skill_name = "勾线·递增39次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41486              #子ID
+base_damage1 = 430          #基本伤害
+base_damage2 = 450          #基本伤害2
+atk_xishu = 6.6666665        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增0次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.546875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增1次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.6822917        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增2次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.8177083        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增3次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 0.953125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增4次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.09375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增5次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.2291666        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增6次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.3645834        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增7次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.5        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增8次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.640625        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增9次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.7760416        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增10次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 1.9114584        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增11次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.046875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增12次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.1875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增13次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.3229167        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增14次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.4583333        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增15次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.59375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增16次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.734375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增17次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 2.8697917        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增18次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.0052083        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增19次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.140625        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增20次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.28125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增21次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.4166667        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增22次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.5520833        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增23次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.6875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增24次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.828125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增25次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 3.9635417        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增26次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 4.0989585        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增27次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 4.234375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增28次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 4.375        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增29次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 4.5104165        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增30次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 4.6458335        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增31次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 4.78125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增32次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 4.921875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增33次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 5.0572915        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增34次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 5.1927085        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增35次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 5.328125        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增36次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 5.46875        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增37次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 5.6041665        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增38次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 5.7395835        #伤害系数
+
+[[skill]]
+skill_name = "勾线·伶影·递增39次"           #名字
+skill_id = 42117            #技能ID（数据源池内 id）
+sub_id = 41994              #子ID
+base_damage1 = 300          #基本伤害
+base_damage2 = 320          #基本伤害2
+atk_xishu = 5.875        #伤害系数
+
+[[skill]]
+skill_name = "绎心"           #名字
+skill_id = 42120            #技能ID（数据源池内 id）
+sub_id = 42260              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 5.25        #伤害系数
+
+[[skill]]
+skill_name = "金缕"           #名字
+skill_id = 42130            #技能ID（数据源池内 id）
+sub_id = 42381              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 3.125        #伤害系数
+
+[[skill]]
+skill_name = "千里急·肆"           #名字
+skill_id = 42137            #技能ID（数据源池内 id）
+sub_id = 42384              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 2.1875        #伤害系数
+
+[[skill]]
+skill_name = "谐调·20点"           #名字
+skill_id = 42146            #技能ID（数据源池内 id）
+sub_id = 42976              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 2.6041667        #伤害系数
+
+[[skill]]
+skill_name = "谐调·30点"           #名字
+skill_id = 42146            #技能ID（数据源池内 id）
+sub_id = 42976              #子ID
+base_damage1 = 170          #基本伤害
+base_damage2 = 175          #基本伤害2
+atk_xishu = 5.2083335        #伤害系数
+
+[[skill]]
+skill_name = "谐调·40点"           #名字
+skill_id = 42146            #技能ID（数据源池内 id）
+sub_id = 42976              #子ID
+base_damage1 = 190          #基本伤害
+base_damage2 = 195          #基本伤害2
+atk_xishu = 10.416667        #伤害系数
+
+[[skill]]
+skill_name = "应天长"           #名字
+skill_id = 42415            #技能ID（数据源池内 id）
+sub_id = 42417              #子ID
+base_damage1 = 150          #基本伤害
+base_damage2 = 155          #基本伤害2
+atk_xishu = 7.2916665        #伤害系数
+
+[[skill]]
+skill_name = "千里急（dot）"           #名字
+skill_id = 42415            #技能ID（数据源池内 id）
+sub_id = 31945              #子ID
+base_damage1 = 58          #基本伤害
+base_damage2 = 58          #基本伤害2
+atk_xishu = 1.25        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 1          #每跳间隔（秒，16帧=1秒）
+dot_duration = 5          #持续时长（秒，总跳数×间隔）
+

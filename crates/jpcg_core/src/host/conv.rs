@@ -5,10 +5,9 @@
 // ============================================================================
 
 use jpcg_api::{
-    ComboPresetDTO, ComboResultDTO, ComboStepDTO, ComboStepResultDTO, CritVsPofangDTO,
-    DerivativeEntryDTO, DerivativesOutputDTO, OptimizeRecommendationDTO, SkillDerivativeDTO,
-    SkillEditorDataDTO, SkillEditorItemDTO, SkillPoolItemDTO, SkillResultDTO, TopAttrDTO,
-    VersionInfoDTO, XinfaSummaryDTO,
+    ComboPresetDTO, ComboStepDTO, CritVsPofangDTO, DerivativeEntryDTO, DerivativesOutputDTO,
+    OptimizeRecommendationDTO, SkillDerivativeDTO, SkillEditorDataDTO, SkillEditorItemDTO,
+    SkillPoolItemDTO, SkillResultDTO, TopAttrDTO, VersionInfoDTO, XinfaSummaryDTO,
 };
 
 use crate::engine;
@@ -114,8 +113,10 @@ impl From<SkillEditorItemDTO> for Skilltype {
             wushihuajin: dto.wushihuajin,
             wushijianshang: dto.wushijianshang,
             zhenshishanghai: dto.zhenshishanghai,
+            lost_hp_zhenshishanghai: dto.lost_hp_zhenshishanghai,
             dot_flag: dto.dot_flag,
-            dot_num: dto.dot_num,
+            dot_interval: dto.dot_interval,
+            dot_duration: dto.dot_duration,
             dot_up: dto.dot_up,
         }
     }
@@ -147,8 +148,10 @@ impl From<Skilltype> for SkillEditorItemDTO {
             wushihuajin: core.wushihuajin,
             wushijianshang: core.wushijianshang,
             zhenshishanghai: core.zhenshishanghai,
+            lost_hp_zhenshishanghai: core.lost_hp_zhenshishanghai,
             dot_flag: core.dot_flag,
-            dot_num: core.dot_num,
+            dot_interval: core.dot_interval,
+            dot_duration: core.dot_duration,
             dot_up: core.dot_up,
         }
     }
@@ -209,6 +212,10 @@ impl From<engine::CalculateResult> for SkillResultDTO {
             n: core.n,
             h: core.h,
             q: core.q,
+            dot_jumps: core.dot_jumps,
+            has_critical_strike: core.has_critical_strike,
+            zhenshishanghai: core.zhenshishanghai,
+            lost_hp_zhenshishanghai: core.lost_hp_zhenshishanghai,
         }
     }
 }
@@ -217,7 +224,9 @@ impl From<ComboStepDTO> for ComboStep {
     fn from(dto: ComboStepDTO) -> Self {
         ComboStep {
             skill_id: dto.skill.skill_id,
-            skill_name: dto.skill.skill_name,
+            sub_id: dto.skill.sub_id,
+            skill_name: dto.skill.skill_name.clone(),
+            skill_snapshot: Some(super::calc::skill_dto_to_skilltype(&dto.skill)),
             overrides: dto.overrides.map(|o| StepOverride {
                 base_damage_override: o.base_damage_override,
                 atk_xishu_override: o.atk_xishu_override,
@@ -232,6 +241,32 @@ impl From<ComboStepDTO> for ComboStep {
     }
 }
 
+/// Skilltype → 技能池条目（预设加载时用快照还原完整属性）
+fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
+    SkillPoolItemDTO {
+        skill_name: s.skill_name.clone(),
+        skill_id: s.skill_id,
+        sub_id: s.sub_id,
+        base_damage1: s.base_damage1,
+        base_damage2: s.base_damage2,
+        atk_xishu: s.atk_xishu,
+        watk_xishu: s.watk_xishu,
+        hit_up: s.hit_up,
+        huixin_up: s.huixin_up,
+        huixiao_up: s.huixiao_up,
+        wushifangyu: s.wushifangyu,
+        wushihuajin: s.wushihuajin,
+        dot_flag: s.dot_flag,
+        dot_interval: s.dot_interval,
+        dot_duration: s.dot_duration,
+        dot_up: s.dot_up,
+        wushijianshang: s.wushijianshang,
+        zhenshishanghai: s.zhenshishanghai,
+        has_critical_strike: s.has_critical_strike,
+        lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
+    }
+}
+
 impl From<ComboPreset> for ComboPresetDTO {
     fn from(core: ComboPreset) -> Self {
         ComboPresetDTO {
@@ -240,10 +275,15 @@ impl From<ComboPreset> for ComboPresetDTO {
                 .steps
                 .into_iter()
                 .map(|s| {
-                    let mut skill = SkillPoolItemDTO {
-                        skill_name: s.skill_name,
-                        skill_id: s.skill_id,
-                        ..Default::default()
+                    let mut skill = match &s.skill_snapshot {
+                        Some(snap) => skilltype_to_pool_item(snap),
+                        // 旧存档：仅有名称与 ID，属性缺失（保留原行为）
+                        None => SkillPoolItemDTO {
+                            skill_name: s.skill_name,
+                            skill_id: s.skill_id,
+                            sub_id: s.sub_id,
+                            ..Default::default()
+                        },
                     };
                     if let Some(ref o) = s.overrides {
                         if let Some(v) = o.base_damage_override {
@@ -269,31 +309,6 @@ impl From<ComboPreset> for ComboPresetDTO {
                     }
                 })
                 .collect(),
-        }
-    }
-}
-
-impl From<engine::kill_prob::ComboStepResult> for ComboStepResultDTO {
-    fn from(s: engine::kill_prob::ComboStepResult) -> Self {
-        ComboStepResultDTO {
-            skill_name: s.skill_name,
-            g_damage: s.g_damage,
-            h_damage: s.h_damage,
-            q_damage: s.q_damage,
-            crit_rate: s.crit_rate,
-            cumulative_mean_wan: s.cumulative_mean / 10000.0,
-            kill_prob: s.kill_prob,
-        }
-    }
-}
-
-impl From<engine::kill_prob::ComboResult> for ComboResultDTO {
-    fn from(r: engine::kill_prob::ComboResult) -> Self {
-        ComboResultDTO {
-            total_expected_damage_wan: r.total_expected_damage_wan,
-            final_kill_prob: r.final_kill_prob,
-            kill_prob_curve: r.kill_prob_curve,
-            steps: r.steps.into_iter().map(ComboStepResultDTO::from).collect(),
         }
     }
 }

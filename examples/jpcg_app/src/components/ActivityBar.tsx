@@ -1,5 +1,14 @@
 import { useState } from "react";
 import clsx from "../utils/clsx";
+import {
+  IconCalc,
+  IconGlobe,
+  IconCombo,
+  IconTrend,
+  IconPencil,
+  IconChevronLeft,
+  IconChevronRight,
+} from "./icons";
 import styles from "./ActivityBar.module.css";
 
 export type Page = "calc" | "forum" | "combo" | "editor" | "optimize";
@@ -10,11 +19,11 @@ interface Props {
 }
 
 const ITEMS = [
-  { page: "calc" as const, icon: "📊", label: "计算" },
-  { page: "forum" as const, icon: "🌐", label: "论坛" },
-  { page: "combo" as const, icon: "🔗", label: "排轴器" },
-  { page: "optimize" as const, icon: "📈", label: "加点优化" },
-  { page: "editor" as const, icon: "✏️", label: "技能编辑" },
+  { page: "calc" as const, Icon: IconCalc, label: "计算" },
+  { page: "forum" as const, Icon: IconGlobe, label: "论坛" },
+  { page: "combo" as const, Icon: IconCombo, label: "排轴器" },
+  { page: "optimize" as const, Icon: IconTrend, label: "加点优化" },
+  { page: "editor" as const, Icon: IconPencil, label: "技能编辑" },
 ];
 
 export default function ActivityBar({ currentPage, onNavigate }: Props) {
@@ -22,14 +31,16 @@ export default function ActivityBar({ currentPage, onNavigate }: Props) {
 
   return (
     <div className={clsx(styles.bar, expanded && styles.expanded)}>
-      {ITEMS.map(({ page, icon, label }) => (
+      {ITEMS.map(({ page, Icon, label }) => (
         <button
           key={page}
           className={clsx(styles.btn, currentPage === page && styles.active)}
           onClick={() => onNavigate(page)}
           title={label}
         >
-          <span className={styles.icon}>{icon}</span>
+          <span className={styles.icon}>
+            <Icon size={18} />
+          </span>
           {expanded && <span className={styles.label}>{label}</span>}
         </button>
       ))}
@@ -38,7 +49,7 @@ export default function ActivityBar({ currentPage, onNavigate }: Props) {
         onClick={() => setExpanded((v) => !v)}
         title={expanded ? "收起" : "展开"}
       >
-        {expanded ? "◀" : "▶"}
+        {expanded ? <IconChevronLeft size={14} /> : <IconChevronRight size={14} />}
       </button>
     </div>
   );

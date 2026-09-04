@@ -150,6 +150,120 @@ pub fn call_no_args<R: DeserializeOwned>(method: &str) -> Result<R, String> {
     call_json(method, "{}")
 }
 
+#[cfg(target_os = "windows")]
+const COMBO_LIB_NAME: &str = "jpcg_combo.dll";
+#[cfg(target_os = "macos")]
+const COMBO_LIB_NAME: &str = "libjpcg_combo.dylib";
+#[cfg(all(unix, not(target_os = "macos")))]
+const COMBO_LIB_NAME: &str = "libjpcg_combo.so";
+
+/// 连招引擎库句柄（dynamic 模式：单独 dlopen libjpcg_combo）
+struct ComboLib {
+    _lib: Library,
+    handle: *mut c_void,
+    jpcg_combo_call: JpcgCallFn,
+    jpcg_combo_handle_free: JpcgHandleFreeFn,
+    jpcg_combo_free_string: JpcgFreeStringFn,
+    jpcg_combo_last_error: JpcgLastErrorFn,
+    jpcg_combo_version: JpcgVersionFn,
+}
+
+unsafe impl Send for ComboLib {}
+unsafe impl Sync for ComboLib {}
+
+impl Drop for ComboLib {
+    fn drop(&mut self) {
+        if !self.handle.is_null() {
+            unsafe { (self.jpcg_combo_handle_free)(self.handle) };
+            self.handle = std::ptr::null_mut();
+        }
+    }
+}
+
+static COMBO: OnceLock<Result<ComboLib, String>> = OnceLock::new();
+
+fn combo() -> Result<&'static ComboLib, String> {
+    COMBO
+        .get_or_init(|| {
+            let path = resolve_lib_path(COMBO_LIB_NAME)?;
+            let lib = unsafe { Library::new(&path) }
+                .map_err(|e| format!("加载 {} 失败: {}", path.display(), e))?;
+            unsafe {
+                let jpcg_combo_call: Symbol<'_, JpcgCallFn> =
+                    lib.get(b"jpcg_combo_call").map_err(|e| e.to_string())?;
+                let free: Symbol<'_, JpcgFreeStringFn> = lib
+                    .get(b"jpcg_combo_free_string")
+                    .map_err(|e| e.to_string())?;
+                let last_err: Symbol<'_, JpcgLastErrorFn> = lib
+                    .get(b"jpcg_combo_last_error")
+                    .map_err(|e| e.to_string())?;
+                let create: Symbol<'_, JpcgHandleCreateFn> = lib
+                    .get(b"jpcg_combo_handle_create")
+                    .map_err(|e| e.to_string())?;
+                let free_handle: Symbol<'_, JpcgHandleFreeFn> = lib
+                    .get(b"jpcg_combo_handle_free")
+                    .map_err(|e| e.to_string())?;
+                let version: Symbol<'_, JpcgVersionFn> =
+                    lib.get(b"jpcg_combo_version").map_err(|e| e.to_string())?;
+                let jpcg_combo_call = *jpcg_combo_call;
+                let jpcg_combo_free_string = *free;
+                let jpcg_combo_last_error = *last_err;
+                let jpcg_combo_handle_create = *create;
+                let jpcg_combo_handle_free = *free_handle;
+                let jpcg_combo_version = *version;
+                let session_c = CString::new("{}").map_err(|e| e.to_string())?;
+                let handle = jpcg_combo_handle_create(session_c.as_ptr());
+                Ok(ComboLib {
+                    _lib: lib,
+                    handle,
+                    jpcg_combo_call,
+                    jpcg_combo_handle_free,
+                    jpcg_combo_free_string,
+                    jpcg_combo_last_error,
+                    jpcg_combo_version,
+                })
+            }
+        })
+        .as_ref()
+        .map_err(|e| e.clone())
+}
+
+/// 调用连招引擎业务方法（请求对象序列化 + 响应反序列化）
+pub fn call_combo<T: Serialize, R: DeserializeOwned>(method: &str, req: &T) -> Result<R, String> {
+    let req_json = serde_json::to_string(req).map_err(|e| e.to_string())?;
+    call_combo_json(method, &req_json)
+}
+
+/// 调用连招引擎业务方法（无请求体）
+pub fn call_combo_no_args<R: DeserializeOwned>(method: &str) -> Result<R, String> {
+    call_combo_json(method, "{}")
+}
+
+/// 调用连招引擎业务方法（原始 JSON 请求体）
+pub fn call_combo_json<R: DeserializeOwned>(method: &str, req_json: &str) -> Result<R, String> {
+    let combo = combo()?;
+    let method_c = CString::new(method).map_err(|e| e.to_string())?;
+    let req_c = CString::new(req_json).map_err(|e| e.to_string())?;
+    let resp = unsafe { (combo.jpcg_combo_call)(combo.handle, method_c.as_ptr(), req_c.as_ptr()) };
+    if resp.is_null() {
+        let err_c = unsafe { (combo.jpcg_combo_last_error)() };
+        let err = if err_c.is_null() {
+            "combo 返回空错误".to_string()
+        } else {
+            unsafe { CStr::from_ptr(err_c) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        unsafe { (combo.jpcg_combo_free_string)(err_c) };
+        return Err(err);
+    }
+    let s = unsafe { CStr::from_ptr(resp) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { (combo.jpcg_combo_free_string)(resp) };
+    serde_json::from_str(&s).map_err(|e| format!("响应解析失败: {}", e))
+}
+
 /// 调用 core 业务方法（原始 JSON 请求体）
 pub fn call_json<R: DeserializeOwned>(method: &str, req_json: &str) -> Result<R, String> {
     let core = core()?;
@@ -202,6 +316,18 @@ pub fn lib_version(lib_name: &str, getter: &[u8], freer: &[u8]) -> Option<String
         free(p);
         Some(s)
     }
+}
+
+/// 读取连招引擎 dll 版本（dynamic 模式，经 combo 句柄）
+pub fn combo_version() -> Option<String> {
+    let combo = combo().ok()?;
+    let p = unsafe { (combo.jpcg_combo_version)() };
+    if p.is_null() {
+        return None;
+    }
+    let s = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
+    unsafe { (combo.jpcg_combo_free_string)(p) };
+    Some(s)
 }
 
 /// 各模块版本（动态模式）

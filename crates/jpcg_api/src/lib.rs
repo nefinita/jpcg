@@ -37,6 +37,12 @@ pub struct HostileConfigDTO {
     pub huajin_dengji: u32,
     pub jianshang_bili: u32,
     pub target_hp: u32,
+    /// 目标最大血量（追加真伤/击杀率用；0=未提供，回退 target_hp 满血模型）
+    #[serde(default)]
+    pub max_hp: u32,
+    /// 目标当前血量（开局剩余；0=未提供，回退 target_hp 满血模型）
+    #[serde(default)]
+    pub current_hp: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -105,6 +111,18 @@ pub struct SkillResultDTO {
     pub n: u32,
     pub h: u32,
     pub q: u32,
+    /// Dot 每跳期望伤害（非 Dot 技能为空；q 为各跳之和）
+    #[serde(default)]
+    pub dot_jumps: Vec<u32>,
+    /// 无质（伤害固定 = 期望 Q，含会心加权）
+    #[serde(default)]
+    pub has_critical_strike: bool,
+    /// 真实伤害（数据源 custom_damage_base 标签，无视防御减免）
+    #[serde(default)]
+    pub zhenshishanghai: u32,
+    /// 追加真伤系数（已损失生命值 × 系数，连招中动态结算，单技能面板满血为 0）
+    #[serde(default)]
+    pub lost_hp_zhenshishanghai: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -112,6 +130,9 @@ pub struct SkillResultDTO {
 pub struct SkillPoolItemDTO {
     pub skill_name: String,
     pub skill_id: u32,
+    /// 子技能 ID（同 skill_id 不同形态，如引窍·0点任脉 ~ 引窍·100点任脉）
+    #[serde(default)]
+    pub sub_id: u32,
     pub base_damage1: u32,
     pub base_damage2: u32,
     pub atk_xishu: f32,
@@ -122,6 +143,27 @@ pub struct SkillPoolItemDTO {
     pub wushifangyu: u32,
     pub wushihuajin: u32,
     pub dot_flag: u8,
+    /// Dot 每跳间隔（秒）
+    #[serde(default)]
+    pub dot_interval: f32,
+    /// Dot 持续时长（秒）
+    #[serde(default)]
+    pub dot_duration: f32,
+    /// Dot 递增系数（每跳递增比例，等比）
+    #[serde(default)]
+    pub dot_up: f32,
+    /// 无视减伤
+    #[serde(default)]
+    pub wushijianshang: u32,
+    /// 真实伤害（无视所有防御减免）
+    #[serde(default)]
+    pub zhenshishanghai: u32,
+    /// 无质（伤害固定 = 期望 Q，含会心加权）
+    #[serde(default)]
+    pub has_critical_strike: bool,
+    /// 追加真伤系数（已损失生命值 × 系数，0=无；连招中动态结算）
+    #[serde(default)]
+    pub lost_hp_zhenshishanghai: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -160,6 +202,18 @@ pub struct ComboStepResultDTO {
     pub crit_rate: f32,
     pub cumulative_mean_wan: f64,
     pub kill_prob: f64,
+    /// Dot 每跳期望伤害（非 Dot 技能为空；q_damage 为各跳之和）
+    #[serde(default)]
+    pub dot_jumps: Vec<u32>,
+    /// 无质（伤害固定 = 期望 Q，含会心加权）
+    #[serde(default)]
+    pub has_critical_strike: bool,
+    /// 真实伤害（数据源 custom_damage_base 标签，无视防御减免）
+    #[serde(default)]
+    pub zhenshishanghai: u32,
+    /// 本步追加真伤（已损失生命值 × 系数，无视防御，确定性只加期望）
+    #[serde(default)]
+    pub lost_hp_zhenshi_damage: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,8 +295,10 @@ pub struct SkillEditorItemDTO {
     pub wushihuajin: u32,
     pub wushijianshang: u32,
     pub zhenshishanghai: u32,
+    pub lost_hp_zhenshishanghai: f32,
     pub dot_flag: u8,
-    pub dot_num: u8,
+    pub dot_interval: f32,
+    pub dot_duration: f32,
     pub dot_up: f32,
 }
 

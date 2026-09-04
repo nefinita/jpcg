@@ -30,12 +30,12 @@ pub fn data_dir() -> Option<PathBuf> {
     }
 
     // macOS .app bundle: exe 在 Contents/MacOS/，资源在 Contents/Resources/
-    if exe_dir.ends_with("MacOS") {
-        if let Some(contents) = exe_dir.parent() {
-            let bundle = contents.join("Resources").join("data").join("shuxing");
-            if bundle.is_dir() {
-                return Some(bundle);
-            }
+    if exe_dir.ends_with("MacOS")
+        && let Some(contents) = exe_dir.parent()
+    {
+        let bundle = contents.join("Resources").join("data").join("shuxing");
+        if bundle.is_dir() {
+            return Some(bundle);
         }
     }
 

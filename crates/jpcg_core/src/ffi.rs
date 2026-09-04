@@ -70,13 +70,12 @@ pub(crate) struct FfiHostEvents;
 impl crate::host::update::HostEvents for FfiHostEvents {
     fn on_progress(&self, event: &jpcg_update::UpdateProgressEvent) {
         let table = host_events_table();
-        if let Some(cb) = table.on_progress {
-            if let Ok(json) = serde_json::to_string(event) {
-                if let Ok(c) = CString::new(json) {
-                    unsafe {
-                        cb(c.as_ptr());
-                    }
-                }
+        if let Some(cb) = table.on_progress
+            && let Ok(json) = serde_json::to_string(event)
+            && let Ok(c) = CString::new(json)
+        {
+            unsafe {
+                cb(c.as_ptr());
             }
         }
     }
@@ -156,77 +155,6 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             let out = crate::host::calc::compute_derivatives(req)?;
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
-        "calculate_combo" => {
-            #[derive(serde::Deserialize)]
-            struct ComboRequest {
-                steps: Vec<jpcg_api::ComboStepDTO>,
-                player: jpcg_api::PlayerConfigDTO,
-                hostile: jpcg_api::HostileConfigDTO,
-                xinfa: jpcg_api::XinfaConfigDTO,
-                buff: jpcg_api::BuffConfigDTO,
-                coefficient: jpcg_api::CoefficientConfigDTO,
-            }
-            let req: ComboRequest =
-                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::host::combo::calculate_combo(
-                req.steps,
-                req.player,
-                req.hostile,
-                req.xinfa,
-                req.buff,
-                req.coefficient,
-            )?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
-        }
-        "save_combo_preset" => {
-            #[derive(serde::Deserialize)]
-            struct ComboPresetReq {
-                name: String,
-                steps: Vec<jpcg_api::ComboStepDTO>,
-            }
-            let req: ComboPresetReq =
-                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::host::combo::save_combo_preset(req.name, req.steps)?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
-        }
-        "list_combo_presets" => {
-            let out = crate::host::combo::list_combo_presets();
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
-        }
-        "load_combo_preset" => {
-            #[derive(serde::Deserialize)]
-            struct ComboPresetReq {
-                name: String,
-            }
-            let req: ComboPresetReq =
-                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::host::combo::load_combo_preset(req.name)?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
-        }
-        "delete_combo_preset" => {
-            #[derive(serde::Deserialize)]
-            struct ComboPresetReq {
-                name: String,
-            }
-            let req: ComboPresetReq =
-                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::host::combo::delete_combo_preset(req.name)?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
-        }
-        "export_config" => {
-            let out = crate::host::combo::export_config()?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
-        }
-        "import_config" => {
-            #[derive(serde::Deserialize)]
-            struct ImportConfigReq {
-                toml_str: String,
-            }
-            let req: ImportConfigReq =
-                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::host::combo::import_config(req.toml_str)?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
-        }
         "save_config" => {
             #[derive(serde::Deserialize)]
             struct SaveConfigReq {
@@ -266,8 +194,8 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             }
             let req: SkillDataRequest =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::host::skill::save_skill_data(req.profession, req.data)?;
-            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
+            crate::host::skill::save_skill_data(req.profession, req.data)?;
+            serde_json::to_string(&()).map_err(|e| format!("响应序列化失败: {}", e))
         }
         "load_skill_pool" => {
             #[derive(serde::Deserialize)]
@@ -422,6 +350,9 @@ pub unsafe extern "C" fn jpcg_free_string(s: *mut c_char) {
 }
 
 /// 读取上次错误信息（jpcg_call 返回 null 后调用），返回字符串需 jpcg_free_string 释放
+///
+/// # Safety
+/// - 返回指针需由 jpcg_free_string 释放（可为 null）
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_last_error() -> *mut c_char {
     let s = match LAST_ERROR.lock() {
@@ -442,6 +373,9 @@ pub extern "C" fn jpcg_abi_version() -> u32 {
 
 /// 返回本 core 模块库版本号（如 "2.1.0"），返回字符串需 jpcg_free_string 释放
 /// 供宿主 UI 展示各 dll 版本。
+///
+/// # Safety
+/// - 返回指针需由 jpcg_free_string 释放
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jpcg_core_version() -> *mut c_char {
     cstring_out(crate::CORE_VERSION)
@@ -518,7 +452,7 @@ mod ffi_tests {
         // 不落盘验证 JSON 契约，仅确认方法可达（会写 saved_config.toml 到 CWD）
         let req = r#"{
             "player": {"jcsx":"gengu","jichu_shuxing":18888,"jichu_gongji":4666,"huixin_dengji":33000,"huixin_xiaoguo":22000,"pofang_dengji":25000,"wuqi_shanghai":2800},
-            "hostile": {"waigong_fangyu":21000,"neigong_fangyu":21000,"yujin_dengji":8500,"huajin_dengji":35000,"jianshang_bili":35,"target_hp":200},
+            "hostile": {"waigong_fangyu":21000,"neigong_fangyu":21000,"yujin_dengji":8500,"huajin_dengji":35000,"jianshang_bili":35,"target_hp":2000000},
             "xinfa": {"profession":"mowen","xinfa_name":"莫问","xinfa_nom":"根骨","atk_up":1.96,"pofang_up":2.0,"huixin_up":0.0}
         }"#;
         let out = unsafe { call_owned("save_config", req) }.expect("调用失败");

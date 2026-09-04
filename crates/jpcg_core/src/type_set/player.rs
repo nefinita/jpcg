@@ -47,20 +47,6 @@ impl PlayerConfig {
         }
     }
 
-    /// 默认配置（模拟基础装备水平）
-    pub fn default() -> Self {
-        Self {
-            jcsx: "gengu".to_string(),
-            jichu_shuxing: 100,
-            jichu_gongji: 200,
-            huixin_dengji: 1,
-            huixin_xiaoguo: 10,
-            pofang_dengji: 1,
-            wuqi_shanghai: 50,
-            zuizhong_gongji: 0,
-        }
-    }
-
     /// 计算实际攻击力
     /// 公式: (基础攻击+基础属性) × (1 + 心法攻击加成)
     /// - `shuxing_atk_up`: 基础属性提供的攻击加成
@@ -131,9 +117,9 @@ pub struct AtkConfig {
 }
 
 impl AtkConfig {
-    /// 总攻击力（基础 + 额外）
+    /// 总攻击力（基础攻击 + 属性转化；不含武器伤害——武器伤害单独经 watk_xishu 参与技能伤害，避免双算）
     pub fn total(&self) -> u32 {
-        self.base + self.extra
+        self.base
     }
 
     /// 仅获取基础攻击部分

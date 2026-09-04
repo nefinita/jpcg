@@ -212,12 +212,11 @@ async fn categories_handler(State(state): State<Arc<AppState>>) -> Json<Vec<Stri
     let mut cats = Vec::new();
     if let Ok(entries) = fs::read_dir(&state.data_dir) {
         for entry in entries.flatten() {
-            if entry.path().is_dir() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if !name.starts_with('.') {
-                        cats.push(name.to_string());
-                    }
-                }
+            if entry.path().is_dir()
+                && let Some(name) = entry.file_name().to_str()
+                && !name.starts_with('.')
+            {
+                cats.push(name.to_string());
             }
         }
     }
@@ -302,7 +301,7 @@ async fn upload_handler(
 
         let name = field.name().unwrap_or("").to_string();
         if name == "category" {
-            if let Some(val) = field.text().await.ok() {
+            if let Ok(val) = field.text().await {
                 let val = val.trim().to_string();
                 if !val.is_empty() {
                     upload_category = val;
@@ -422,7 +421,7 @@ fn unix_ts_to_ymd(secs: u64) -> (u64, u64, u64, u64, u64, u64) {
     let mut y = 1970u64;
     let mut d = days;
     loop {
-        let leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+        let leap = (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400);
         let yd = if leap { 366 } else { 365 };
         if d < yd {
             break;
@@ -430,7 +429,7 @@ fn unix_ts_to_ymd(secs: u64) -> (u64, u64, u64, u64, u64, u64) {
         d -= yd;
         y += 1;
     }
-    let leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    let leap = (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400);
     let mdays: [u64; 12] = if leap {
         [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     } else {

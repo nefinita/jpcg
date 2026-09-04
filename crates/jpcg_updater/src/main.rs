@@ -51,9 +51,8 @@ fn main() {
     eprintln!("替换程序: {} -> {}", new.display(), old.display());
     std::fs::rename(new, old)
         .or_else(|_| {
-            std::fs::copy(new, old).and_then(|_| {
+            std::fs::copy(new, old).map(|_| {
                 std::fs::remove_file(new).ok();
-                Ok(())
             })
         })
         .expect("替换程序失败");

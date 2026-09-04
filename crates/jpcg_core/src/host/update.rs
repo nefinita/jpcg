@@ -135,10 +135,10 @@ fn locate_updater(events: &dyn HostEvents) -> Result<std::path::PathBuf, String>
         "jpcg_updater"
     };
 
-    if let Some(path) = events.updater_path() {
-        if path.exists() {
-            return Ok(path);
-        }
+    if let Some(path) = events.updater_path()
+        && path.exists()
+    {
+        return Ok(path);
     }
 
     let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;

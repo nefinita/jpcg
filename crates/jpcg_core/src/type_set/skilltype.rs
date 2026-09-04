@@ -18,6 +18,8 @@ fn is_zero_f32(n: &f32) -> bool {
 fn is_false(b: &bool) -> bool {
     !b
 }
+// serde skip_serializing_if 要求 `&String` 签名，保持原样
+#[allow(clippy::ptr_arg)]
 fn is_string_empty(s: &String) -> bool {
     s.is_empty()
 }
@@ -25,7 +27,7 @@ fn is_string_empty(s: &String) -> bool {
 /// 技能属性结构
 /// 每个技能实例包含完整的伤害计算所需系数。
 /// TOML 中以 [[skill]] 数组形式存在。
-#[derive(Default, Deserialize, Serialize, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct Skilltype {
     pub skill_name: String, // 技能名称
@@ -46,7 +48,7 @@ pub struct Skilltype {
     #[serde(skip_serializing_if = "is_false")]
     pub guaranteed_hit: bool, // 必然命中（无视闪避/偏离）
     #[serde(skip_serializing_if = "is_false")]
-    pub has_critical_strike: bool, // 无视会心限制（无质/必会心标签）
+    pub has_critical_strike: bool, // 无质（伤害固定 = 期望 Q，含会心加权）
     #[serde(skip_serializing_if = "is_zero_u8")]
     pub effect_type: u8, // 效果类型（0=有害, 1=有益）
     #[serde(skip_serializing_if = "is_string_empty")]
@@ -72,17 +74,30 @@ pub struct Skilltype {
     pub wushijianshang: u32, // 无视减伤
     #[serde(skip_serializing_if = "is_zero_u32")]
     pub zhenshishanghai: u32, // 真实伤害（无视所有防御减免）
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub lost_hp_zhenshishanghai: f32, // 追加真伤：目标已损失生命值 × 系数（如 0.06 = 6%/层），无视防御
     #[serde(skip_serializing_if = "is_zero_u8")]
     pub dot_flag: u8, // Dot 标签（0=非Dot, 1=Dot）
-    #[serde(skip_serializing_if = "is_zero_u8")]
-    pub dot_num: u8, // Dot 总跳数
     #[serde(skip_serializing_if = "is_zero_f32")]
-    pub dot_up: f32, // Dot 递增系数（每跳递增比例）
+    pub dot_interval: f32, // Dot 每跳间隔（秒）
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub dot_duration: f32, // Dot 持续时长（秒）
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub dot_up: f32, // Dot 递增系数（每跳递增比例，等比）
 }
 
 impl Skilltype {
     /// 计算技能基础攻击（base_damage1 和 base_damage2 的平均值）
     pub fn base_atk(&self) -> u32 {
         (self.base_damage1 + self.base_damage2) / 2
+    }
+
+    /// Dot 总跳数 = 持续时长 / 每跳间隔（均为 0 或数据非法时返回 0，即非 Dot）
+    pub fn dot_jump_count(&self) -> u32 {
+        if self.dot_interval > 0.0 && self.dot_duration >= self.dot_interval {
+            (self.dot_duration / self.dot_interval).round() as u32
+        } else {
+            0
+        }
     }
 }

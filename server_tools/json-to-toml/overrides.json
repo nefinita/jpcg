@@ -1,0 +1,263 @@
+{
+  "pools": {
+    "10002": {
+      "file": "10002.toml",
+      "xinfa_name": "洗髓经",
+      "xinfa_nom": "体质",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10003": {
+      "file": "10003.toml",
+      "xinfa_name": "易筋经",
+      "xinfa_nom": "元气",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10014": {
+      "file": "10014.toml",
+      "xinfa_name": "紫霞功",
+      "xinfa_nom": "根骨",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10015": {
+      "file": "10015.toml",
+      "xinfa_name": "太虚剑意",
+      "xinfa_nom": "身法",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10021": {
+      "file": "10021.toml",
+      "xinfa_name": "花间游",
+      "xinfa_nom": "元气",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": [
+        "临源"
+      ]
+    },
+    "10026": {
+      "file": "10026.toml",
+      "xinfa_name": "傲血战意",
+      "xinfa_nom": "力道",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10062": {
+      "file": "10062.toml",
+      "xinfa_name": "铁牢律",
+      "xinfa_nom": "体质",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10081": {
+      "file": "10081.toml",
+      "xinfa_name": "冰心诀",
+      "xinfa_nom": "根骨",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10144": {
+      "file": "10144.toml",
+      "xinfa_name": "问水诀",
+      "xinfa_nom": "身法",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10175": {
+      "file": "10175.toml",
+      "xinfa_name": "毒经",
+      "xinfa_nom": "根骨",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10224": {
+      "file": "10224.toml",
+      "xinfa_name": "惊羽诀",
+      "xinfa_nom": "力道",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10225": {
+      "file": "10225.toml",
+      "xinfa_name": "天罗诡道",
+      "xinfa_nom": "元气",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10242": {
+      "file": "10242.toml",
+      "xinfa_name": "焚影圣诀",
+      "xinfa_nom": "元气",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": [
+        "涤罪"
+      ]
+    },
+    "10243": {
+      "file": "10243.toml",
+      "xinfa_name": "明尊琉璃体",
+      "xinfa_nom": "体质",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10268": {
+      "file": "10268.toml",
+      "xinfa_name": "笑尘诀",
+      "xinfa_nom": "力道",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10389": {
+      "file": "10389.toml",
+      "xinfa_name": "铁骨衣",
+      "xinfa_nom": "体质",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10390": {
+      "file": "10390.toml",
+      "xinfa_name": "分山劲",
+      "xinfa_nom": "身法",
+      "atk_up": 1.88,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10447": {
+      "file": "mowen.toml",
+      "xinfa_name": "莫问",
+      "xinfa_nom": "根骨",
+      "atk_up": 1.96,
+      "pofang_up": 2.0,
+      "huixin_up": 0.0,
+      "wuzhi": [
+        "相依"
+      ]
+    },
+    "10464": {
+      "file": "10464.toml",
+      "xinfa_name": "北傲诀",
+      "xinfa_nom": "力道",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10533": {
+      "file": "10533.toml",
+      "xinfa_name": "凌海诀",
+      "xinfa_nom": "身法",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10585": {
+      "file": "10585.toml",
+      "xinfa_name": "隐龙诀",
+      "xinfa_nom": "身法",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10615": {
+      "file": "10615.toml",
+      "xinfa_name": "太玄经",
+      "xinfa_nom": "元气",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10627": {
+      "file": "10627.toml",
+      "xinfa_name": "无方",
+      "xinfa_nom": "根骨",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10698": {
+      "file": "10698.toml",
+      "xinfa_name": "孤锋诀",
+      "xinfa_nom": "力道",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": [],
+      "lost_hp_zhenshi": [
+        {
+          "name": "怒锋倾涛",
+          "per_layer": 0.06,
+          "max_layers": 3
+        }
+      ]
+    },
+    "10756": {
+      "file": "10756.toml",
+      "xinfa_name": "山海心诀",
+      "xinfa_nom": "身法",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    },
+    "10786": {
+      "file": "zhoutian.toml",
+      "xinfa_name": "周天功",
+      "xinfa_nom": "元气",
+      "atk_up": 1.96,
+      "pofang_up": 0.3,
+      "huixin_up": 0.0,
+      "wuzhi": [],
+      "rename": {
+        "骤风": "骤风令"
+      }
+    },
+    "10821": {
+      "file": "10821.toml",
+      "xinfa_name": "幽罗引",
+      "xinfa_nom": "根骨",
+      "atk_up": 1.0,
+      "pofang_up": 1.0,
+      "huixin_up": 0.0,
+      "wuzhi": []
+    }
+  }
+}
