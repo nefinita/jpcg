@@ -75,6 +75,7 @@ jobs:
 
       # tauri externalBin 需要 jpcg_updater-<host-triple>
       - name: 构建并放置 jpcg_updater
+        shell: bash
         run: |
           cargo build -p jpcg_updater
           HOST="$(rustc -vV | grep '^host:' | cut -d' ' -f2)"
