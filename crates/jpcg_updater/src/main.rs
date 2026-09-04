@@ -49,12 +49,13 @@ fn main() {
     }
 
     eprintln!("替换程序: {} -> {}", new.display(), old.display());
-    std::fs::rename(new, old).or_else(|_| {
-        std::fs::copy(new, old).and_then(|_| {
-            std::fs::remove_file(new).ok();
-            Ok(())
+    std::fs::rename(new, old)
+        .or_else(|_| {
+            std::fs::copy(new, old).map(|_| {
+                std::fs::remove_file(new).ok();
+            })
         })
-    }).expect("替换程序失败");
+        .expect("替换程序失败");
 
     // 设置可执行权限
     #[cfg(unix)]
@@ -65,10 +66,7 @@ fn main() {
     }
 
     eprintln!("启动新版本: {}", old_path);
-    Command::new(old_path)
-        .current_dir(workdir)
-        .spawn()
-        .ok();
+    Command::new(old_path).current_dir(workdir).spawn().ok();
 
     eprintln!("更新完成，更新器退出。");
 }

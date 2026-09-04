@@ -34,6 +34,8 @@ export const COEFFICIENT_FIELDS = [
   { id: "pofang_xishu",        label: "破防系数", default: 225957.6 },
   { id: "huixin_xishu",        label: "会心系数", default: 197703 },
   { id: "huixiao_xishu",       label: "会效系数", default: 72844.2 },
+  { id: "yujin_xishu",         label: "御劲系数(会心)", default: 197703 },
+  { id: "yuhui_xishu",         label: "御劲系数(会伤)", default: 55123.2 },
   { id: "huajin_xishu",        label: "化劲系数", default: 30115.8 },
   { id: "fangyu_xishu",        label: "防御系数", default: 126007.2 },
   { id: "pvp_global_jianshang", label: "PVP全局减伤", default: 0.9 },
@@ -53,6 +55,8 @@ export const DEFAULT_COEFFICIENT: CoefficientConfigDTO = {
   pofang_xishu: 225957.6,
   huixin_xishu: 197703,
   huixiao_xishu: 72844.2,
+  yujin_xishu: 197703,
+  yuhui_xishu: 55123.2,
   huajin_xishu: 30115.8,
   fangyu_xishu: 126007.2,
   pvp_global_jianshang: 0.9,
@@ -73,7 +77,9 @@ export const HOSTILE_FIELDS = [
   { id: "yujin_dengji",    label: "御劲等级",     min: 0, step: 1 },
   { id: "huajin_dengji",   label: "化劲等级",     min: 0, step: 1 },
   { id: "jianshang_bili",  label: "减伤比例(%)",  min: 0, max: 100, step: 0.1 },
-  { id: "target_hp",       label: "目标血量(万)", min: 0, step: 1 },
+  { id: "target_hp",       label: "目标血量", min: 0, step: 1 },
+  { id: "max_hp",          label: "目标最大血量", min: 0, step: 1 },
+  { id: "current_hp",      label: "目标当前血量", min: 0, step: 1 },
 ];
 
 export const STORAGE_KEYS = {

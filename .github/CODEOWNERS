@@ -1,0 +1,4 @@
+# 代码所有者：默认仓库维护者
+# 触发 master/develop 分支保护中的 "require code owner reviews"
+# 需有仓库写权限。后续可改为团队或按目录拆分。
+* @QinThirteen

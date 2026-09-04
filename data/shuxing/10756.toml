@@ -1,0 +1,220 @@
+[xinfa]
+xinfa_name = "山海心诀"
+xinfa_nom = "身法"
+atk_up = 1
+pofang_up = 1
+huixin_up = 0
+
+[version]
+level = 130
+season = 3
+modified = 20260814
+
+[[skill]]
+skill_name = "风矢"           #名字
+skill_id = 10756            #技能ID（数据源池内 id）
+sub_id = 35894              #子ID
+atk_xishu = 0.15        #伤害系数
+
+[[skill]]
+skill_name = "标鹄"           #名字
+skill_id = 10756            #技能ID（数据源池内 id）
+sub_id = 36157              #子ID
+base_damage1 = 30          #基本伤害
+base_damage2 = 50          #基本伤害2
+atk_xishu = 3.45625        #伤害系数
+
+[[skill]]
+skill_name = "劲风簇"           #名字
+skill_id = 35659            #技能ID（数据源池内 id）
+sub_id = 35866              #子ID
+base_damage1 = 333          #基本伤害
+base_damage2 = 338          #基本伤害2
+atk_xishu = 1.15625        #伤害系数
+
+[[skill]]
+skill_name = "霖集簇·1枚箭矢"           #名字
+skill_id = 35660            #技能ID（数据源池内 id）
+sub_id = 36004              #子ID
+base_damage1 = 30          #基本伤害
+base_damage2 = 35          #基本伤害2
+atk_xishu = 0.53125        #伤害系数
+
+[[skill]]
+skill_name = "霖集簇·2枚箭矢"           #名字
+skill_id = 35660            #技能ID（数据源池内 id）
+sub_id = 36004              #子ID
+base_damage1 = 60          #基本伤害
+base_damage2 = 65          #基本伤害2
+atk_xishu = 1.06875        #伤害系数
+
+[[skill]]
+skill_name = "霖集簇·3枚箭矢"           #名字
+skill_id = 35660            #技能ID（数据源池内 id）
+sub_id = 36004              #子ID
+base_damage1 = 90          #基本伤害
+base_damage2 = 95          #基本伤害2
+atk_xishu = 1.6        #伤害系数
+
+[[skill]]
+skill_name = "霖集簇·4枚箭矢"           #名字
+skill_id = 35660            #技能ID（数据源池内 id）
+sub_id = 36004              #子ID
+base_damage1 = 120          #基本伤害
+base_damage2 = 125          #基本伤害2
+atk_xishu = 2.1375        #伤害系数
+
+[[skill]]
+skill_name = "饮羽簇"           #名字
+skill_id = 35661            #技能ID（数据源池内 id）
+sub_id = 39092              #子ID
+base_damage1 = 732          #基本伤害
+base_damage2 = 742          #基本伤害2
+atk_xishu = 2.74375        #伤害系数
+
+[[skill]]
+skill_name = "破"           #名字
+skill_id = 35671            #技能ID（数据源池内 id）
+sub_id = 36177              #子ID
+atk_xishu = 8.534        #伤害系数
+
+[[skill]]
+skill_name = "归平野·一"           #名字
+skill_id = 35685            #技能ID（数据源池内 id）
+sub_id = 36022              #子ID
+base_damage1 = 740          #基本伤害
+base_damage2 = 750          #基本伤害2
+atk_xishu = 1.1875        #伤害系数
+
+[[skill]]
+skill_name = "归平野·二"           #名字
+skill_id = 35685            #技能ID（数据源池内 id）
+sub_id = 36023              #子ID
+base_damage1 = 1480          #基本伤害
+base_damage2 = 1490          #基本伤害2
+atk_xishu = 1.78125        #伤害系数
+
+[[skill]]
+skill_name = "汇山岚"           #名字
+skill_id = 35686            #技能ID（数据源池内 id）
+sub_id = 44687              #子ID
+base_damage1 = 666          #基本伤害
+base_damage2 = 676          #基本伤害2
+atk_xishu = 2.58125        #伤害系数
+
+[[skill]]
+skill_name = "践踏"           #名字
+skill_id = 35695            #技能ID（数据源池内 id）
+sub_id = 36056              #子ID
+base_damage1 = 296          #基本伤害
+base_damage2 = 316          #基本伤害2
+atk_xishu = 3.98125        #伤害系数
+
+[[skill]]
+skill_name = "重击"           #名字
+skill_id = 35695            #技能ID（数据源池内 id）
+sub_id = 36057              #子ID
+base_damage1 = 296          #基本伤害
+base_damage2 = 316          #基本伤害2
+atk_xishu = 1.80625        #伤害系数
+
+[[skill]]
+skill_name = "攻击"           #名字
+skill_id = 35695            #技能ID（数据源池内 id）
+sub_id = 36111              #子ID
+base_damage1 = 296          #基本伤害
+base_damage2 = 316          #基本伤害2
+atk_xishu = 1.80625        #伤害系数
+
+[[skill]]
+skill_name = "攻击"           #名字
+skill_id = 35695            #技能ID（数据源池内 id）
+sub_id = 36112              #子ID
+base_damage1 = 296          #基本伤害
+base_damage2 = 316          #基本伤害2
+atk_xishu = 5.43125        #伤害系数
+
+[[skill]]
+skill_name = "攻击"           #名字
+skill_id = 35695            #技能ID（数据源池内 id）
+sub_id = 36113              #子ID
+base_damage1 = 296          #基本伤害
+base_damage2 = 316          #基本伤害2
+atk_xishu = 3.98125        #伤害系数
+
+[[skill]]
+skill_name = "攻击"           #名字
+skill_id = 35695            #技能ID（数据源池内 id）
+sub_id = 36114              #子ID
+base_damage1 = 296          #基本伤害
+base_damage2 = 316          #基本伤害2
+atk_xishu = 1.08125        #伤害系数
+
+[[skill]]
+skill_name = "于狩"           #名字
+skill_id = 35737            #技能ID（数据源池内 id）
+sub_id = 40717              #子ID
+base_damage1 = 30          #基本伤害
+base_damage2 = 50          #基本伤害2
+atk_xishu = 1.875        #伤害系数
+
+[[skill]]
+skill_name = "命俦"           #名字
+skill_id = 35756            #技能ID（数据源池内 id）
+sub_id = 44361              #子ID
+base_damage1 = 296          #基本伤害
+base_damage2 = 316          #基本伤害2
+atk_xishu = 3.8        #伤害系数
+
+[[skill]]
+skill_name = "白虹贯日"           #名字
+skill_id = 35765            #技能ID（数据源池内 id）
+sub_id = 36173              #子ID
+base_damage1 = 37          #基本伤害
+base_damage2 = 42          #基本伤害2
+atk_xishu = 8.7        #伤害系数
+
+[[skill]]
+skill_name = "狩印"           #名字
+skill_id = 40239            #技能ID（数据源池内 id）
+sub_id = 40329              #子ID
+base_damage1 = 35          #基本伤害
+base_damage2 = 40          #基本伤害2
+atk_xishu = 1.16875        #伤害系数
+
+[[skill]]
+skill_name = "聚势摧霆"           #名字
+skill_id = 40240            #技能ID（数据源池内 id）
+sub_id = 40347              #子ID
+base_damage1 = 35          #基本伤害
+base_damage2 = 40          #基本伤害2
+atk_xishu = 1.81875        #伤害系数
+
+[[skill]]
+skill_name = "聚势"           #名字
+skill_id = 40240            #技能ID（数据源池内 id）
+sub_id = 40720              #子ID
+base_damage1 = 35          #基本伤害
+base_damage2 = 40          #基本伤害2
+atk_xishu = 0.9625        #伤害系数
+
+[[skill]]
+skill_name = "领胡"           #名字
+skill_id = 45105            #技能ID（数据源池内 id）
+sub_id = 45107              #子ID
+base_damage1 = 40          #基本伤害
+base_damage2 = 80          #基本伤害2
+atk_xishu = 2.96875        #伤害系数
+has_critical_strike = true   #无质（伤害固定=期望 Q）
+
+[[skill]]
+skill_name = "贯穿（dot）"           #名字
+skill_id = 10756            #技能ID（数据源池内 id）
+sub_id = 26856              #子ID
+base_damage1 = 32          #基本伤害
+base_damage2 = 32          #基本伤害2
+atk_xishu = 0        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 0.5          #每跳间隔（秒，16帧=1秒）
+dot_duration = 2          #持续时长（秒，总跳数×间隔）
+

@@ -1,0 +1,40 @@
+name: deps
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # 每周一 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  cargo-audit:
+    name: Rust 依赖审计
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: 安装 cargo-audit
+        run: cargo install cargo-audit --locked || true
+      - name: 运行审计
+        continue-on-error: true
+        run: cargo audit
+
+  npm-audit:
+    name: 前端依赖审计
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/jpcg_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm audit --omit=dev
+
+  dependabot:
+    name: 依赖更新 PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 提示启用 Dependabot
+        run: echo "请在 GitHub -> Settings -> Code security 启用 Dependabot（或见 .github/dependabot.yml）"

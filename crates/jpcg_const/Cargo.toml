@@ -2,10 +2,17 @@
 name = "jpcg_const"
 license.workspace = true
 readme.workspace = true
-version.workspace = true
+# 常量子系统独立版本：等级.赛季.日期（策划调整常量时更新日期位）
+# 例：130.3.20260602 = 130级第3赛季 2026-06-02
+version = "130.3.20260602"
 edition.workspace = true
 
-[dependencies]
+# 常量子系统：drug/food 编译期数值 + level_constant 等级常数（编译期由 preset TOML 解析固化）。
+# 双产物：rlib（静态）/ cdylib（动态模式被 core dlopen）。
+# 运行时零依赖（level_constant 数据编译期 include_str! + const fn 解析）。
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [lints]
 workspace = true

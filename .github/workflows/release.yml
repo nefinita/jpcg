@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 构建 (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            os: darwin
+            ext: dylib
+          - platform: ubuntu-latest
+            os: linux
+            ext: so
+          - platform: windows-latest
+            os: windows
+            ext: dll
+    runs-on: ${{ matrix.platform }}
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 提取版本号（tag）
+        id: version
+        run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # 通道判定：tag 含 -beta → beta 通道；否则 stable 通道
+      - name: 判断更新通道
+        id: channel
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-beta* ]]; then
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: examples/jpcg_app/package-lock.json
+
+      # Tauri v2 Linux 系统依赖
+      - name: 安装 Tauri Linux 依赖
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libgtk-3-dev libxdo-dev libssl-dev liblzma-dev
+
+      - name: 前端依赖 + 构建
+        working-directory: examples/jpcg_app
+        run: |
+          npm ci
+          npm run build
+
+      # tauri externalBin 需要 jpcg_updater-<host-triple>
+      - name: 构建并放置 jpcg_updater
+        run: |
+          cargo build -p jpcg_updater
+          HOST="$(rustc -vV | grep '^host:' | cut -d' ' -f2)"
+          mkdir -p examples/jpcg_app/src-tauri/binaries
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/debug/jpcg_updater.exe "examples/jpcg_app/src-tauri/binaries/jpcg_updater-${HOST}.exe"
+          else
+            cp target/debug/jpcg_updater "examples/jpcg_app/src-tauri/binaries/jpcg_updater-${HOST}"
+          fi
+
+      - name: 构建模块库（dll）
+        run: |
+          cargo build -p jpcg_core -p jpcg_update -p jpcg_const --release
+
+      - name: 构建 app（static）与 updater
+        run: |
+          cargo build -p jpcg_app --release
+          cargo build -p jpcg_updater --release
+
+      - name: 准备模块产物目录
+        shell: bash
+        run: |
+          mkdir -p dist/modules dist/app
+          # 写入通道标记，便于按 stable/beta 路由部署
+          echo "${{ steps.channel.outputs.channel }}" > dist/channel.txt
+          echo "channel=${{ steps.channel.outputs.channel }}" >> "$GITHUB_STEP_SUMMARY"
+          cp target/release/libjpcg_core.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_core.${{ matrix.ext }} dist/modules/
+          cp target/release/libjpcg_update.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_update.${{ matrix.ext }} dist/modules/
+          cp target/release/libjpcg_const.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_const.${{ matrix.ext }} dist/modules/
+          # app 产物命名用 core 版本（tag）
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            cp target/release/jpcg_app.exe "dist/app/jpcg-app-${{ matrix.os }}-x86_64.exe"
+            cp target/release/jpcg_updater.exe dist/app/jpcg_updater.exe
+          else
+            cp target/release/jpcg_app "dist/app/jpcg-app-${{ matrix.os }}-x86_64"
+            cp target/release/jpcg_updater "dist/app/jpcg_updater"
+          fi
+
+      - name: 生成 manifests
+        shell: bash
+        run: |
+          cargo run -p manifest-gen --release -- \
+            --version v${{ steps.version.outputs.tag }} \
+            --data-dir ./data \
+            --output data_manifest.toml \
+            --modules-dir dist/modules \
+            --modules-output dist/modules/modules_manifest.toml \
+            --platform ${{ matrix.os }}
+
+      - name: 打包上传到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/app/**
+            dist/modules/**
+            dist/channel.txt
+            data_manifest.toml

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO } from "../types";
+import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions } from "../types";
 import {
   XINFA_LIST as XINFA_FALLBACK, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS,
   BUFF_FIELDS, COEFFICIENT_FIELDS, DEFAULT_BUFF, DEFAULT_COEFFICIENT,
@@ -49,11 +49,13 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
   const [betaChannel, setBetaChannel] = useState(() => localStorage.getItem(STORAGE_KEYS.betaChannel) === "true");
+  const [moduleVersions, setModuleVersions] = useState<ModuleVersions | null>(null);
 
   useEffect(() => {
     api.listProfessions().then((list) => {
       if (list.length > 0) setProfessionOptions(list);
     }).catch(() => {});
+    api.getModuleVersions().then(setModuleVersions).catch(() => {});
   }, []);
 
   const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
@@ -86,47 +88,69 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const updateField = useCallback(
     (section: "player" | "hostile", id: string, value: string) => {
-      const num = value === "" ? 0 : Number(value);
+      const num = Number(value);
+      const stored = value === "" || isNaN(num) ? "" : num;
       setForm((prev) => ({
         ...prev,
-        [section]: { ...prev[section], [id]: isNaN(num) ? 0 : num },
+        [section]: { ...prev[section], [id]: stored },
       }));
     },
     [],
   );
 
   const updateBuff = useCallback((id: string, value: string) => {
-    const num = value === "" ? 0 : Number(value);
+    const num = Number(value);
+    const stored = value === "" || isNaN(num) ? "" : num;
     setForm((prev) => ({
       ...prev,
-      buff: { ...prev.buff, [id]: isNaN(num) ? 0 : num },
+      buff: { ...prev.buff, [id]: stored },
     }));
   }, []);
 
   const updateCoefficient = useCallback((id: string, value: string) => {
-    const num = value === "" ? 0 : Number(value);
+    const num = Number(value);
+    const stored = value === "" || isNaN(num) ? "" : num;
     setForm((prev) => ({
       ...prev,
-      coefficient: { ...prev.coefficient, [id]: isNaN(num) ? 0 : num },
+      coefficient: { ...prev.coefficient, [id]: stored },
     }));
   }, []);
 
+  // 数字兜底：空串/NaN → 0（提交 core 前统一 normalize）
+  const normalizeNum = useCallback((v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }, []);
+
+  const normalizeForm = useCallback((f: typeof form) => {
+    const num = (o: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(o).map(([k, v]) => [k, normalizeNum(v)]));
+    return {
+      ...f,
+      player: num(f.player),
+      hostile: num(f.hostile),
+      buff: num(f.buff),
+      coefficient: num(f.coefficient),
+    } as typeof form;
+  }, [normalizeNum]);
+
   const handleCalculate = useCallback(() => {
-    onCalculate(form);
-  }, [form, onCalculate]);
+    onCalculate(normalizeForm(form));
+  }, [form, onCalculate, normalizeForm]);
 
   const handleSave = useCallback(async () => {
     try {
+      const norm = normalizeForm(form);
       await api.saveConfig({
-        player: form.player as never,
-        hostile: form.hostile as never,
-        xinfa_config: form.xinfa_config,
+        player: norm.player as never,
+        hostile: norm.hostile as never,
+        xinfa_config: norm.xinfa_config,
       });
       addToast("配置已保存", "success");
     } catch (err) {
       addToast(String(err), "error");
     }
-  }, [form, addToast]);
+  }, [form, addToast, normalizeForm]);
 
   const handleLoad = useCallback(async () => {
     try {
@@ -156,8 +180,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           target_hp: cfg.hostile.target_hp,
         },
         xinfa_config: cfg.xinfa_config,
-        buff: cfg.buff || { ...DEFAULT_BUFF },
-        coefficient: cfg.coefficient || { ...DEFAULT_COEFFICIENT },
+        buff: cfg.buff ? { ...cfg.buff } : { ...DEFAULT_BUFF },
+        coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
       });
       addToast("配置已加载", "success");
     } catch (err) {
@@ -221,7 +245,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     try {
       const result = await api.checkUpdate(betaChannel, false);
       setUpdateCheckResult(result);
-      if (!result.has_data_update && !result.has_app_update) {
+      if (!result.has_data_update && !result.has_app_update && !result.has_modules_update) {
         setUpdateMessage("已是最新版本");
         addToast("已是最新版本", "info");
         setUpdating(false);
@@ -256,6 +280,31 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         return;
       }
 
+      // 模块库（dll）增量更新
+      if (result.has_modules_update && result.modules_files_to_update?.length) {
+        const names = result.modules_files_to_update.map((f) => f.name).join(", ");
+        const ok = window.confirm(`发现 ${names} 需要更新，是否下载并重启应用？`);
+        if (!ok) {
+          setUpdateMessage("已取消");
+          setUpdating(false);
+          return;
+        }
+        setUpdateMessage("正在更新模块库...");
+        const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
+          setUpdateProgress(evt.progress);
+          setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
+        });
+        try {
+          await api.performModulesUpdate(betaChannel, result);
+        } finally {
+          unlisten();
+        }
+        setUpdateMessage("重启失败");
+        addToast("重启失败，请手动重启应用", "error");
+        setUpdating(false);
+        return;
+      }
+
       // 仅数据更新
       setUpdateMessage(`发现 ${result.data_files_to_update.length} 个文件需要更新`);
       addToast("发现更新", "info");
@@ -282,14 +331,14 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const playerStats = React.useMemo(() => {
     const pct = (v: number) => (v * 100).toFixed(1) + "%";
-    const huixinRate = form.player.huixin_dengji / (form.coefficient.huixin_xishu || 197703);
-    const pofangRate = form.player.pofang_dengji / (form.coefficient.pofang_xishu || 225957.6);
+    const huixinRate = normalizeNum(form.player.huixin_dengji) / (normalizeNum(form.coefficient.huixin_xishu) || 197703);
+    const pofangRate = normalizeNum(form.player.pofang_dengji) / (normalizeNum(form.coefficient.pofang_xishu) || 225957.6);
     return {
-      huixinRate: pct(huixinRate + form.buff.huixin_pct / 100),
-      pofangRate: pct(pofangRate + form.buff.pofang_pct / 100),
-      jianshang: form.hostile.jianshang_bili + "%",
+      huixinRate: pct(huixinRate + normalizeNum(form.buff.huixin_pct) / 100),
+      pofangRate: pct(pofangRate + normalizeNum(form.buff.pofang_pct) / 100),
+      jianshang: normalizeNum(form.hostile.jianshang_bili) + "%",
     };
-  }, [form]);
+  }, [form, normalizeNum]);
 
   return (
     <div className={styles.card}>
@@ -393,6 +442,11 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
               <div className={styles.progressFill} style={{ width: `${Math.round(updateProgress * 100)}%` }} />
             </div>
             <div className={styles.progressText}>{updateMessage}</div>
+          </div>
+        )}
+        {moduleVersions && (
+          <div className={styles.moduleVersions}>
+            App {moduleVersions.app} · Core {moduleVersions.core} · Update {moduleVersions.update} · Const {moduleVersions.const}
           </div>
         )}
       </div>

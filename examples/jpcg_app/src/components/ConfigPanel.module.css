@@ -2,6 +2,7 @@
   background: var(--glass-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   backdrop-filter: var(--glass-blur);
   overflow: hidden;
 }
@@ -71,7 +72,7 @@
 .input:focus {
   outline: none;
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.15);
 }
 
 .input::-webkit-inner-spin-button {
@@ -169,6 +170,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.moduleVersions {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 
 .details {
   padding: var(--space-lg);

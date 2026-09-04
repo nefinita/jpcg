@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use std::fs;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ForumFileInfo {
@@ -14,7 +14,7 @@ fn download_dir(category: &str) -> PathBuf {
     let exe_dir = exe.as_ref().and_then(|p| p.parent());
     let base_dir = exe_dir.map(|p| p.to_path_buf()).unwrap_or_default();
 
-    if exe_dir.map_or(false, |d| d.ends_with("MacOS")) {
+    if exe_dir.is_some_and(|d| d.ends_with("MacOS")) {
         let home = std::env::var("HOME").unwrap_or_default();
         PathBuf::from(home)
             .join("Library")
@@ -96,12 +96,10 @@ pub async fn forum_download_file(
         .map_err(|e| format!("读取文件数据失败: {}", e))?;
 
     let dest_dir = download_dir(&cat);
-    std::fs::create_dir_all(&dest_dir)
-        .map_err(|e| format!("创建目录失败: {}", e))?;
+    std::fs::create_dir_all(&dest_dir).map_err(|e| format!("创建目录失败: {}", e))?;
 
     let dest_path = dest_dir.join(&filename);
-    std::fs::write(&dest_path, &bytes)
-        .map_err(|e| format!("保存文件失败: {}", e))?;
+    std::fs::write(&dest_path, &bytes).map_err(|e| format!("保存文件失败: {}", e))?;
 
     Ok(format!("已下载: {}", filename))
 }
@@ -117,12 +115,11 @@ pub fn forum_list_downloaded(category: Option<String>) -> Result<Vec<String>, St
     let entries = fs::read_dir(&dir).map_err(|e| format!("读取目录失败: {}", e))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
-        if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
-            if let Some(name) = entry.file_name().to_str() {
-                if name.ends_with(".toml") {
-                    files.push(name.to_string());
-                }
-            }
+        if entry.file_type().map(|t| t.is_file()).unwrap_or(false)
+            && let Some(name) = entry.file_name().to_str()
+            && name.ends_with(".toml")
+        {
+            files.push(name.to_string());
         }
     }
     files.sort();

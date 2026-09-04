@@ -16,6 +16,10 @@ export interface HostileConfigDTO {
   huajin_dengji: number;
   jianshang_bili: number;
   target_hp: number;
+  /** 目标最大血量（追加真伤斩杀线基座）；0 = 未提供，回退 target_hp 满血模型 */
+  max_hp: number;
+  /** 目标当前血量（连招初始血量）；0 或 > max_hp = 满血 */
+  current_hp: number;
 }
 
 export interface BuffConfigDTO {
@@ -32,6 +36,10 @@ export interface CoefficientConfigDTO {
   pofang_xishu: number;
   huixin_xishu: number;
   huixiao_xishu: number;
+  /** 御劲 → 目标会心率减免分母 */
+  yujin_xishu: number;
+  /** 御劲 → 目标会心伤害减免分母 */
+  yuhui_xishu: number;
   huajin_xishu: number;
   fangyu_xishu: number;
   pvp_global_jianshang: number;
@@ -62,11 +70,16 @@ export interface SkillResultDTO {
   n: number;
   h: number;
   q: number;
+  dot_jumps: number[];
+  has_critical_strike: boolean;
+  zhenshishanghai: number;
+  lost_hp_zhenshishanghai: number;
 }
 
 export interface SkillPoolItemDTO {
   skill_name: string;
   skill_id: number;
+  sub_id: number;
   base_damage1: number;
   base_damage2: number;
   atk_xishu: number;
@@ -77,6 +90,8 @@ export interface SkillPoolItemDTO {
   wushifangyu: number;
   wushihuajin: number;
   dot_flag: number;
+  has_critical_strike: boolean;
+  lost_hp_zhenshishanghai: number;
 }
 
 export interface StepOverrideDTO {
@@ -108,6 +123,10 @@ export interface ComboStepResultDTO {
   crit_rate: number;
   cumulative_mean_wan: number;
   kill_prob: number;
+  dot_jumps: number[];
+  has_critical_strike: boolean;
+  zhenshishanghai: number;
+  lost_hp_zhenshi_damage: number;
 }
 
 export interface ComboResultDTO {
@@ -125,6 +144,24 @@ export interface UpdateCheckResult {
   latest_data_version: string | null;
   has_data_update: boolean;
   data_files_to_update: string[];
+  has_modules_update: boolean;
+  modules_version: string | null;
+  modules_files_to_update: ModulesFileEntry[];
+}
+
+export interface ModulesFileEntry {
+  name: string;
+  hash: string;
+  hash_type: string;
+  size: number;
+}
+
+export interface ModuleVersions {
+  core: string;
+  update: string;
+  const: string;
+  combo: string;
+  app: string;
 }
 
 export interface UpdateProgressEvent {
@@ -178,8 +215,10 @@ export interface SkillEditorItemDTO {
   wushihuajin: number;
   wushijianshang: number;
   zhenshishanghai: number;
+  lost_hp_zhenshishanghai: number;
   dot_flag: number;
-  dot_num: number;
+  dot_interval: number;
+  dot_duration: number;
   dot_up: number;
 }
 
@@ -239,8 +278,8 @@ export interface DerivativesOutputDTO {
 
 export interface FormData {
   xinfa: string;
-  player: Record<string, number>;
-  hostile: Record<string, number>;
+  player: Record<string, number | string>;
+  hostile: Record<string, number | string>;
   xinfa_config: {
     profession: string;
     xinfa_name: string;
@@ -249,6 +288,6 @@ export interface FormData {
     pofang_up: number;
     huixin_up: number;
   };
-  buff: BuffConfigDTO;
-  coefficient: CoefficientConfigDTO;
+  buff: Record<string, number | string | boolean>;
+  coefficient: Record<string, number | string>;
 }

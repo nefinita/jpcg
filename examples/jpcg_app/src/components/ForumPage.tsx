@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { ForumFileInfo } from "../types";
 import { FORUM_URL } from "../utils/constants";
 import * as api from "../api/commands";
+import { IconChevronLeft, IconChevronRight } from "./icons";
 import styles from "./ForumPage.module.css";
 
 const PAGE_SIZE = 10;
@@ -111,9 +112,13 @@ export default function ForumPage({ addToast }: Props) {
           </table>
           {totalPages > 1 && (
             <div className={styles.pagination}>
-              <button disabled={page === 0} onClick={() => setPage(page - 1)}>←</button>
+              <button disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="上一页">
+                <IconChevronLeft size={14} />
+              </button>
               <span>{page + 1}/{totalPages}</span>
-              <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>→</button>
+              <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} aria-label="下一页">
+                <IconChevronRight size={14} />
+              </button>
             </div>
           )}
         </>
