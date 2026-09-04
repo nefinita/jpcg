@@ -56,14 +56,7 @@ pub(crate) fn into_core(
         shanghai_pct: req.buff.shanghai_pct,
         mode_is_point: req.buff.mode_is_point,
     };
-    let coeff = CoefficientConfig {
-        pofang_xishu: req.coefficient.pofang_xishu,
-        huixin_xishu: req.coefficient.huixin_xishu,
-        huixiao_xishu: req.coefficient.huixiao_xishu,
-        huajin_xishu: req.coefficient.huajin_xishu,
-        fangyu_xishu: req.coefficient.fangyu_xishu,
-        pvp_global_jianshang: req.coefficient.pvp_global_jianshang,
-    };
+    let coeff = CoefficientConfig::from(&req.coefficient);
     (player, hostile, xinfa, buff, coeff)
 }
 

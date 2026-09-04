@@ -36,6 +36,10 @@ export interface CoefficientConfigDTO {
   pofang_xishu: number;
   huixin_xishu: number;
   huixiao_xishu: number;
+  /** 御劲 → 目标会心率减免分母 */
+  yujin_xishu: number;
+  /** 御劲 → 目标会心伤害减免分母 */
+  yuhui_xishu: number;
   huajin_xishu: number;
   fangyu_xishu: number;
   pvp_global_jianshang: number;

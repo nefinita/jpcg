@@ -85,6 +85,8 @@ pub fn load_config() -> jpcg_api::ConfigDataDTO {
             pofang_xishu: saved.coefficient.pofang_xishu,
             huixin_xishu: saved.coefficient.huixin_xishu,
             huixiao_xishu: saved.coefficient.huixiao_xishu,
+            yujin_xishu: saved.coefficient.yujin_xishu,
+            yuhui_xishu: saved.coefficient.yuhui_xishu,
             huajin_xishu: saved.coefficient.huajin_xishu,
             fangyu_xishu: saved.coefficient.fangyu_xishu,
             pvp_global_jianshang: saved.coefficient.pvp_global_jianshang,

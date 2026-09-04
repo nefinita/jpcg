@@ -14,7 +14,9 @@ fn truncate(v: f32) -> f32 {
 /// 单技能伤害计算器
 /// 所有配置均以引用持有，避免逐技能全量 clone（热路径优化）。
 pub struct JpcgConfig<'a> {
+    //攻击方玩家
     player: &'a PlayerConfig,
+    //木桩（被攻击的玩家）
     hostilepile: &'a HostilepileConfig,
     skilltype: &'a Skilltype,
     xinfa: &'a XinfaConfig,
@@ -474,6 +476,7 @@ mod golden_tests {
         let c = CoefficientConfig::default();
         let cfg = JpcgConfig::new_with_config(&p, &h, sk, &x, buff, &c);
         let d = cfg.q_cal();
+        let dr = cfg.q_cal_with_derivatives().derivatives;
         assert_eq!(d.y, g.y, "{tag}: Y 段不匹配");
         assert_eq!(d.b, g.b, "{tag}: B 段不匹配");
         assert_eq!(d.i, g.i, "{tag}: I 段不匹配");
@@ -481,7 +484,6 @@ mod golden_tests {
         assert_eq!(d.h_damage, g.h, "{tag}: H 段不匹配");
         assert_eq!(d.q_damage, g.q, "{tag}: Q 段不匹配");
 
-        let dr = cfg.q_cal_with_derivatives().derivatives;
         let eps = 1e-6;
         assert!(
             (dr.d_jichu_shuxing - g.d_js).abs() < eps,
@@ -533,13 +535,13 @@ mod golden_tests {
                 b: 277337,
                 i: 106216,
                 n: 75138,
-                h: 132992,
-                q: 91768,
-                d_js: 1.6923265,
-                d_jg: 0.8634319,
-                d_hxd: 0.29263085,
-                d_hxg: 0.28897458,
-                d_pf: 0.27388445,
+                h: 129108,
+                q: 90651,
+                d_js: 1.6717374,
+                d_jg: 0.85292727,
+                d_hxd: 0.27298522,
+                d_hxg: 0.26957446,
+                d_pf: 0.27055234,
                 d_wq: 0.000000,
             },
         );
@@ -616,13 +618,13 @@ mod golden_tests {
                 b: 305051,
                 i: 116837,
                 n: 89359,
-                h: 165130,
-                q: 114928,
-                d_js: 2.1195543,
-                d_jg: 1.0814053,
-                d_hxd: 0.3832567,
-                d_hxg: 0.40344572,
-                d_pf: 0.33627373,
+                h: 160043,
+                q: 113211,
+                d_js: 2.0878966,
+                d_jg: 1.0652533,
+                d_hxd: 0.35752618,
+                d_hxg: 0.3763607,
+                d_pf: 0.33125117,
                 d_wq: 0.000000,
             },
         );
@@ -640,13 +642,13 @@ mod golden_tests {
                 b: 188844,
                 i: 106216,
                 n: 61395,
-                h: 108667,
-                q: 74983,
-                d_js: 1.3822356,
-                d_jg: 0.70522225,
-                d_hxd: 0.23910613,
-                d_hxg: 0.23612013,
-                d_pf: 0.22379173,
+                h: 105494,
+                q: 74071,
+                d_js: 1.3654193,
+                d_jg: 0.69664246,
+                d_hxd: 0.2230568,
+                d_hxg: 0.22026837,
+                d_pf: 0.22106907,
                 d_wq: 0.000000,
             },
         );
@@ -664,13 +666,13 @@ mod golden_tests {
                 b: 207707,
                 i: 116837,
                 n: 73012,
-                h: 134922,
-                q: 93903,
-                d_js: 1.7311809,
-                d_jg: 0.88325554,
-                d_hxd: 0.31314647,
-                d_hxg: 0.3296409,
-                d_pf: 0.2747596,
+                h: 130766,
+                q: 92501,
+                d_js: 1.7053239,
+                d_jg: 0.8700632,
+                d_hxd: 0.29212505,
+                d_hxg: 0.3075107,
+                d_pf: 0.27065578,
                 d_wq: 0.000000,
             },
         );
@@ -688,14 +690,14 @@ mod golden_tests {
                 b: 335584,
                 i: 106216,
                 n: 92039,
-                h: 162907,
-                q: 112410,
-                d_js: 2.0722191,
-                d_jg: 1.0572547,
-                d_hxd: 0.35845688,
-                d_hxg: 0.35397443,
-                d_pf: 0.33556786,
-                d_wq: 0.3349718,
+                h: 158149,
+                q: 111042,
+                d_js: 2.0470083,
+                d_jg: 1.044392,
+                d_hxd: 0.33439046,
+                d_hxg: 0.33021063,
+                d_pf: 0.3314853,
+                d_wq: 0.33089647,
             },
         );
     }
@@ -712,14 +714,14 @@ mod golden_tests {
                 b: 369106,
                 i: 116837,
                 n: 109429,
-                h: 202219,
-                q: 140741,
-                d_js: 2.594731,
-                d_jg: 1.3238423,
-                d_hxd: 0.46934035,
-                d_hxg: 0.4940595,
-                d_pf: 0.41199425,
-                d_wq: 0.3813047,
+                h: 195989,
+                q: 138638,
+                d_js: 2.555976,
+                d_jg: 1.3040693,
+                d_hxd: 0.43782845,
+                d_hxg: 0.4608912,
+                d_pf: 0.4058407,
+                d_wq: 0.37560952,
             },
         );
     }
@@ -739,13 +741,13 @@ mod golden_tests {
                 b: 277337,
                 i: 106216,
                 n: 75138,
-                h: 132992,
-                q: 91768,
-                d_js: 1.6923265,
-                d_jg: 0.8634319,
-                d_hxd: 0.29263085,
-                d_hxg: 0.28897458,
-                d_pf: 0.27388445,
+                h: 129108,
+                q: 90651,
+                d_js: 1.6717374,
+                d_jg: 0.85292727,
+                d_hxd: 0.27298522,
+                d_hxg: 0.26957446,
+                d_pf: 0.27055234,
                 d_wq: 0.000000,
             },
         );

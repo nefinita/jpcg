@@ -383,10 +383,11 @@ mod tests {
         let mut wuzhi = skill("宫", 160, 200, 2.609375, 0, 0, 0);
         wuzhi.has_critical_strike = true;
         let combo = combo(&[wuzhi.clone(), wuzhi], cfg);
-        assert_eq!(combo.steps[0].cumulative_mean, 91768.0, "无质期望 = Q");
+        // hostile.yujin_dengji=5047：会伤减免分母 yuhui_xishu(55123.2) 生效后期望下降
+        assert_eq!(combo.steps[0].cumulative_mean, 90651.0, "无质期望 = Q");
         assert_eq!(combo.steps[0].cumulative_std, 0.0, "无质方差应为 0");
         assert_eq!(combo.steps[1].cumulative_std, 0.0, "无质累计方差应为 0");
-        assert_eq!(combo.steps[1].cumulative_mean, 183536.0, "两次无质期望翻倍");
+        assert_eq!(combo.steps[1].cumulative_mean, 181302.0, "两次无质期望翻倍");
         // target_hp=2M 满血，两击 183536 ≪ 2M → 击杀率 0（确定性精确）
         assert_eq!(combo.steps[1].kill_prob, 0.0);
     }

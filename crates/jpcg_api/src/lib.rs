@@ -63,6 +63,10 @@ pub struct CoefficientConfigDTO {
     pub pofang_xishu: f32,
     pub huixin_xishu: f32,
     pub huixiao_xishu: f32,
+    /// 御劲 → 目标会心率减免（×1024 制分母）
+    pub yujin_xishu: f32,
+    /// 御劲 → 目标会心伤害减免（×1024 制分母）
+    pub yuhui_xishu: f32,
     pub huajin_xishu: f32,
     pub fangyu_xishu: f32,
     pub pvp_global_jianshang: f32,

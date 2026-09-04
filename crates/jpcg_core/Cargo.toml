@@ -17,6 +17,8 @@ serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 jpcg_api.workspace = true
+# 等级常数真源（编译期 const；默认系数与引擎固定公式均取自 jpcg_const::level_constant）
+jpcg_const.workspace = true
 
 # 网络服务（forum 客户端、update 编排）—— 可选特性 net
 jpcg_update = { workspace = true, optional = true }

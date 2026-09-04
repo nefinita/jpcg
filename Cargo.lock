@@ -2278,6 +2278,7 @@ version = "2.1.0-alpha.2"
 dependencies = [
  "colorized",
  "jpcg_api",
+ "jpcg_const",
  "jpcg_update",
  "serde",
  "serde_json",
