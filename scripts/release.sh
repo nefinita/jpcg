@@ -74,8 +74,20 @@ if [ -z "$VERSION" ]; then
   echo "  推断版本: $VERSION"
 fi
 
-cargo set-version "$VERSION"
+# 仅更新根 workspace 版本（继承者自动生效；jpcg_const/jpcg_updater 等独立版本号不动，
+# 直接 cargo set-version 会尝试把 jpcg_const 从 130.3.x 降级而失败）
+python3 - "$VERSION" <<'PY'
+import sys, re
+ver = sys.argv[1]
+text = open('Cargo.toml').read()
+idx = text.index('[workspace.package]')
+ver_marker = re.compile(r'(?m)^version\s*=\s*"[^"]*"')
+text = text[:idx] + ver_marker.sub(f'version = "{ver}"', text[idx:], count=1)
+open('Cargo.toml', 'w').write(text)
+PY
 scripts/sync-version.sh "$VERSION"
+# 刷新 Cargo.lock（根版本变更后，workspace 继承成员的具体版本需重新解算）
+cargo metadata --format-version 1 >/dev/null
 
 echo "==> [5/8] 聚合 CHANGELOG"
 python3 - "$VERSION" <<'PY'
@@ -107,7 +119,7 @@ else
 fi
 
 echo "==> [7/8] 推 prep 合并分支 + 开 PR"
-PREP_BRANCH="release/prep-${VERSION}"
+PREP_BRANCH="prep/${VERSION}"  # 不可用 release/ 前缀：与已有 release 分支命名空间冲突
 git push origin "HEAD:$PREP_BRANCH" >/dev/null
 PR_URL="$(gh pr create --base "$TARGET_BRANCH" --head "$PREP_BRANCH" \
   --title "release($STAGE): v${VERSION}" \

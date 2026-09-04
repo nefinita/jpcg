@@ -57,10 +57,10 @@ scripts/release.sh release         # → tag v2.1.0，触发 stable 通道构建
 1. **校验**：工作树干净；所在分支与 stage 匹配（alpha→dev、beta→beta、release→release）
 2. **同步**：确保基于最新目标分支（ff-only）
 3. **全量测试**：`make check-all` + 金标准回归
-4. **bump 版本**：`cargo set-version` + `sync-version.sh`
+4. **bump 版本**：仅改根 workspace 版本（继承者自动生效；`jpcg_const` 等独立版本号不动）+ `sync-version.sh` + 刷新 lock
 5. **聚合 CHANGELOG**：把 `changes/*.md` 并入 `CHANGELOG.md`
 6. **commit + tag**：alpha 不 tag；beta/release 打对应 tag
-7. **推 prep 合并分支 + 开 PR**：推 `release/prep-<ver>`，`gh pr create` 到目标分支
+7. **推 prep 合并分支 + 开 PR**：推 `prep/<ver>`，`gh pr create` 到目标分支
 8. **推 tag**（beta/release）：推 tag 触发 release.yml
 
 ### 安全性说明（可放心分发）
@@ -76,12 +76,12 @@ scripts/release.sh release         # → tag v2.1.0，触发 stable 通道构建
 `dev`/`beta`/`release` 均开启**分支保护**（禁直接 push、需 PR + review）。因此脚本**不直接 push 目标分支**，改为：
 
 1. 在本地对目标分支做 commit + tag
-2. 把该提交推到 prep 分支：`release/prep-<版本>`
-3. 用 `gh` 开 PR：`release/prep-<版本>` → 目标分支
+2. 把该提交推到 prep 分支：`prep/<版本>`
+3. 用 `gh` 开 PR：`prep/<版本>` → 目标分支
 4. 推 tag（beta/release）触发 release.yml 构建
 
 由 reviewer 批准并 **squash 合并** PR 后，版本提交落地目标分支。合并后可删除 prep 分支：
-`git push origin --delete release/prep-<版本>`
+`git push origin --delete prep/<版本>`
 
 ### 首次/常规发布速查
 
