@@ -109,14 +109,14 @@ kill_prob = kills / 50_000
 
 ## 📦 本次更新 (v2.1.0-beta.1)
 
-- **更新自动部署上线**：tag 构建 → `deploy-gen` 编排通道目录并打包
-  `jpcg-<channel>-<tag>.tgz`（附 `.sha256`）→ 上传 GitHub Release →
-  服务器 webhook 自动拉取、校验并原子切换（beta 覆写根 / stable 保留 3 版），全程无人值守
-- **等级常数编译期固化**：新增 `jpcg_const::level_constant`（预设 TOML + `const fn` 白名单解析），
-  `CoefficientConfig` 默认值单一真源；补齐御劲/御会（会伤减免）分母并修正公式，golden 回填
-- **发布/构建修复**：`release.sh` 兼容独立版本 crate（`jpcg_const`）与分支命名空间；
-  Windows 构建 job 修正为 bash
-- **模块更新多平台**：三平台 dll 合并清单（`platform="multi"`）+ 客户端按本机平台过滤
+- **PVP 数值更准**：修复了目标带御劲时“会心伤害减免”的计算偏差，
+  面对高御劲对手，期望伤害更贴近游戏实测
+- **公测全平台就绪**：修复 Windows 构建问题，Windows / macOS / Linux
+  三端 Beta 同步发布，想尝鲜都能更
+- **更新体验升级**：新版本发布后自动同步更新源，检查更新更及时稳定；
+  增量更新只拉本机所需的组件，更快也更省流量
+- **赛季数值体系升级**：赛季换算常数统一管理，数值校准更一致，
+  换赛季后调参更省心
 
 ---
 
