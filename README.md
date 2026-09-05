@@ -2,7 +2,7 @@
 
 > **精确计算每一发伤害，科学规划连招，轻松掌握击杀线。**
 >
-> **版本**: v2.1.0-alpha.2 | **更新日期**: 2026年8月
+> **版本**: v2.1.0-beta.1 | **更新日期**: 2026年9月
 > **适用平台**: Windows / macOS / Linux (Android 适配中)
 
 ---
@@ -250,9 +250,8 @@ npx tauri build
        └─ package job：deploy-gen 生成通道布局
             → jpcg-<channel>-<tag>.tgz + .sha256 上传同一 Release
 GitHub Release webhook
-  └─ nefinita_download_service（服务器）
-       POST /hooks/github → 验签 → 拉取 tgz → sha256 校验
-       → 原子切换（beta 覆写 / stable 合并留 3 版）
+  └─ 更新服务器（独立私有服务，不随本仓库发布）
+       验签 → 拉取 tgz → sha256 校验 → 原子切换（beta 覆写 / stable 保留 3 版）
 ```
 
 相关工具：`server_tools/deploy-gen`（布局编排）、`scripts/release.sh`（三分支发布）、
