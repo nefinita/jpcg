@@ -107,7 +107,20 @@ kill_prob = kills / 50_000
 
 ---
 
-## 📦 本次更新 (v2.1.0-alpha.2)
+## 📦 本次更新 (v2.1.0-beta.1)
+
+- **更新自动部署上线**：tag 构建 → `deploy-gen` 编排通道目录并打包
+  `jpcg-<channel>-<tag>.tgz`（附 `.sha256`）→ 上传 GitHub Release →
+  服务器 webhook 自动拉取、校验并原子切换（beta 覆写根 / stable 保留 3 版），全程无人值守
+- **等级常数编译期固化**：新增 `jpcg_const::level_constant`（预设 TOML + `const fn` 白名单解析），
+  `CoefficientConfig` 默认值单一真源；补齐御劲/御会（会伤减免）分母并修正公式，golden 回填
+- **发布/构建修复**：`release.sh` 兼容独立版本 crate（`jpcg_const`）与分支命名空间；
+  Windows 构建 job 修正为 bash
+- **模块更新多平台**：三平台 dll 合并清单（`platform="multi"`）+ 客户端按本机平台过滤
+
+---
+
+## 📦 版本记录 (v2.1.0-alpha.2)
 
 ```diff
 + 🎯 全新连招引擎 jpcg_combo —— 蒙特卡洛击杀率 + hp 步进追加真伤
@@ -226,6 +239,25 @@ cd examples/jpcg_app
 npx tauri build
 ```
 
+### 更新发布（自动链路）
+
+打 tag 后全链路自动完成，无需人工介入：
+
+```
+推 tag vX.Y.Z(-beta.n)
+  └─ release.yml
+       ├─ 三平台构建 → 资产上传 GitHub Release
+       └─ package job：deploy-gen 生成通道布局
+            → jpcg-<channel>-<tag>.tgz + .sha256 上传同一 Release
+GitHub Release webhook
+  └─ nefinita_download_service（服务器）
+       POST /hooks/github → 验签 → 拉取 tgz → sha256 校验
+       → 原子切换（beta 覆写 / stable 合并留 3 版）
+```
+
+相关工具：`server_tools/deploy-gen`（布局编排）、`scripts/release.sh`（三分支发布）、
+`scripts/sync-version.sh`（版本同步）；服务器文件结构见 `server_manifest.md`。
+
 ### 完整校验
 
 ```sh
@@ -253,9 +285,9 @@ crates/jpcg_core/     核心计算引擎 + host JSON 层 + FFI（句柄 + JSON �
 crates/jpcg_combo/    连招引擎（依赖 core；cdylib+rlib 双产物）
 crates/jpcg_update/   App / 数据 / 模块(dll) 自动更新（nefinita-ai.com）
 crates/jpcg_updater/  独立更新器（替换主程序并重启）
-crates/jpcg_const/    药品/食物常量
+crates/jpcg_const/    药品/食物常量 + 等级常数（编译期由 preset TOML 固化）
 examples/jpcg_app/    Tauri v2 桌面应用（React 19 + TypeScript + Vite）
-server_tools/         manifest 生成器 / 配置分享论坛
+server_tools/         manifest/deploy-gen 生成器 / 配置分享论坛 / 数据转换器
 ```
 
 ---
