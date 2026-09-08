@@ -426,8 +426,8 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
     }
     case "check_update":
       return {
-        current_app_version: "v2.1.0-alpha.2",
-        latest_app_version: "v2.1.0-alpha.2",
+        current_app_version: "v2.1.0-beta.1",
+        latest_app_version: "v2.1.0-beta.1",
         has_app_update: false,
         current_data_version: null,
         latest_data_version: null,
