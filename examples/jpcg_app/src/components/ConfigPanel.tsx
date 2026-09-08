@@ -50,6 +50,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
   const [betaChannel, setBetaChannel] = useState(() => localStorage.getItem(STORAGE_KEYS.betaChannel) === "true");
   const [moduleVersions, setModuleVersions] = useState<ModuleVersions | null>(null);
+  // 应用内确认（Tauri v2 禁用 window.confirm，需自绘）
+  const [confirmKind, setConfirmKind] = useState<null | "app" | "modules">(null);
 
   useEffect(() => {
     api.listProfessions().then((list) => {
@@ -238,70 +240,36 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, []);
 
   const handleUpdateClick = useCallback(async () => {
-    if (updating) return;
+    if (updating || confirmKind) return;
     setUpdating(true);
     setUpdateProgress(0);
     setUpdateMessage("正在检查更新...");
+    // 命中应用/模块更新时进入确认态（updating 保持 true，禁用重复触发）；
+    // 只有未进入确认态才允许 finally 复位 updating。
+    let needsConfirm = false;
     try {
       const result = await api.checkUpdate(betaChannel, false);
       setUpdateCheckResult(result);
       if (!result.has_data_update && !result.has_app_update && !result.has_modules_update) {
         setUpdateMessage("已是最新版本");
         addToast("已是最新版本", "info");
-        setUpdating(false);
         return;
       }
 
-      // 处理应用更新
+      // 处理应用更新：改为应用内确认（Tauri v2 中 window.confirm 恒返回 false）
       if (result.has_app_update && result.latest_app_version) {
-        const ok = window.confirm(
-          `发现新版本 ${result.latest_app_version}，是否下载并重启应用？`
-        );
-        if (!ok) {
-          setUpdateMessage("已取消");
-          setUpdating(false);
-          return;
-        }
-        setUpdateMessage("正在下载更新...");
-        addToast(`开始更新到 ${result.latest_app_version}`, "info");
-        const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
-          setUpdateProgress(evt.progress);
-          setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
-        });
-        try {
-          await api.performAppUpdate(betaChannel);
-        } finally {
-          unlisten();
-        }
-        // 执行到这里说明重启失败
-        setUpdateMessage("重启失败");
-        addToast("重启失败，请手动重启应用", "error");
-        setUpdating(false);
+        setUpdateMessage(`发现新版本 ${result.latest_app_version}，是否下载并重启应用？`);
+        setConfirmKind("app");
+        needsConfirm = true;
         return;
       }
 
       // 模块库（dll）增量更新
       if (result.has_modules_update && result.modules_files_to_update?.length) {
         const names = result.modules_files_to_update.map((f) => f.name).join(", ");
-        const ok = window.confirm(`发现 ${names} 需要更新，是否下载并重启应用？`);
-        if (!ok) {
-          setUpdateMessage("已取消");
-          setUpdating(false);
-          return;
-        }
-        setUpdateMessage("正在更新模块库...");
-        const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
-          setUpdateProgress(evt.progress);
-          setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
-        });
-        try {
-          await api.performModulesUpdate(betaChannel, result);
-        } finally {
-          unlisten();
-        }
-        setUpdateMessage("重启失败");
-        addToast("重启失败，请手动重启应用", "error");
-        setUpdating(false);
+        setUpdateMessage(`发现模块更新：${names}，是否下载并重启应用？`);
+        setConfirmKind("modules");
+        needsConfirm = true;
         return;
       }
 
@@ -312,18 +280,76 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         setUpdateProgress(evt.progress);
         setUpdateMessage(`正在下载: ${evt.file || evt.message}`);
       });
-      await api.performUpdate(betaChannel, result);
-      unlisten();
-      setUpdateProgress(1);
-      setUpdateMessage("更新完成");
-      addToast("更新完成", "success");
+      try {
+        await api.performUpdate(betaChannel, result);
+        setUpdateProgress(1);
+        setUpdateMessage("更新完成");
+        addToast("更新完成", "success");
+      } finally {
+        unlisten();
+      }
     } catch (err) {
       setUpdateMessage("更新失败");
       addToast(String(err), "error");
     } finally {
+      if (!needsConfirm) setUpdating(false);
+    }
+  }, [updating, confirmKind, betaChannel, addToast]);
+
+  // —— 应用内确认的执行/取消（替代被 Tauri v2 禁用的 window.confirm）——
+  const cancelUpdate = useCallback(() => {
+    setConfirmKind(null);
+    setUpdateMessage("已取消");
+    setUpdating(false);
+    addToast("已取消更新", "info");
+  }, [addToast]);
+
+  const runAppUpdate = useCallback(async () => {
+    setConfirmKind(null);
+    setUpdateProgress(0);
+    setUpdateMessage("正在下载更新...");
+    const ver = updateCheckResult?.latest_app_version;
+    if (ver) addToast(`开始更新到 ${ver}`, "info");
+    const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
+      setUpdateProgress(evt.progress);
+      setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
+    });
+    try {
+      await api.performAppUpdate(betaChannel);
+      // 正常会由后端发起退出重启；走到这里说明失败
+      setUpdateMessage("重启失败");
+      addToast("重启失败，请手动重启应用", "error");
+    } catch (err) {
+      setUpdateMessage("更新失败");
+      addToast(String(err), "error");
+    } finally {
+      unlisten();
       setUpdating(false);
     }
-  }, [updating, betaChannel, addToast]);
+  }, [betaChannel, updateCheckResult, addToast]);
+
+  const runModulesUpdate = useCallback(async () => {
+    setConfirmKind(null);
+    setUpdateProgress(0);
+    setUpdateMessage("正在更新模块库...");
+    const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
+      setUpdateProgress(evt.progress);
+      setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
+    });
+    try {
+      if (updateCheckResult) {
+        await api.performModulesUpdate(betaChannel, updateCheckResult);
+      }
+      setUpdateMessage("重启失败");
+      addToast("重启失败，请手动重启应用", "error");
+    } catch (err) {
+      setUpdateMessage("更新失败");
+      addToast(String(err), "error");
+    } finally {
+      unlisten();
+      setUpdating(false);
+    }
+  }, [betaChannel, updateCheckResult, addToast]);
 
   useEffect(() => {
     handleXinfaChange(form.xinfa);
@@ -436,12 +462,26 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
             {updating ? "更新中..." : "检查更新"}
           </button>
         </div>
-        {updating && (
+        {updating && !confirmKind && (
           <div className={styles.progress}>
             <div className={styles.progressTrack}>
               <div className={styles.progressFill} style={{ width: `${Math.round(updateProgress * 100)}%` }} />
             </div>
             <div className={styles.progressText}>{updateMessage}</div>
+          </div>
+        )}
+        {confirmKind && (
+          <div className={styles.progress}>
+            <div className={styles.progressText}>{updateMessage}</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                onClick={confirmKind === "app" ? runAppUpdate : runModulesUpdate}
+              >
+                下载更新
+              </button>
+              <button className={styles.btn} onClick={cancelUpdate}>取消</button>
+            </div>
           </div>
         )}
         {moduleVersions && (
