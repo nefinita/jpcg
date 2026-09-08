@@ -57,12 +57,16 @@ struct DataFileEntry {
 }
 
 const APP_BINS: [(&str, &str, &str); 3] = [
-    ("jpcg-app-darwin-x86_64", "darwin", "x86_64"),
+    // (资产文件名, 清单 os 字段, 清单 arch 字段)
+    // os 字段须与客户端 std::env::consts::OS 一致（macos/linux/windows），
+    // 不能写 "darwin"——否则客户端比对永不命中。mac 仅发 arm64（Intel 已淘汰）
+    ("jpcg-app-macos-aarch64", "macos", "aarch64"),
     ("jpcg-app-linux-x86_64", "linux", "x86_64"),
     ("jpcg-app-windows-x86_64.exe", "windows", "x86_64"),
 ];
 
-/// 各平台 dll 文件名（三平台合并；客户端按扩展名取本平台）
+// 各平台 dll 文件名（三平台合并；客户端按扩展名取本平台）。
+// mac 仅 aarch64 单架构，故 dylib 无同名冲突
 const MODULES: [&str; 9] = [
     "libjpcg_core.dylib",
     "libjpcg_update.dylib",
