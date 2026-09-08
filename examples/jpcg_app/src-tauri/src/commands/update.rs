@@ -16,7 +16,9 @@ pub async fn check_update(
     beta: bool,
     force: bool,
 ) -> Result<jpcg_update::UpdateCheckResult, String> {
-    check_update_impl(beta, force)
+    tauri::async_runtime::spawn_blocking(move || check_update_impl(beta, force))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg(feature = "static")]
@@ -38,13 +40,18 @@ pub async fn perform_update(
     latest_data_version: Option<String>,
     data_files_to_update: Vec<String>,
 ) -> Result<String, String> {
-    perform_update_impl(
-        app_handle,
-        beta,
-        has_data_update,
-        latest_data_version,
-        data_files_to_update,
-    )
+    let app = app_handle.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        perform_update_impl(
+            app,
+            beta,
+            has_data_update,
+            latest_data_version,
+            data_files_to_update,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(feature = "static")]
@@ -88,7 +95,10 @@ pub async fn perform_app_update(
     app_handle: tauri::AppHandle,
     beta: bool,
 ) -> Result<String, String> {
-    perform_app_update_impl(app_handle, beta)
+    let app = app_handle.clone();
+    tauri::async_runtime::spawn_blocking(move || perform_app_update_impl(app, beta))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg(feature = "static")]
@@ -114,7 +124,12 @@ pub async fn perform_modules_update(
     modules_version: Option<String>,
     modules_files_to_update: Vec<jpcg_update::modules::ModulesFileEntry>,
 ) -> Result<String, String> {
-    perform_modules_update_impl(app_handle, beta, modules_version, modules_files_to_update)
+    let app = app_handle.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        perform_modules_update_impl(app, beta, modules_version, modules_files_to_update)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(feature = "static")]
