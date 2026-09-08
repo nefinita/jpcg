@@ -123,7 +123,7 @@ PREP_BRANCH="prep/${VERSION}"  # 不可用 release/ 前缀：与已有 release �
 git push origin "HEAD:$PREP_BRANCH" >/dev/null
 PR_URL="$(gh pr create --base "$TARGET_BRANCH" --head "$PREP_BRANCH" \
   --title "release($STAGE): v${VERSION}" \
-  --body "发布准备（$STAGE，v${VERSION}）：版本 bump + CHANGELOG 聚合。\n\n请 review 并 squash 合并到 $TARGET_BRANCH。")"
+  --body "发布准备（${STAGE}，v${VERSION}）：版本 bump + CHANGELOG 聚合。\n\n请 review 并 squash 合并到 ${TARGET_BRANCH}。")"
 echo "  PR: $PR_URL"
 
 echo "==> [8/8] 推 tag（beta/release）"
@@ -134,5 +134,5 @@ fi
 
 echo ""
 echo "✅ 完成: stage=$STAGE version=$VERSION"
-echo "   下一步：reviewer 合并 PR ${PR_URL:-} 后，版本提交即落地 $TARGET_BRANCH。"
+echo "   下一步：reviewer 合并 PR ${PR_URL:-} 后，版本提交即落地 ${TARGET_BRANCH}。"
 echo "   PR 合并后可删除 prep 分支: git push origin --delete $PREP_BRANCH"
