@@ -102,7 +102,7 @@ pub async fn fetch_modules_manifest(
             MODULES_MANIFEST_FILENAME
         )
     };
-    let client = reqwest::Client::new();
+    let client = download::http_client();
     let response = client.get(&manifest_url).send().await?;
     if !response.status().is_success() {
         return Err(format!("获取模块清单失败，HTTP 状态码: {}", response.status()).into());
