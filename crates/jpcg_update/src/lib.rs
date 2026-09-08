@@ -226,7 +226,9 @@ pub async fn fetch_app_update_info(
 
     // 计算下载 URL
     let download_url = if use_beta {
-        format!("{}{}", base_url.trim_end_matches('/'), target_binary.path)
+        // beta 清单在通道根，path 无前导 /；必须补分隔符，否则拼成
+        // .../JPCG_betajpcg-app-xxx 而 404
+        format!("{}/{}", base_url.trim_end_matches('/'), target_binary.path)
     } else {
         format!(
             "{}{}/{}",
