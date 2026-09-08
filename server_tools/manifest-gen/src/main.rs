@@ -28,7 +28,7 @@ struct Args {
     #[arg(long, default_value = "modules_manifest.toml")]
     modules_output: PathBuf,
 
-    /// 目标平台（默认按本机 OS 推断：darwin / linux / windows）
+    /// 目标平台（默认按本机 OS 推断：macos / linux / windows；与客户端 env::consts 一致）
     #[arg(long)]
     platform: Option<String>,
 }
@@ -122,7 +122,7 @@ fn workspace_version() -> Option<String> {
 
 fn detect_platform() -> &'static str {
     match std::env::consts::OS {
-        "macos" => "darwin",
+        "macos" => "macos",
         "linux" => "linux",
         "windows" => "windows",
         other => other,

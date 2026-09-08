@@ -15,14 +15,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # GitHub 标准 macOS runner 已全部迁移到 arm64（Intel 已被官方淘汰），
+          # macos-latest 构建出的即是原生 aarch64，产物按 arch 如实命名
           - platform: macos-latest
-            os: darwin
+            os: macos
+            arch: aarch64
             ext: dylib
           - platform: ubuntu-latest
             os: linux
+            arch: x86_64
             ext: so
           - platform: windows-latest
             os: windows
+            arch: x86_64
             ext: dll
     runs-on: ${{ matrix.platform }}
     env:
@@ -105,12 +110,12 @@ jobs:
           cp target/release/libjpcg_core.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_core.${{ matrix.ext }} dist/modules/
           cp target/release/libjpcg_update.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_update.${{ matrix.ext }} dist/modules/
           cp target/release/libjpcg_const.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_const.${{ matrix.ext }} dist/modules/
-          # app 产物命名用 core 版本（tag）
+          # app 产物命名用 core 版本（tag），文件名/清单 os+arch 与客户端 env::consts 对齐
           if [ "${{ matrix.platform }}" = "windows-latest" ]; then
-            cp target/release/jpcg_app.exe "dist/app/jpcg-app-${{ matrix.os }}-x86_64.exe"
+            cp target/release/jpcg_app.exe "dist/app/jpcg-app-${{ matrix.os }}-${{ matrix.arch }}.exe"
             cp target/release/jpcg_updater.exe dist/app/jpcg_updater.exe
           else
-            cp target/release/jpcg_app "dist/app/jpcg-app-${{ matrix.os }}-x86_64"
+            cp target/release/jpcg_app "dist/app/jpcg-app-${{ matrix.os }}-${{ matrix.arch }}"
             cp target/release/jpcg_updater "dist/app/jpcg_updater"
           fi
 

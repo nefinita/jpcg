@@ -177,12 +177,20 @@ pub struct VersionDirectory {
 // ============================================================================
 
 /// 从服务器获取最新版本信息（update.toml）
+/// 带全局超时的 HTTP 客户端（避免更新流程无限等待）
+pub fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 pub async fn fetch_latest_version_info(
     base_url: &str,
 ) -> Result<Option<UpdateTomlInfo>, Box<dyn std::error::Error + Send + Sync>> {
     let update_info_url = format!("{}/{}", base_url.trim_end_matches('/'), "update.toml");
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let response = client.get(&update_info_url).send().await?;
 
     // 非 2xx 状态码视为无可用的版本信息（不视为错误）
@@ -357,7 +365,7 @@ pub async fn download_file(
     url: &str,
     file_name: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut response = client
         .get(url)
         .header(
@@ -418,7 +426,7 @@ pub async fn download_file_with_progress(
     file_name: &str,
     progress: &dyn ProgressCallback,
 ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut response = client
         .get(url)
         .header(
@@ -540,7 +548,7 @@ pub async fn calculate_file_sha256(
 pub async fn download_and_parse_manifest(
     manifest_url: &str,
 ) -> Result<Manifest, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let response = client.get(manifest_url).send().await?;
     if !response.status().is_success() {
         return Err(format!("下载清单失败，HTTP 状态码: {}", response.status()).into());
@@ -604,7 +612,7 @@ pub async fn fetch_data_manifest(
         )
     };
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let response = client.get(&manifest_url).send().await?;
     if !response.status().is_success() {
         return Err(format!("获取数据清单失败，HTTP 状态码: {}", response.status()).into());
