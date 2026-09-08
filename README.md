@@ -2,7 +2,7 @@
 
 > **精确计算每一发伤害，科学规划连招，轻松掌握击杀线。**
 >
-> **版本**: v2.1.0-alpha.2 | **更新日期**: 2026年8月
+> **版本**: v2.1.0-beta.1 | **更新日期**: 2026年9月
 > **适用平台**: Windows / macOS / Linux (Android 适配中)
 
 ---
@@ -107,7 +107,20 @@ kill_prob = kills / 50_000
 
 ---
 
-## 📦 本次更新 (v2.1.0-alpha.2)
+## 📦 本次更新 (v2.1.0-beta.1)
+
+- **PVP 数值更准**：修复了目标带御劲时“会心伤害减免”的计算偏差，
+  面对高御劲对手，期望伤害更贴近游戏实测
+- **公测全平台就绪**：修复 Windows 构建问题，Windows / macOS / Linux
+  三端 Beta 同步发布，想尝鲜都能更
+- **更新体验升级**：新版本发布后自动同步更新源，检查更新更及时稳定；
+  增量更新只拉本机所需的组件，更快也更省流量
+- **赛季数值体系升级**：赛季换算常数统一管理，数值校准更一致，
+  换赛季后调参更省心
+
+---
+
+## 📦 版本记录 (v2.1.0-alpha.2)
 
 ```diff
 + 🎯 全新连招引擎 jpcg_combo —— 蒙特卡洛击杀率 + hp 步进追加真伤
@@ -226,6 +239,24 @@ cd examples/jpcg_app
 npx tauri build
 ```
 
+### 更新发布（自动链路）
+
+打 tag 后全链路自动完成，无需人工介入：
+
+```
+推 tag vX.Y.Z(-beta.n)
+  └─ release.yml
+       ├─ 三平台构建 → 资产上传 GitHub Release
+       └─ package job：deploy-gen 生成通道布局
+            → jpcg-<channel>-<tag>.tgz + .sha256 上传同一 Release
+GitHub Release webhook
+  └─ 更新服务器（独立私有服务，不随本仓库发布）
+       验签 → 拉取 tgz → sha256 校验 → 原子切换（beta 覆写 / stable 保留 3 版）
+```
+
+相关工具：`server_tools/deploy-gen`（布局编排）、`scripts/release.sh`（三分支发布）、
+`scripts/sync-version.sh`（版本同步）；服务器文件结构见 `server_manifest.md`。
+
 ### 完整校验
 
 ```sh
@@ -253,9 +284,9 @@ crates/jpcg_core/     核心计算引擎 + host JSON 层 + FFI（句柄 + JSON �
 crates/jpcg_combo/    连招引擎（依赖 core；cdylib+rlib 双产物）
 crates/jpcg_update/   App / 数据 / 模块(dll) 自动更新（nefinita-ai.com）
 crates/jpcg_updater/  独立更新器（替换主程序并重启）
-crates/jpcg_const/    药品/食物常量
+crates/jpcg_const/    药品/食物常量 + 等级常数（编译期由 preset TOML 固化）
 examples/jpcg_app/    Tauri v2 桌面应用（React 19 + TypeScript + Vite）
-server_tools/         manifest 生成器 / 配置分享论坛
+server_tools/         manifest/deploy-gen 生成器 / 配置分享论坛 / 数据转换器
 ```
 
 ---
