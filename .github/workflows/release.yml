@@ -95,9 +95,13 @@ jobs:
         run: |
           cargo build -p jpcg_core -p jpcg_update -p jpcg_const --release
 
-      - name: 构建 app（static）与 updater
+      - name: 构建 app（static；用 tauri build 以嵌入前端资源）
+        working-directory: examples/jpcg_app
+        # 裸 cargo build 不嵌入 frontendDist（产物白屏）；tauri CLI 构建才会把 dist 打进二进制
+        run: npx tauri build --no-bundle
+
+      - name: 构建 updater（独立 Rust 二进制，无需嵌入）
         run: |
-          cargo build -p jpcg_app --release
           cargo build -p jpcg_updater --release
 
       - name: 准备模块产物目录
