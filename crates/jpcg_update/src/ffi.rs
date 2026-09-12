@@ -100,6 +100,7 @@ pub unsafe extern "C" fn jpcg_update_check(request: *const c_char) -> *mut c_cha
             base_path: Option<String>,
             beta: Option<bool>,
             force: Option<bool>,
+            current_version: Option<String>,
         }
         let parsed: CheckRequest = match serde_json::from_str(&req) {
             Ok(p) => p,
@@ -114,6 +115,7 @@ pub unsafe extern "C" fn jpcg_update_check(request: *const c_char) -> *mut c_cha
             &base_path,
             parsed.beta.unwrap_or(false),
             parsed.force.unwrap_or(false),
+            parsed.current_version.as_deref(),
         )) {
             Ok(result) => match serde_json::to_string(&result) {
                 Ok(s) => cstring_out(&s),
@@ -153,6 +155,7 @@ pub unsafe extern "C" fn jpcg_update_fetch_app_info(request: *const c_char) -> *
             base_path: Option<String>,
             beta: Option<bool>,
             force: Option<bool>,
+            current_version: Option<String>,
         }
         let parsed: CheckRequest = match serde_json::from_str(&req) {
             Ok(p) => p,
@@ -167,6 +170,7 @@ pub unsafe extern "C" fn jpcg_update_fetch_app_info(request: *const c_char) -> *
             &base_path,
             parsed.beta.unwrap_or(false),
             parsed.force.unwrap_or(false),
+            parsed.current_version.as_deref(),
         )) {
             Ok(Some(info)) => match serde_json::to_string(&info) {
                 Ok(s) => cstring_out(&s),

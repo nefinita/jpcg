@@ -40,9 +40,20 @@ fn base_path() -> Result<std::path::PathBuf, String> {
 }
 
 /// 检查更新（应用 + 数据）
-pub fn check_update(beta: bool, force: bool) -> Result<jpcg_update::UpdateCheckResult, String> {
+/// - `current_version`: 当前运行二进制版本（宿主注入；None 回退本 crate 版本）
+pub fn check_update(
+    beta: bool,
+    force: bool,
+    current_version: Option<&str>,
+) -> Result<jpcg_update::UpdateCheckResult, String> {
     let base_path = base_path()?;
-    block_on(jpcg_update::check_updates(&base_path, beta, force)).map_err(|e| e.to_string())
+    block_on(jpcg_update::check_updates(
+        &base_path,
+        beta,
+        force,
+        current_version,
+    ))
+    .map_err(|e| e.to_string())
 }
 
 /// 执行模块库（dll）更新：下载 → 校验 → 安装到 exe 同目录 modules/ → 请求宿主重启
@@ -160,7 +171,12 @@ fn locate_updater(events: &dyn HostEvents) -> Result<std::path::PathBuf, String>
 }
 
 /// 执行整包应用更新：下载 → 验证 → 发动 updater → 请求宿主退出
-pub fn perform_app_update(events: &dyn HostEvents, beta: bool) -> Result<String, String> {
+/// - `current_version`: 当前运行二进制版本（用于判断是否真的需要更新）
+pub fn perform_app_update(
+    events: &dyn HostEvents,
+    beta: bool,
+    current_version: Option<&str>,
+) -> Result<String, String> {
     let base_path = base_path()?;
     let progress = HostProgress(events);
 
@@ -171,9 +187,14 @@ pub fn perform_app_update(events: &dyn HostEvents, beta: bool) -> Result<String,
         0.0,
         None,
     ));
-    let info = block_on(jpcg_update::fetch_app_update_info(&base_path, beta, false))
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "没有可用的应用更新".to_string())?;
+    let info = block_on(jpcg_update::fetch_app_update_info(
+        &base_path,
+        beta,
+        false,
+        current_version,
+    ))
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| "没有可用的应用更新".to_string())?;
 
     // 2. 下载新二进制
     progress.on_progress(&UpdateProgressEvent::new(
