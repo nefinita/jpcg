@@ -21,6 +21,17 @@ const CURRENT_DIR: &str = ".";
 use std::env;
 use std::path::Path;
 
+/// 拼接更新 URL：base 去尾 `/`，各段去首尾 `/` 后以 `/` 连接。
+/// 统一入口，避免 `format!("{}{}", base, path)` 漏分隔符（曾致 404）。
+pub(crate) fn join_url(base: &str, segments: &[&str]) -> String {
+    let mut out = base.trim_end_matches('/').to_string();
+    for seg in segments {
+        out.push('/');
+        out.push_str(seg.trim_matches('/'));
+    }
+    out
+}
+
 // 将 download 模块的所有公有类型和函数重新导出
 pub use download::*;
 
@@ -180,7 +191,7 @@ pub async fn fetch_app_update_info(
     // 获取版本目录
     let version_dirs = if use_beta {
         // Beta 版: manifest 直接位于根目录
-        let manifest_url = format!("{}{}", base_url.trim_end_matches('/'), "/manifest.toml");
+        let manifest_url = join_url(base_url, &["manifest.toml"]);
         match download::download_and_parse_manifest(&manifest_url).await {
             Ok(manifest) => {
                 vec![VersionDirectory {
@@ -224,18 +235,11 @@ pub async fn fetch_app_update_info(
         env::consts::ARCH,
     )?;
 
-    // 计算下载 URL
+    // 计算下载 URL（统一走 join_url，避免漏分隔符拼成 ...JPCGv2.1.0 / ...JPCG_betaXXX）
     let download_url = if use_beta {
-        // beta 清单在通道根，path 无前导 /；必须补分隔符，否则拼成
-        // .../JPCG_betajpcg-app-xxx 而 404
-        format!("{}/{}", base_url.trim_end_matches('/'), target_binary.path)
+        join_url(base_url, &[&target_binary.path])
     } else {
-        format!(
-            "{}{}/{}",
-            base_url.trim_end_matches('/'),
-            target_dir.dir_name,
-            target_binary.path
-        )
+        join_url(base_url, &[&target_dir.dir_name, &target_binary.path])
     };
 
     Ok(Some(AppUpdateInfo {
@@ -392,7 +396,7 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
         }
 
         if !all_updates_needed.is_empty() {
-            let version_url = format!("{}{}/", base_url.trim_end_matches('/'), target_version_str);
+            let version_url = format!("{}/", join_url(base_url, &[target_version_str]));
             let file_base_url = if use_beta {
                 "https://nefinita-ai.com/files/JPCG_beta/".to_string()
             } else {
@@ -473,9 +477,35 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
 #[cfg(test)]
 mod tests {
+    use super::join_url;
+
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn join_url_beta_root_binary() {
+        assert_eq!(
+            join_url(
+                "https://nefinita-ai.com/updates/JPCG_beta/",
+                &["jpcg-app-macos-aarch64"]
+            ),
+            "https://nefinita-ai.com/updates/JPCG_beta/jpcg-app-macos-aarch64"
+        );
+    }
+
+    #[test]
+    fn join_url_stable_version_dir() {
+        assert_eq!(
+            join_url(
+                "https://nefinita-ai.com/updates/JPCG/",
+                &["v2.1.0", "jpcg-app-macos-aarch64"]
+            ),
+            "https://nefinita-ai.com/updates/JPCG/v2.1.0/jpcg-app-macos-aarch64"
+        );
+    }
+
+    #[test]
+    fn join_url_tolerates_missing_trailing_or_leading_slash() {
+        assert_eq!(
+            join_url("https://x/updates/JPCG", &["/manifest.toml"]),
+            "https://x/updates/JPCG/manifest.toml"
+        );
     }
 }
