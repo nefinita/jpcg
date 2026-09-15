@@ -1,7 +1,8 @@
 // ============================================================================
 // level_constant —— 等级常数（编译期固化）
 //
-// 数据源：preset/level_constant.toml（include_str! 内嵌，改文件即自动重编）。
+// 数据源：preset/cszj-exp-260908.toml（本分支默认，一测 50 级）。
+// 正式服 preset/level_constant.toml 保留为 LIVE_130；include_str! 改文件即重编。
 // 解析：const fn 逐行白名单解析，任何未知 key / 缺字段 / 坏值都会在
 //       编译期 panic（const 求值 = 编译错误），防"策划改字段忘同步解析器"。
 // 设计：运行时零依赖、零 I/O；level 只作快照记录（LEVEL），不进入结构。
@@ -49,13 +50,23 @@ impl LevelConstant {
 }
 
 /// 快照文本（改 preset 即触发重编）
-const SNAPSHOT_TEXT: &str = include_str!("../preset/level_constant.toml");
+const SNAPSHOT_TEXT: &str = include_str!("../preset/cszj-exp-260908.toml");
+
+/// 正式服 130 级快照，仅用于显式兼容与历史金标准回归。
+pub const LIVE_130: LevelConstant = parse_snapshot(include_str!("../preset/level_constant.toml")).1;
 
 /// 快照对应等级（仅记录/预计算用）
 pub const LEVEL: u32 = parse_snapshot(SNAPSHOT_TEXT).0;
 
 /// 当前快照的等级常数（编译期解析固化）
 pub const CURRENT: LevelConstant = parse_snapshot(SNAPSHOT_TEXT).1;
+
+/// 苍生铸世体验服一测：本分支的默认快照。
+pub const CANGSHENG_FIRST_TEST: LevelConstant =
+    parse_snapshot(include_str!("../preset/cszj-exp-260908.toml")).1;
+
+pub const CANGSHENG_FIRST_TEST_LEVEL: u32 =
+    parse_snapshot(include_str!("../preset/cszj-exp-260908.toml")).0;
 
 /// 解析快照文本 → (level, LevelConstant)
 /// 未知 key / 缺字段 / 值非法一律 panic（const 场景即编译错误）
@@ -298,8 +309,39 @@ mod tests {
     use super::{CURRENT, LEVEL, LevelConstant, parse_snapshot};
 
     #[test]
+    fn cangsheng_first_test_matches_published_level_50_table() {
+        let c = super::CANGSHENG_FIRST_TEST;
+        assert_eq!(super::CANGSHENG_FIRST_TEST_LEVEL, 50);
+        assert_eq!(
+            c,
+            LevelConstant {
+                pofang_xishu: 10378.17,
+                huixin_xishu: 9512.91,
+                huixiao_xishu: 3504.60,
+                yujin_xishu: 19025.82,
+                yuhui_xishu: 9422.82,
+                huajin_xishu: 5148.00,
+                fangyu_xishu: 10802.88,
+                pvp_global_jianshang: 0.9,
+            }
+        );
+        // C(50) = 33 * 50 - 660 = 990，校验原文 GlobalParam 与分母。
+        for (divisor, global) in [
+            (c.pofang_xishu, 10.483),
+            (c.huixin_xishu, 9.609),
+            (c.huixiao_xishu, 3.540),
+            (c.yujin_xishu, 19.218),
+            (c.yuhui_xishu, 9.518),
+            (c.huajin_xishu, 5.200),
+            (c.fangyu_xishu, 10.912),
+        ] {
+            assert!((divisor - global * 990.0).abs() < 0.002);
+        }
+    }
+
+    #[test]
     fn snapshot_matches_rust_literal_bits() {
-        // 与 preset/level_constant.toml 当前值逐项 bit 校验（防解析精度漂移）
+        // 与正式服 preset/level_constant.toml 逐项 bit 校验（防历史快照漂移）
         let expect = LevelConstant {
             pofang_xishu: 225957.6,
             huixin_xishu: 197703.0,
@@ -310,13 +352,12 @@ mod tests {
             fangyu_xishu: 126007.2,
             pvp_global_jianshang: 0.9,
         };
-        assert_eq!(LEVEL, 130);
-        assert_eq!(CURRENT, expect);
+        assert_eq!(super::LIVE_130, expect);
     }
 
     #[test]
     fn full_text_parse_roundtrip() {
-        let (level, val) = parse_snapshot(include_str!("../preset/level_constant.toml"));
+        let (level, val) = parse_snapshot(include_str!("../preset/cszj-exp-260908.toml"));
         assert_eq!(level, LEVEL);
         assert_eq!(val, CURRENT);
     }

@@ -357,8 +357,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const playerStats = React.useMemo(() => {
     const pct = (v: number) => (v * 100).toFixed(1) + "%";
-    const huixinRate = normalizeNum(form.player.huixin_dengji) / (normalizeNum(form.coefficient.huixin_xishu) || 197703);
-    const pofangRate = normalizeNum(form.player.pofang_dengji) / (normalizeNum(form.coefficient.pofang_xishu) || 225957.6);
+    const huixinRate = normalizeNum(form.player.huixin_dengji) / (normalizeNum(form.coefficient.huixin_xishu) || DEFAULT_COEFFICIENT.huixin_xishu);
+    const pofangRate = normalizeNum(form.player.pofang_dengji) / (normalizeNum(form.coefficient.pofang_xishu) || DEFAULT_COEFFICIENT.pofang_xishu);
     return {
       huixinRate: pct(huixinRate + normalizeNum(form.buff.huixin_pct) / 100),
       pofangRate: pct(pofangRate + normalizeNum(form.buff.pofang_pct) / 100),

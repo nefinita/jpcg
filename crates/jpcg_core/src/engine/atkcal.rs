@@ -473,7 +473,8 @@ mod golden_tests {
         let p = player();
         let h = hostile();
         let x = xinfa();
-        let c = CoefficientConfig::default();
+        // 历史金标准采用正式服属性，固定原快照，不随实验分支默认值改变。
+        let c = CoefficientConfig::from(jpcg_const::level_constant::LIVE_130);
         let cfg = JpcgConfig::new_with_config(&p, &h, sk, &x, buff, &c);
         let d = cfg.q_cal();
         let dr = cfg.q_cal_with_derivatives().derivatives;
@@ -559,7 +560,7 @@ mod golden_tests {
         let h = hostile();
         let x = xinfa();
         let b = BuffConfig::default();
-        let c = CoefficientConfig::default();
+        let c = CoefficientConfig::from(jpcg_const::level_constant::LIVE_130);
         let cfg = JpcgConfig::new_with_config(&p, &h, &sk, &x, &b, &c);
         let d = cfg.q_cal();
         assert_eq!(d.dot_jumps.len(), 6, "普通 dot 应为 6 跳");
@@ -586,7 +587,7 @@ mod golden_tests {
         let h = hostile();
         let x = xinfa();
         let b = BuffConfig::default();
-        let c = CoefficientConfig::default();
+        let c = CoefficientConfig::from(jpcg_const::level_constant::LIVE_130);
         let cfg = JpcgConfig::new_with_config(&p, &h, &sk, &x, &b, &c);
         let d = cfg.q_cal();
         assert_eq!(d.dot_jumps.len(), 9, "疏曲 dot 应为 9 跳");

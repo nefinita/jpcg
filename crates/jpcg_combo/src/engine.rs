@@ -363,7 +363,8 @@ mod tests {
 
     fn combo(skills: &[Skilltype], cfg: ComboConfig) -> ComboResult {
         let (p, h, x) = (player(), hostile(), xinfa());
-        let (b, c) = (BuffConfig::default(), CoefficientConfig::default());
+        // 本组历史测试数据为正式服 130 级，必须配套同版本系数。
+        let (b, c) = (BuffConfig::default(), CoefficientConfig::live_130());
         calculate_combo(skills, &p, &h, &x, &b, &c, &cfg)
     }
 
@@ -425,7 +426,7 @@ mod tests {
         h.max_hp = 100_000;
         h.current_hp = 100_000;
         let (p, x) = (player(), xinfa());
-        let (b, c) = (BuffConfig::default(), CoefficientConfig::default());
+        let (b, c) = (BuffConfig::default(), CoefficientConfig::live_130());
         let cfg = ComboConfig {
             samples: 5000,
             seed: Some(1),
@@ -541,7 +542,7 @@ mod tests {
             seed: Some(10),
         };
         let (p_, x_) = (player(), xinfa());
-        let (b, c) = (BuffConfig::default(), CoefficientConfig::default());
+        let (b, c) = (BuffConfig::default(), CoefficientConfig::live_130());
         let r2 = calculate_combo(&[sk.clone()], &p_, &h, &x_, &b, &c, &weak_cfg);
         assert!(
             r2.final_kill_prob < 1.0,

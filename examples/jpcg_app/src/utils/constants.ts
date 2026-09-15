@@ -1,4 +1,5 @@
 import type { XinfaEntry, BuffConfigDTO, CoefficientConfigDTO } from "../types";
+import { FIRST_TEST_COEFFICIENT } from "./coefficientSnapshot";
 
 export const XINFA_LIST: XinfaEntry[] = [
   { value: "yinlong",  label: "隐龙诀",   icon: "" },
@@ -31,14 +32,14 @@ export const BUFF_FIELDS = [
 ];
 
 export const COEFFICIENT_FIELDS = [
-  { id: "pofang_xishu",        label: "破防系数", default: 225957.6 },
-  { id: "huixin_xishu",        label: "会心系数", default: 197703 },
-  { id: "huixiao_xishu",       label: "会效系数", default: 72844.2 },
-  { id: "yujin_xishu",         label: "御劲系数(会心)", default: 197703 },
-  { id: "yuhui_xishu",         label: "御劲系数(会伤)", default: 55123.2 },
-  { id: "huajin_xishu",        label: "化劲系数", default: 30115.8 },
-  { id: "fangyu_xishu",        label: "防御系数", default: 126007.2 },
-  { id: "pvp_global_jianshang", label: "PVP全局减伤", default: 0.9 },
+  { id: "pofang_xishu",        label: "破防系数", default: FIRST_TEST_COEFFICIENT.pofang_xishu },
+  { id: "huixin_xishu",        label: "会心系数", default: FIRST_TEST_COEFFICIENT.huixin_xishu },
+  { id: "huixiao_xishu",       label: "会效系数", default: FIRST_TEST_COEFFICIENT.huixiao_xishu },
+  { id: "yujin_xishu",         label: "御劲系数(会心)", default: FIRST_TEST_COEFFICIENT.yujin_xishu },
+  { id: "yuhui_xishu",         label: "御劲系数(会伤)", default: FIRST_TEST_COEFFICIENT.yuhui_xishu },
+  { id: "huajin_xishu",        label: "化劲系数", default: FIRST_TEST_COEFFICIENT.huajin_xishu },
+  { id: "fangyu_xishu",        label: "防御系数", default: FIRST_TEST_COEFFICIENT.fangyu_xishu },
+  { id: "pvp_global_jianshang", label: "PVP全局减伤", default: FIRST_TEST_COEFFICIENT.pvp_global_jianshang },
 ];
 
 export const DEFAULT_BUFF: BuffConfigDTO = {
@@ -52,14 +53,14 @@ export const DEFAULT_BUFF: BuffConfigDTO = {
 };
 
 export const DEFAULT_COEFFICIENT: CoefficientConfigDTO = {
-  pofang_xishu: 225957.6,
-  huixin_xishu: 197703,
-  huixiao_xishu: 72844.2,
-  yujin_xishu: 197703,
-  yuhui_xishu: 55123.2,
-  huajin_xishu: 30115.8,
-  fangyu_xishu: 126007.2,
-  pvp_global_jianshang: 0.9,
+  pofang_xishu: FIRST_TEST_COEFFICIENT.pofang_xishu,
+  huixin_xishu: FIRST_TEST_COEFFICIENT.huixin_xishu,
+  huixiao_xishu: FIRST_TEST_COEFFICIENT.huixiao_xishu,
+  yujin_xishu: FIRST_TEST_COEFFICIENT.yujin_xishu,
+  yuhui_xishu: FIRST_TEST_COEFFICIENT.yuhui_xishu,
+  huajin_xishu: FIRST_TEST_COEFFICIENT.huajin_xishu,
+  fangyu_xishu: FIRST_TEST_COEFFICIENT.fangyu_xishu,
+  pvp_global_jianshang: FIRST_TEST_COEFFICIENT.pvp_global_jianshang,
 };
 
 export const PLAYER_FIELDS = [
