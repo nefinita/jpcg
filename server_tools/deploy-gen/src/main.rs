@@ -238,7 +238,7 @@ fn write_update_toml(path: &Path, version: &str, data_version: &str) {
 }
 
 fn write_manifest_toml(path: &Path, version: &str) {
-    let mut out = String::from(format!("version = \"v{}\"\nmajor_version = 2\n\n", version));
+    let mut out = format!("version = \"v{}\"\nmajor_version = 2\n\n", version);
     for (name, os, arch) in APP_BINS {
         let parent = path.parent().expect("parent");
         let hash = sha256_hex(&parent.join(name));
@@ -252,9 +252,7 @@ fn write_manifest_toml(path: &Path, version: &str) {
 }
 
 fn write_modules_manifest(manifest_path: &Path, modules_dir: &Path, version: &str) {
-    let mut out = String::from(format!(
-        "modules_version = \"{version}\"\nplatform = \"multi\"\n\n"
-    ));
+    let mut out = format!("modules_version = \"{version}\"\nplatform = \"multi\"\n\n");
     for name in MODULES {
         let p = modules_dir.join(name);
         if !p.is_file() {

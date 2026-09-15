@@ -44,9 +44,15 @@ fn resolve_current_version(current: Option<&str>) -> String {
     }
 }
 
+/// 版本号规范化：去首尾空白与 `v` 前缀。
+/// 服务器 update.toml 写的是 `vX.Y.Z`，而 `CARGO_PKG_VERSION` 不带 `v`，必须归一后再比。
+fn normalize_version(v: &str) -> &str {
+    v.trim().trim_start_matches('v')
+}
+
 /// 应用是否需要更新：强制，或当前二进制版本与服务器最新版本不同
 pub(crate) fn needs_app_update(force: bool, current_version: &str, latest_version: &str) -> bool {
-    force || current_version != latest_version
+    force || normalize_version(current_version) != normalize_version(latest_version)
 }
 
 // ============================================================================
@@ -539,6 +545,16 @@ mod tests {
         assert!(needs_app_update(false, "2.1.0-beta.2", "2.1.0-beta.3"));
         // force → 总是有更新
         assert!(needs_app_update(true, "2.1.0-beta.3", "2.1.0-beta.3"));
+    }
+
+    #[test]
+    fn needs_app_update_normalizes_v_prefix() {
+        // CARGO_PKG_VERSION 不带 v，服务器 update.toml 带 v → 必须视为同一版本
+        assert!(!needs_app_update(false, "2.1.0-beta.3", "v2.1.0-beta.3"));
+        assert!(!needs_app_update(false, "v2.1.0-beta.3", "2.1.0-beta.3"));
+        assert!(!needs_app_update(false, " v2.1.0-beta.3 ", "2.1.0-beta.3"));
+        // 真不同版本仍应判定为有更新
+        assert!(needs_app_update(false, "2.1.0-alpha.2", "v2.1.0-beta.3"));
     }
 
     #[test]
