@@ -988,16 +988,14 @@ pub async fn prompt_and_perform_update(
         }
     }
 
-    // 更新本地版本信息
+    // 更新本地版本信息（读旧值合并，保留 data_version，避免被覆盖丢失）
     if os_arch_supported {
-        save_local_version_info(&LocalVersionInfo {
-            version: Some(target_version_str.to_string()),
-            major_version: None,
-            channel: channel.to_string(),
-            last_checked_version: Some(target_version_str.to_string()),
-            last_checked_major: manifest.major_version,
-            data_version: None, // data 版本由独立流程维护
-        })?;
+        let mut local_info = load_local_version_info()?;
+        local_info.version = Some(target_version_str.to_string());
+        local_info.channel = channel.to_string();
+        local_info.last_checked_version = Some(target_version_str.to_string());
+        local_info.last_checked_major = manifest.major_version;
+        save_local_version_info(&local_info)?;
     }
 
     Ok(())

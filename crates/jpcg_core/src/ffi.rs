@@ -213,12 +213,14 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             struct UpdateCheckRequest {
                 beta: Option<bool>,
                 force: Option<bool>,
+                current_version: Option<String>,
             }
             let req: UpdateCheckRequest =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
             let out = crate::host::update::check_update(
                 req.beta.unwrap_or(false),
                 req.force.unwrap_or(false),
+                req.current_version.as_deref(),
             )?;
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
@@ -247,11 +249,15 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             #[derive(serde::Deserialize)]
             struct UpdateAppRequest {
                 beta: Option<bool>,
+                current_version: Option<String>,
             }
             let req: UpdateAppRequest =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out =
-                crate::host::update::perform_app_update(&FfiHostEvents, req.beta.unwrap_or(false))?;
+            let out = crate::host::update::perform_app_update(
+                &FfiHostEvents,
+                req.beta.unwrap_or(false),
+                req.current_version.as_deref(),
+            )?;
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
         #[cfg(feature = "net")]
