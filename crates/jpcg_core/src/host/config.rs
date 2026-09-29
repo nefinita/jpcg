@@ -91,6 +91,7 @@ pub fn load_config() -> jpcg_api::ConfigDataDTO {
             fangyu_xishu: saved.coefficient.fangyu_xishu,
             pvp_global_jianshang: saved.coefficient.pvp_global_jianshang,
         },
+        value_set: saved.value_set,
     }
 }
 

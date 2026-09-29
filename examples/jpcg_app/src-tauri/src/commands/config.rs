@@ -59,6 +59,22 @@ fn list_professions_impl() -> Result<Vec<XinfaSummaryDTO>, String> {
     crate::commands::ffi_bridge::call_no_args("list_professions")
 }
 
+/// 列出可用数值集（正式服/体验服等；来源 data/values/index.toml，缺失时为内置兜底）
+#[tauri::command]
+pub fn list_value_sets_cmd() -> Result<Vec<ValueSetDTO>, String> {
+    list_value_sets_impl()
+}
+
+#[cfg(feature = "static")]
+fn list_value_sets_impl() -> Result<Vec<ValueSetDTO>, String> {
+    Ok(jpcg_core::host::values::list_value_sets())
+}
+
+#[cfg(feature = "dynamic")]
+fn list_value_sets_impl() -> Result<Vec<ValueSetDTO>, String> {
+    crate::commands::ffi_bridge::call_no_args("list_value_sets")
+}
+
 #[tauri::command]
 pub fn load_profession_config(profession: String) -> Result<XinfaConfigDTO, String> {
     load_profession_config_impl(profession)

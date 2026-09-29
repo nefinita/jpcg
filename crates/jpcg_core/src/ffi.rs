@@ -176,6 +176,10 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             let out = crate::host::config::list_professions();
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
+        "list_value_sets" => {
+            let out = crate::host::values::list_value_sets();
+            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
+        }
         "load_skill_data" => {
             #[derive(serde::Deserialize)]
             struct ProfessionRequest {

@@ -90,6 +90,9 @@ pub struct CalculateRequest {
     pub xinfa_config: XinfaConfigDTO,
     pub buff: BuffConfigDTO,
     pub coefficient: CoefficientConfigDTO,
+    /// 数值集 id（None = 使用默认值集，见 data/values/index.toml 的 default）
+    #[serde(default)]
+    pub value_set: Option<String>,
 }
 
 /// 完整配置数据（对应 saved_config.toml 的加载结果）
@@ -102,6 +105,24 @@ pub struct ConfigDataDTO {
     pub xinfa_config: XinfaConfigDTO,
     pub buff: BuffConfigDTO,
     pub coefficient: CoefficientConfigDTO,
+    /// 数值集 id（持久化选择；None = 默认值集）
+    pub value_set: Option<String>,
+}
+
+/// 数值集信息（对应 data/values/index.toml 的条目）
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ValueSetDTO {
+    /// 唯一 id（如 cszj-exp-260908 / live-130 / builtin-*）
+    pub id: String,
+    /// 界面显示名（如「体验服·苍生铸世一测」）
+    pub name: String,
+    /// 等级（仅标识）
+    pub level: u32,
+    /// 是否为当前默认值集
+    pub is_default: bool,
+    /// 来源："data"（本地 data/values）或 "builtin"（内置兜底）
+    pub source: String,
 }
 
 // ============ 计算/连招结果 DTO ============

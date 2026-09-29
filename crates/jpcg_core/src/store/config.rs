@@ -26,6 +26,9 @@ pub struct SaveConfig {
     pub buff: BuffConfig,       // 阵眼/奇穴增益
     #[serde(default)]
     pub coefficient: CoefficientConfig, // 系数设置
+    /// 选中的数值集 id（None = 默认值集；见 data/values/index.toml）
+    #[serde(default)]
+    pub value_set: Option<String>,
 }
 
 // ============================================================================
@@ -45,6 +48,8 @@ pub fn save_config(
         xinfa,
         buff: BuffConfig::default(),
         coefficient: CoefficientConfig::default(),
+        // 保留已选的数值集（本函数不接收该项，避免保存时丢失）
+        value_set: load_save_config().value_set,
     };
     // 序列化为 TOML 字符串
     match toml::to_string(&save_config) {

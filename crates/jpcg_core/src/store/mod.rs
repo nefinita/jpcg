@@ -13,6 +13,7 @@ pub mod config;
 pub mod paths;
 pub mod profession;
 pub mod toml;
+pub mod values;
 
 pub use combo::{delete_combo_preset, list_combo_presets, load_combo_preset, save_combo_preset};
 pub use config::{

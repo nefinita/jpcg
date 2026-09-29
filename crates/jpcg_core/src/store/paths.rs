@@ -42,6 +42,42 @@ pub fn data_dir() -> Option<PathBuf> {
     None
 }
 
+/// 数值集目录（data/values）：存放 index.toml 与各值集快照。
+/// 解析顺序与 [`data_dir`] 一致：JPCG_DATA_DIR → exe 同目录/data/values → .app Resources/data/values
+pub fn values_dir() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
+        let p = PathBuf::from(dir);
+        // JPCG_DATA_DIR 可能指向数据根（含 shuxing/ 与 values/）或 shuxing 本身
+        let root = if p.join("values").is_dir() {
+            p
+        } else if p.join("shuxing").is_dir() {
+            p
+        } else {
+            return None;
+        };
+        return Some(root.join("values"));
+    }
+
+    let exe = std::env::current_exe().ok()?;
+    let exe_dir = exe.parent()?;
+
+    let dev = exe_dir.join("data").join("values");
+    if dev.is_dir() {
+        return Some(dev);
+    }
+
+    if exe_dir.ends_with("MacOS")
+        && let Some(contents) = exe_dir.parent()
+    {
+        let bundle = contents.join("Resources").join("data").join("values");
+        if bundle.is_dir() {
+            return Some(bundle);
+        }
+    }
+
+    None
+}
+
 /// 连招预设目录路径（开发模式: exe_dir/data/combo；.app bundle: 用户数据目录/combo）
 pub fn combo_presets_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
