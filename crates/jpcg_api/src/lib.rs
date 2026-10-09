@@ -123,6 +123,8 @@ pub struct ValueSetDTO {
     pub is_default: bool,
     /// 来源："data"（本地 data/values）或 "builtin"（内置兜底）
     pub source: String,
+    /// 索引已列出且对应快照可读取、可解析且校验通过
+    pub available: bool,
 }
 
 // ============ 计算/连招结果 DTO ============

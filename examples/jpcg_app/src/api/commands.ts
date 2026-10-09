@@ -178,6 +178,7 @@ export async function calculateCombo(
   xinfa: XinfaConfigDTO,
   buff: BuffConfigDTO,
   coefficient: CoefficientConfigDTO,
+  valueSet?: string | null,
 ): Promise<ComboResultDTO> {
   return invoke("calculate_combo_cmd", {
     steps,
@@ -186,6 +187,7 @@ export async function calculateCombo(
     xinfa,
     buff,
     coefficient,
+    value_set: valueSet ?? null,
   });
 }
 

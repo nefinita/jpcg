@@ -180,6 +180,17 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             let out = crate::host::values::list_value_sets();
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
+        "resolve_value_set" => {
+            #[derive(serde::Deserialize)]
+            struct ResolveValueSetRequest {
+                #[serde(default)]
+                value_set: Option<String>,
+            }
+            let req: ResolveValueSetRequest =
+                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
+            let out = crate::host::values::resolve_value_set(req.value_set.as_deref());
+            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
+        }
         "load_skill_data" => {
             #[derive(serde::Deserialize)]
             struct ProfessionRequest {
@@ -401,6 +412,14 @@ pub unsafe extern "C" fn jpcg_core_version() -> *mut c_char {
 mod ffi_tests {
     use super::*;
     use serde_json::Value;
+    use std::sync::Mutex;
+
+    /// FFI 错误经全局 last_error 传递；测试并行执行会相互覆盖 → 串行化
+    static FFI_LOCK: Mutex<()> = Mutex::new(());
+
+    fn ffi_guard() -> std::sync::MutexGuard<'static, ()> {
+        FFI_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     unsafe fn call_owned(method: &str, req: &str) -> Result<String, String> {
         let handle = unsafe { jpcg_handle_create(cstring("{}").as_ptr()) };
@@ -440,6 +459,7 @@ mod ffi_tests {
 
     #[test]
     fn list_professions_roundtrip() {
+        let _g = ffi_guard();
         let out = unsafe { call_owned("list_professions", "{}") }.expect("调用失败");
         let v: Value = serde_json::from_str(&out).expect("响应应为合法 JSON");
         assert!(v.is_array());
@@ -447,18 +467,21 @@ mod ffi_tests {
 
     #[test]
     fn unknown_method_sets_error() {
+        let _g = ffi_guard();
         let err = unsafe { call_owned("no_such_method", "{}") }.expect_err("应返回错误");
         assert!(err.contains("未知方法"), "错误信息: {}", err);
     }
 
     #[test]
     fn invalid_request_json_sets_error() {
+        let _g = ffi_guard();
         let err = unsafe { call_owned("calculate", "not json") }.expect_err("应返回错误");
         assert!(err.contains("解析失败"), "错误信息: {}", err);
     }
 
     #[test]
     fn save_config_roundtrip() {
+        let _g = ffi_guard();
         // 不落盘验证 JSON 契约，仅确认方法可达（会写 saved_config.toml 到 CWD）
         let req = r#"{
             "player": {"jcsx":"gengu","jichu_shuxing":18888,"jichu_gongji":4666,"huixin_dengji":33000,"huixin_xiaoguo":22000,"pofang_dengji":25000,"wuqi_shanghai":2800},

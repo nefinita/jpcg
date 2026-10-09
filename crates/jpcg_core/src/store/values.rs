@@ -6,10 +6,12 @@
 //       即体验服·苍生铸世一测），UI 通过 source="builtin" 可见来源。
 //
 // 解析策略：白名单严格解析（deny_unknown_fields），换算分母必须 > 0，
-//           pvp_global_jianshang ∈ [0,1]；任一不合法即整份回退兜底并告警。
+//           pvp_global_jianshang ∈ [0,1]；任一不合法即整体回退并告警。
+// 可测试性：核心逻辑均以显式目录参数（`*_from` / `load_with_fallback`）实现，
+//           便于用隔离临时目录做确定性回归，而不依赖环境变量或真实 data 是否存在。
 // ============================================================================
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use jpcg_api::ValueSetDTO;
 use jpcg_const::level_constant::{CURRENT, LevelConstant};
@@ -29,7 +31,7 @@ struct IndexFile {
     value_sets: Vec<IndexEntry>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 struct IndexEntry {
     id: String,
@@ -93,7 +95,8 @@ impl Snapshot {
     }
 }
 
-/// 已加载的数值集（供计算取系数）
+/// 已加载的数值集（供计算取系数；info 用于上报实际使用的值集）
+#[derive(Debug, Clone)]
 pub struct LoadedValueSet {
     pub info: ValueSetDTO,
     pub constant: LevelConstant,
@@ -107,13 +110,13 @@ fn builtin() -> LoadedValueSet {
             level: 0,
             is_default: true,
             source: "builtin".to_string(),
+            available: true,
         },
         constant: CURRENT,
     }
 }
 
-fn read_index() -> Result<(IndexFile, PathBuf), String> {
-    let dir = values_dir().ok_or_else(|| "未找到 data/values 目录".to_string())?;
+fn read_index(dir: &Path) -> Result<IndexFile, String> {
     let text = std::fs::read_to_string(dir.join(INDEX_FILENAME))
         .map_err(|e| format!("读取 {} 失败: {}", INDEX_FILENAME, e))?;
     let index: IndexFile =
@@ -127,22 +130,43 @@ fn read_index() -> Result<(IndexFile, PathBuf), String> {
             index.default
         ));
     }
-    Ok((index, dir))
+    Ok(index)
 }
 
-/// 列出可用值集（本地 data 不可用时返回单个内置兜底项）
+/// 读取并校验单个快照
+fn read_snapshot(dir: &Path, file: &str) -> Result<LevelConstant, String> {
+    let text = std::fs::read_to_string(dir.join(file))
+        .map_err(|e| format!("读取快照 {} 失败: {}", file, e))?;
+    let snap: Snapshot =
+        toml::from_str(&text).map_err(|e| format!("解析快照 {} 失败: {}", file, e))?;
+    snap.to_constant()
+}
+
+fn entry_to_dto(entry: &IndexEntry, index: &IndexFile, available: bool) -> ValueSetDTO {
+    ValueSetDTO {
+        id: entry.id.clone(),
+        name: entry.name.clone(),
+        level: entry.level,
+        is_default: entry.id == index.default,
+        source: "data".to_string(),
+        available,
+    }
+}
+
+/// 列出可用值集（同时逐项校验快照可用性；索引不可用时返回内置兜底项）
 pub fn list_value_sets() -> Vec<ValueSetDTO> {
-    match read_index() {
-        Ok((index, _)) => index
+    match values_dir() {
+        Some(dir) => list_from(&dir),
+        None => vec![builtin().info],
+    }
+}
+
+fn list_from(dir: &Path) -> Vec<ValueSetDTO> {
+    match read_index(dir) {
+        Ok(index) => index
             .value_sets
             .iter()
-            .map(|s| ValueSetDTO {
-                id: s.id.clone(),
-                name: s.name.clone(),
-                level: s.level,
-                is_default: s.id == index.default,
-                source: "data".to_string(),
-            })
+            .map(|s| entry_to_dto(s, &index, read_snapshot(dir, &s.file).is_ok()))
             .collect(),
         Err(e) => {
             crate::log::warn(&format!("数值集清单不可用（回退内置兜底）：{}", e));
@@ -154,7 +178,15 @@ pub fn list_value_sets() -> Vec<ValueSetDTO> {
 /// 加载指定数值集；`id = None` 用 index.toml 的 default；
 /// 任何失败（目录/文件/解析/校验）都回退内置兜底（体验服一测）。
 pub fn load_value_set(id: Option<&str>) -> LoadedValueSet {
-    match try_load(id) {
+    match values_dir() {
+        Some(dir) => load_with_fallback(&dir, id),
+        None => builtin(),
+    }
+}
+
+/// 从指定目录加载，失败回退内置兜底（显式目录版，便于测试）
+pub(crate) fn load_with_fallback(dir: &Path, id: Option<&str>) -> LoadedValueSet {
+    match load_from(dir, id) {
         Ok(v) => v,
         Err(e) => {
             crate::log::warn(&format!("数值集加载失败（回退内置兜底）：{}", e));
@@ -163,28 +195,19 @@ pub fn load_value_set(id: Option<&str>) -> LoadedValueSet {
     }
 }
 
-fn try_load(id: Option<&str>) -> Result<LoadedValueSet, String> {
-    let (index, dir) = read_index()?;
+fn load_from(dir: &Path, id: Option<&str>) -> Result<LoadedValueSet, String> {
+    let index = read_index(dir)?;
     let wanted = id.unwrap_or(&index.default);
+    // 指定 id 未命中时回退默认项；默认项也缺失才报错
     let entry = index
         .value_sets
         .iter()
         .find(|s| s.id == wanted)
         .or_else(|| index.value_sets.iter().find(|s| s.id == index.default))
         .ok_or_else(|| format!("未找到值集: {}", wanted))?;
-    let text = std::fs::read_to_string(dir.join(&entry.file))
-        .map_err(|e| format!("读取快照 {} 失败: {}", entry.file, e))?;
-    let snap: Snapshot =
-        toml::from_str(&text).map_err(|e| format!("解析快照 {} 失败: {}", entry.file, e))?;
-    let constant = snap.to_constant()?;
+    let constant = read_snapshot(dir, &entry.file)?;
     Ok(LoadedValueSet {
-        info: ValueSetDTO {
-            id: entry.id.clone(),
-            name: entry.name.clone(),
-            level: entry.level,
-            is_default: entry.id == index.default,
-            source: "data".to_string(),
-        },
+        info: entry_to_dto(entry, &index, true),
         constant,
     })
 }
@@ -192,65 +215,131 @@ fn try_load(id: Option<&str>) -> Result<LoadedValueSet, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::paths::values_dir_from_env;
+    use std::path::{Path, PathBuf};
 
     const EXP: &str = include_str!("../../../../data/values/cszj-exp-260908.toml");
+    const LIVE: &str = include_str!("../../../../data/values/live-130.toml");
+    const INDEX: &str = include_str!("../../../../data/values/index.toml");
 
-    #[test]
-    fn snapshot_parses_exp_and_validates() {
-        let snap: Snapshot = toml::from_str(EXP).expect("exp 快照应可解析");
-        assert_eq!(snap.level, 50);
-        let c = snap.to_constant().expect("exp 快照应通过校验");
-        assert_eq!(c.huixin_xishu, 9512.91);
+    /// 隔离临时目录：`root/values/` 写入 index + 两份快照，Drop 时清理
+    struct TempData {
+        root: PathBuf,
+        values: PathBuf,
     }
-
-    #[test]
-    fn snapshot_rejects_zero_or_unknown() {
-        // 未知字段
-        let unknown = format!("{}\nnope = 1\n", EXP);
-        assert!(toml::from_str::<Snapshot>(&unknown).is_err());
-        // 分母为 0
-        let zero = EXP.replace("huixin_xishu  = 9512.91", "huixin_xishu  = 0.0");
-        let snap: Snapshot = toml::from_str(&zero).unwrap();
-        assert!(snap.to_constant().is_err());
-        // pvp 越界
-        let bad_pvp = EXP.replace("pvp_global_jianshang = 0.9", "pvp_global_jianshang = 1.5");
-        let snap: Snapshot = toml::from_str(&bad_pvp).unwrap();
-        assert!(snap.to_constant().is_err());
-    }
-
-    #[test]
-    fn index_parses_builtin_repo_file() {
-        let idx: IndexFile = toml::from_str(include_str!("../../../../data/values/index.toml"))
-            .expect("index 应可解析");
-        assert_eq!(idx.default, "cszj-exp-260908");
-        assert_eq!(idx.value_sets.len(), 2);
-    }
-
-    #[test]
-    fn load_falls_back_to_builtin_when_no_data() {
-        if values_dir().is_some() {
-            return; // 有本地 data 时该断言不适用
+    impl TempData {
+        fn new(tag: &str) -> Self {
+            let root =
+                std::env::temp_dir().join(format!("jpcg-values-{}-{}", tag, std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            let values = root.join("values");
+            std::fs::create_dir_all(&values).expect("mkdir temp");
+            std::fs::write(values.join("index.toml"), INDEX).expect("write index");
+            std::fs::write(values.join("cszj-exp-260908.toml"), EXP).expect("write exp");
+            std::fs::write(values.join("live-130.toml"), LIVE).expect("write live");
+            Self { root, values }
         }
-        let v = load_value_set(Some("does-not-exist"));
-        assert_eq!(v.constant.huixin_xishu, CURRENT.huixin_xishu);
+        fn values(&self) -> &Path {
+            &self.values
+        }
+        fn root(&self) -> &Path {
+            &self.root
+        }
+    }
+    impl Drop for TempData {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn lists_with_availability_and_default() {
+        let t = TempData::new("list");
+        let sets = list_from(t.values());
+        assert_eq!(sets.len(), 2);
+        let exp = sets.iter().find(|s| s.id == "cszj-exp-260908").unwrap();
+        assert!(exp.is_default && exp.available && exp.source == "data");
+        let live = sets.iter().find(|s| s.id == "live-130").unwrap();
+        assert!(!live.is_default && live.available);
+    }
+
+    #[test]
+    fn loads_default_and_explicit_set() {
+        let t = TempData::new("load");
+        assert_eq!(load_from(t.values(), None).unwrap().constant, CURRENT);
+        assert_eq!(
+            load_from(t.values(), Some("live-130")).unwrap().constant,
+            jpcg_const::level_constant::LIVE_130
+        );
+        // 未知 id → 回退默认项（体验服一测），而非报错
+        assert_eq!(
+            load_from(t.values(), Some("nope")).unwrap().constant,
+            CURRENT
+        );
+    }
+
+    #[test]
+    fn missing_snapshot_marks_unavailable_and_falls_back() {
+        let t = TempData::new("missing");
+        std::fs::remove_file(t.values().join("live-130.toml")).unwrap();
+
+        // 列表：live-130 仍列出但 available=false
+        let sets = list_from(t.values());
+        assert!(!sets.iter().find(|s| s.id == "live-130").unwrap().available);
+        assert!(
+            sets.iter()
+                .find(|s| s.id == "cszj-exp-260908")
+                .unwrap()
+                .available
+        );
+
+        // 加载：回退内置兜底，且可观察（source=builtin）
+        let v = load_with_fallback(t.values(), Some("live-130"));
+        assert_eq!(v.info.source, "builtin");
+        assert_eq!(v.constant, CURRENT);
+    }
+
+    #[test]
+    fn invalid_snapshot_marks_unavailable_and_falls_back() {
+        let t = TempData::new("invalid");
+        // 分母置 0（校验失败）
+        let bad = LIVE.replace("huixin_xishu  = 197703.0", "huixin_xishu  = 0.0");
+        std::fs::write(t.values().join("live-130.toml"), bad).unwrap();
+
+        let sets = list_from(t.values());
+        assert!(!sets.iter().find(|s| s.id == "live-130").unwrap().available);
+        let v = load_with_fallback(t.values(), Some("live-130"));
         assert_eq!(v.info.source, "builtin");
     }
 
     #[test]
-    fn loads_real_data_when_available() {
-        if values_dir().is_none() {
-            return; // 无本地 data（默认 CI 环境）
-        }
-        let sets = list_value_sets();
-        assert!(sets.iter().any(|s| s.id == "live-130"));
-        assert!(sets.iter().any(|s| s.id == "cszj-exp-260908"));
+    fn unknown_snapshot_field_rejected() {
+        let t = TempData::new("unknown");
+        let extra = format!("{}\nbogus = 1\n", EXP);
+        std::fs::write(t.values().join("cszj-exp-260908.toml"), extra).unwrap();
+        assert!(
+            !list_from(t.values())
+                .iter()
+                .find(|s| s.id == "cszj-exp-260908")
+                .unwrap()
+                .available
+        );
+    }
 
-        let live = load_value_set(Some("live-130"));
-        assert_eq!(live.info.source, "data");
-        assert_eq!(live.constant, jpcg_const::level_constant::LIVE_130);
-
-        // 未知 id → 回退默认（index.toml 的 default = 体验服一测）
-        let dflt = load_value_set(Some("nope"));
-        assert_eq!(dflt.constant, CURRENT);
+    #[test]
+    fn env_dir_accepts_data_root_and_shuxing() {
+        let t = TempData::new("env");
+        // JPCG_DATA_DIR 指向数据根
+        assert_eq!(
+            values_dir_from_env(t.root()),
+            Some(t.values().to_path_buf())
+        );
+        // JPCG_DATA_DIR 直接指向 <root>/shuxing → 取同级 values
+        let shuxing = t.root().join("shuxing");
+        std::fs::create_dir_all(&shuxing).unwrap();
+        assert_eq!(
+            values_dir_from_env(&shuxing),
+            Some(t.values().to_path_buf())
+        );
     }
 }

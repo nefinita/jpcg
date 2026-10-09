@@ -75,6 +75,25 @@ fn list_value_sets_impl() -> Result<Vec<ValueSetDTO>, String> {
     crate::commands::ffi_bridge::call_no_args("list_value_sets")
 }
 
+/// 解析指定值集**实际使用**的信息（含回退：如请求 live-130 但快照不可用时返回 builtin）
+#[tauri::command]
+pub fn resolve_value_set_cmd(value_set: Option<String>) -> Result<ValueSetDTO, String> {
+    resolve_value_set_impl(value_set)
+}
+
+#[cfg(feature = "static")]
+fn resolve_value_set_impl(value_set: Option<String>) -> Result<ValueSetDTO, String> {
+    Ok(jpcg_core::host::values::resolve_value_set(
+        value_set.as_deref(),
+    ))
+}
+
+#[cfg(feature = "dynamic")]
+fn resolve_value_set_impl(value_set: Option<String>) -> Result<ValueSetDTO, String> {
+    let req = serde_json::json!({ "value_set": value_set });
+    crate::commands::ffi_bridge::call("resolve_value_set", &req)
+}
+
 #[tauri::command]
 pub fn load_profession_config(profession: String) -> Result<XinfaConfigDTO, String> {
     load_profession_config_impl(profession)

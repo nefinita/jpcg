@@ -60,6 +60,8 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
                 xinfa: jpcg_api::XinfaConfigDTO,
                 buff: jpcg_api::BuffConfigDTO,
                 coefficient: jpcg_api::CoefficientConfigDTO,
+                #[serde(default)]
+                value_set: Option<String>,
             }
             let req: ComboRequest =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
@@ -70,6 +72,7 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
                 req.xinfa,
                 req.buff,
                 req.coefficient,
+                req.value_set,
                 ComboConfig::default(),
             )?;
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))

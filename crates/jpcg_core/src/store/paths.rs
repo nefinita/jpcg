@@ -5,7 +5,7 @@
 // 保存文件位于工作目录下的 saved_config.toml。
 // ============================================================================
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn data_dir() -> Option<PathBuf> {
     // 环境变量覆盖（CLI/Python/跨进程场景：current_exe 不可用时指向任意数据目录）
@@ -43,19 +43,10 @@ pub fn data_dir() -> Option<PathBuf> {
 }
 
 /// 数值集目录（data/values）：存放 index.toml 与各值集快照。
-/// 解析顺序与 [`data_dir`] 一致：JPCG_DATA_DIR → exe 同目录/data/values → .app Resources/data/values
+/// 解析顺序与 [`data_dir`] 一致，且兼容 `JPCG_DATA_DIR` 直接指向 `data/shuxing` 的既有用法。
 pub fn values_dir() -> Option<PathBuf> {
     if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
-        let p = PathBuf::from(dir);
-        // JPCG_DATA_DIR 可能指向数据根（含 shuxing/ 与 values/）或 shuxing 本身
-        let root = if p.join("values").is_dir() {
-            p
-        } else if p.join("shuxing").is_dir() {
-            p
-        } else {
-            return None;
-        };
-        return Some(root.join("values"));
+        return values_dir_from_env(&PathBuf::from(dir));
     }
 
     let exe = std::env::current_exe().ok()?;
@@ -75,6 +66,26 @@ pub fn values_dir() -> Option<PathBuf> {
         }
     }
 
+    None
+}
+
+/// 由 `JPCG_DATA_DIR` 的值解析 values 目录。
+/// 兼容两种既有写法：
+///   - 指向数据根（含 shuxing/、values/）→ `<root>/values`
+///   - 直接指向 `<root>/shuxing`       → `<root>/values`（取同级）
+pub(crate) fn values_dir_from_env(p: &Path) -> Option<PathBuf> {
+    let direct = p.join("values");
+    if direct.is_dir() {
+        return Some(direct);
+    }
+    if p.file_name().and_then(|n| n.to_str()) == Some("shuxing")
+        && let Some(parent) = p.parent()
+    {
+        let sibling = parent.join("values");
+        if sibling.is_dir() {
+            return Some(sibling);
+        }
+    }
     None
 }
 
