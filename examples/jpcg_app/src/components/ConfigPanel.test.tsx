@@ -54,9 +54,12 @@ async function select(id: string) {
     selection().dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
+function coefficientInput(name = "会心系数") {
+  const label = Array.from(container.querySelectorAll("label")).find((el) => el.textContent === name)!;
+  return label.parentElement!.querySelector("input")!;
+}
 async function editCoefficient(value: string) {
-  const label = Array.from(container.querySelectorAll("label")).find((el) => el.textContent === "会心系数")!;
-  const input = label.parentElement!.querySelector("input")!;
+  const input = coefficientInput();
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -214,6 +217,7 @@ describe("ConfigPanel 当前数值集", () => {
     const pending = deferred<ValueSetDTO>();
     vi.mocked(api.resolveValueSet).mockReturnValue(pending.promise);
     await click("检查更新");
+    expect(coefficientInput().disabled).toBe(false);
     await editCoefficient("777");
     await act(async () => pending.resolve(updated));
     expect((await request()).coefficient.huixin_xishu).toBe(777);
@@ -298,6 +302,69 @@ describe("ConfigPanel 当前数值集", () => {
     expect(addToast).not.toHaveBeenCalled();
     expect(container.textContent).not.toContain("（已回退）");
     expect(await request()).toMatchObject({ value_set: null, coefficient: live.coefficient });
+  });
+
+
+  it.each(["切换", "清空"])("%s等待新系数基线时不能编辑单字段留下其他旧系数", async (action) => {
+    await mount();
+    const next = { ...experience, coefficient: { ...DEFAULT_COEFFICIENT, huixin_xishu: 140, pofang_xishu: 10378.17 } };
+    if (action === "清空") {
+      vi.mocked(api.resolveValueSet).mockResolvedValue(next);
+      await select(experience.id);
+      await editCoefficient("888");
+    }
+    const pending = deferred<ValueSetDTO>();
+    vi.mocked(api.resolveValueSet).mockReturnValue(pending.promise);
+    if (action === "切换") await select(experience.id);
+    else await click("清空");
+    expect(coefficientInput().disabled).toBe(true);
+    expect(coefficientInput("破防系数").disabled).toBe(true);
+    // 即使合成/排队的 input 事件到达，也不能跳过整套新基线。
+    await editCoefficient("777");
+    await act(async () => pending.resolve(next));
+    expect(coefficientInput().disabled).toBe(false);
+    expect(await request()).toMatchObject({ value_set: experience.id, coefficient: next.coefficient });
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ value_set: experience.id, coefficient: next.coefficient }));
+    await editCoefficient("666");
+    expect((await request()).coefficient.huixin_xishu).toBe(666);
+  });
+
+
+  it("存档基线已知时不因等待实际值集标签而锁定系数", async () => {
+    await mount();
+    const pending = deferred<ValueSetDTO>();
+    vi.mocked(api.resolveValueSet).mockReturnValue(pending.promise);
+    await select(experience.id);
+    expect(coefficientInput().disabled).toBe(true);
+    await click("加载");
+    expect(coefficientInput().disabled).toBe(false);
+    await editCoefficient("777");
+    await act(async () => pending.resolve(live));
+    expect(await request()).toMatchObject({
+      value_set: live.id,
+      coefficient: { ...saved().coefficient, huixin_xishu: 777 },
+    });
+  });
+
+  it("旧解析不得解锁新基线，失败后保持锁定直到重试成功", async () => {
+    await mount();
+    const old = deferred<ValueSetDTO>();
+    const latest = deferred<ValueSetDTO>();
+    vi.mocked(api.resolveValueSet).mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+    await select(experience.id);
+    await select(live.id);
+    await act(async () => old.resolve(experience));
+    expect(coefficientInput().disabled).toBe(true);
+    await act(async () => latest.resolve(live));
+    expect(coefficientInput().disabled).toBe(false);
+    vi.mocked(api.resolveValueSet).mockRejectedValueOnce(new Error("resolve failed"));
+    await select(experience.id);
+    expect(coefficientInput().disabled).toBe(true);
+    vi.mocked(api.resolveValueSet).mockResolvedValue(experience);
+    await click("清空");
+    expect(coefficientInput().disabled).toBe(false);
+    expect(await request()).toMatchObject({ value_set: experience.id, coefficient: experience.coefficient });
   });
 
 });

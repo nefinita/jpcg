@@ -54,6 +54,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [valueSets, setValueSets] = useState<ValueSetDTO[]>([]);
   const [appliedValueSet, setAppliedValueSet] = useState<ValueSetDTO | null>(null);
   const [valueSetReady, setValueSetReady] = useState(false);
+  // 新选择/清空的系数基线尚未就绪时禁止编辑；同值集热更新仍允许自定义。
+  const [coefficientBaselinePending, setCoefficientBaselinePending] = useState(true);
   // 用户是否手动改过系数（改过则数据热更新后不自动覆盖）
   const coefficientCustomRef = useRef(false);
   // 应用内确认（Tauri v2 禁用 window.confirm，需自绘）
@@ -82,6 +84,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       if (revision !== valueSetRevisionRef.current || resolveId !== valueSetResolveRef.current) return null;
       setAppliedValueSet(vs);
       setValueSetReady(true);
+      setCoefficientBaselinePending(false);
       const coefficient = vs.coefficient;
       if (!coefficientCustomRef.current && coefficient) {
         setForm((prev) => ({ ...prev, coefficient: { ...coefficient } }));
@@ -99,6 +102,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     const revision = ++valueSetRevisionRef.current;
     persistValueSet(id);
     coefficientCustomRef.current = false;
+    setCoefficientBaselinePending(true);
     setAppliedValueSet(null);
     setForm((prev) => ({ ...prev, value_set: id }));
     return resolveCurrentValueSet(id, revision);
@@ -190,6 +194,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, []);
 
   const updateCoefficient = useCallback((id: string, value: string) => {
+    if (coefficientBaselinePending) return;
     coefficientCustomRef.current = true;
     const num = Number(value);
     const stored = value === "" || isNaN(num) ? "" : num;
@@ -197,7 +202,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       ...prev,
       coefficient: { ...prev.coefficient, [id]: stored },
     }));
-  }, []);
+  }, [coefficientBaselinePending]);
 
   // 数字兜底：空串/NaN → 0（提交 core 前统一 normalize）
   const normalizeNum = useCallback((v: unknown) => {
@@ -279,6 +284,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       });
       // 加载的系数以存档为准（不再自动 seed）；标记为“已自定义”以免数据热更新覆盖
       coefficientCustomRef.current = true;
+      setCoefficientBaselinePending(false);
       void resolveCurrentValueSet(requestedId, revision);
       addToast("配置已加载", "success");
     } catch (err) {
@@ -552,6 +558,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
               <label className={styles.fieldLabel}>{f.label}</label>
               <input className={styles.input} type="number" min={0} step={0.1}
                 value={form.coefficient[f.id as keyof typeof form.coefficient] ?? ""}
+                disabled={coefficientBaselinePending}
                 onChange={(e) => updateCoefficient(f.id, e.target.value)} />
             </div>
           ))}
