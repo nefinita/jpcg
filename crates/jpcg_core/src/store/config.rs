@@ -42,14 +42,15 @@ pub fn save_config(
     hostilepile: hostilepile::HostilepileConfig,
     xinfa: xinfa::XinfaConfig,
 ) {
+    // 保留已存的 buff / 系数 / 数值集：本函数不接收这三项，避免保存时被重置/丢失
+    let prev = load_save_config();
     let save_config = SaveConfig {
         player,
         hostilepile,
         xinfa,
-        buff: BuffConfig::default(),
-        coefficient: CoefficientConfig::default(),
-        // 保留已选的数值集（本函数不接收该项，避免保存时丢失）
-        value_set: load_save_config().value_set,
+        buff: prev.buff,
+        coefficient: prev.coefficient,
+        value_set: prev.value_set,
     };
     // 序列化为 TOML 字符串
     match toml::to_string(&save_config) {

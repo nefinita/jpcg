@@ -64,13 +64,13 @@ pub(crate) fn needs_app_update(force: bool, current_version: &str, latest_versio
 // ============================================================================
 
 /// 检查应用版本和数据更新
-/// - `base_path`: 应用根目录路径
+/// - `data_root`: 数据根目录（含 shuxing/、values/；data 文件落盘与比对基准）
 /// - `beta`: 是否使用 Beta 通道
 /// - `force`: 是否强制检查
 /// - `current_version`: 当前运行二进制版本（宿主注入；None 回退本 crate 版本）
 /// - 返回: UpdateCheckResult 包含所有检查结果
 pub async fn check_updates(
-    base_path: &Path,
+    data_root: &Path,
     beta: bool,
     force: bool,
     current_version: Option<&str>,
@@ -128,7 +128,7 @@ pub async fn check_updates(
             match fetch_data_manifest(&file_base_url, remote_data_ver, channel).await {
                 Ok(manifest) => {
                     // 对比本地 data 文件哈希，找出需要更新的文件
-                    let needed = check_data_updates(base_path, &manifest).await?;
+                    let needed = check_data_updates(data_root, &manifest).await?;
                     if !needed.is_empty() {
                         has_data_update = true;
                         data_files_to_update = needed.iter().map(|f| f.path.clone()).collect();
@@ -283,12 +283,12 @@ pub async fn fetch_app_update_info(
 // ============================================================================
 
 /// 根据检查结果执行下载和安装
-/// - `base_path`: 应用根目录
+/// - `data_root`: 数据根目录（data 文件落盘与比对基准）
 /// - `beta`: 是否 Beta 通道
 /// - `check_result`: 检查结果（由 check_updates 返回）
 /// - `progress`: 进度回调接口（用于 GUI 或 CLI 显示）
 pub async fn download_updates(
-    base_path: &Path,
+    data_root: &Path,
     beta: bool,
     check_result: &UpdateCheckResult,
     progress: &dyn ProgressCallback,
@@ -307,12 +307,12 @@ pub async fn download_updates(
     {
         // 重新获取 data_manifest（因为需要文件哈希进行验证）
         let manifest = fetch_data_manifest(&file_base_url, data_ver, channel).await?;
-        let needed = check_data_updates(base_path, &manifest).await?;
+        let needed = check_data_updates(data_root, &manifest).await?;
         if !needed.is_empty() {
             // 下载并安装所有需要更新的 data 文件
             download_and_install_data(
                 &needed,
-                base_path,
+                data_root,
                 data_ver,
                 &file_base_url,
                 channel,
@@ -355,6 +355,8 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     let app_dir = Path::new(CURRENT_DIR);
     let base_path = app_dir.canonicalize()?;
+    // CLI 场景：数据根为 <应用根>/data（保持既有行为）
+    let data_root = base_path.join("data");
 
     let detected_os = args.target_os.as_deref().unwrap_or(env::consts::OS);
     let detected_arch = args.target_arch.as_deref().unwrap_or(env::consts::ARCH);
@@ -462,7 +464,7 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
             match fetch_data_manifest(&file_base_url, remote_data_ver, channel).await {
                 Ok(manifest) => {
-                    let needed = check_data_updates(&base_path, &manifest).await?;
+                    let needed = check_data_updates(&data_root, &manifest).await?;
                     if !needed.is_empty() {
                         println!(
                             "\n检测到数据更新 (版本: {}), 共 {} 个文件需要更新。",
@@ -484,7 +486,7 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
                         }
                         download_and_install_data(
                             &needed,
-                            &base_path,
+                            &data_root,
                             remote_data_ver,
                             &file_base_url,
                             channel,

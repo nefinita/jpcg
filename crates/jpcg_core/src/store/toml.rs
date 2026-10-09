@@ -91,8 +91,11 @@ pub fn load_config(profession: &str) -> TomlConfig {
 }
 
 /// 保存技能配置到心法数据文件
+/// 写入**可写数据根**的 `shuxing/`（安装版 bundle 资源只读，不能直接写）
 pub fn save_skill_toml(profession: &str, config: TomlConfig) -> Result<(), String> {
-    let dir = data_dir().ok_or("无法获取数据目录")?;
+    let root = super::paths::data_root_writable().ok_or("无法获取可写数据目录")?;
+    let dir = root.join("shuxing");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建数据目录失败: {}", e))?;
     let file_path = dir.join(format!("{}.toml", profession));
     let content = toml::to_string_pretty(&config).map_err(|e| format!("序列化失败: {}", e))?;
     std::fs::write(&file_path, &content).map_err(|e| format!("写入文件失败: {}", e))?;

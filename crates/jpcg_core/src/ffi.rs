@@ -492,4 +492,37 @@ mod ffi_tests {
         assert_eq!(out, "null");
         let _ = std::fs::remove_file("saved_config.toml");
     }
+
+    #[test]
+    fn save_config_preserves_buff_coefficient_and_value_set() {
+        let _g = ffi_guard();
+        let req = r#"{
+            "player": {"jcsx":"gengu","jichu_shuxing":18888,"jichu_gongji":4666,"huixin_dengji":33000,"huixin_xiaoguo":22000,"pofang_dengji":25000,"wuqi_shanghai":2800},
+            "hostile": {"waigong_fangyu":21000,"neigong_fangyu":21000,"yujin_dengji":8500,"huajin_dengji":35000,"jianshang_bili":35,"target_hp":2000000},
+            "xinfa": {"profession":"mowen","xinfa_name":"莫问","xinfa_nom":"根骨","atk_up":1.96,"pofang_up":2.0,"huixin_up":0.0}
+        }"#;
+        // 先产出一份合法基线
+        let _ = unsafe { call_owned("save_config", req) }.expect("调用失败");
+        // 注入非默认 buff / 系数 / 值集
+        let base = std::fs::read_to_string("saved_config.toml").expect("读取基线失败");
+        let injected = format!("value_set = \"live-130\"\n{}", base)
+            .replace("huixin_pct = 0.0", "huixin_pct = 7.7")
+            .replace("huixin_xishu = 197703.0", "huixin_xishu = 12345.0");
+        std::fs::write("saved_config.toml", injected).expect("写入注入配置失败");
+        // 再次保存（仅传 player/hostile/xinfa）——不应重置 buff/系数，也不应丢失值集
+        let _ = unsafe { call_owned("save_config", req) }.expect("调用失败");
+        let after = std::fs::read_to_string("saved_config.toml").expect("读取结果失败");
+        assert!(
+            after.contains("value_set = \"live-130\""),
+            "值集丢失: {}",
+            after
+        );
+        assert!(after.contains("huixin_pct = 7.7"), "buff 被重置: {}", after);
+        assert!(
+            after.contains("huixin_xishu = 12345.0"),
+            "系数被重置: {}",
+            after
+        );
+        let _ = std::fs::remove_file("saved_config.toml");
+    }
 }

@@ -102,6 +102,7 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         req.xinfa_config,
         req.buff,
         req.coefficient,
+        req.value_set,
       );
       setComboResult(result);
     } catch (err) {

@@ -333,14 +333,13 @@ pub async fn determine_other_updates_by_hash(
 
 /// 检查本地数据文件是否需要更新（不存在或哈希不匹配）
 pub async fn check_data_updates(
-    base_path: &Path,
+    data_root: &Path,
     manifest: &DataManifest,
 ) -> Result<Vec<DataFileEntry>, Box<dyn std::error::Error + Send + Sync>> {
-    let data_dir = base_path.join("data");
     let mut needed = Vec::new();
 
     for file_entry in &manifest.files {
-        let local_path = data_dir.join(&file_entry.path);
+        let local_path = data_root.join(&file_entry.path);
 
         if !local_path.exists() {
             needed.push(file_entry.clone());
@@ -632,13 +631,12 @@ pub async fn fetch_data_manifest(
 /// 全部更新完成后更新本地 data_version。
 pub async fn download_and_install_data(
     files_to_update: &[DataFileEntry],
-    base_path: &Path,
+    data_root: &Path,
     data_version: &str,
     file_base_url: &str,
     channel: &str,
     progress: &dyn ProgressCallback,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let data_dir = base_path.join("data");
     let total = files_to_update.len();
 
     progress.on_progress(&UpdateProgressEvent::new(
@@ -684,7 +682,7 @@ pub async fn download_and_install_data(
         }
 
         // 安装到目标路径
-        let target_path = data_dir.join(&file_entry.path);
+        let target_path = data_root.join(&file_entry.path);
         if let Some(parent) = target_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }

@@ -11,7 +11,9 @@
 //           便于用隔离临时目录做确定性回归，而不依赖环境变量或真实 data 是否存在。
 // ============================================================================
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use jpcg_api::ValueSetDTO;
 use jpcg_const::level_constant::{CURRENT, LevelConstant};
@@ -111,8 +113,23 @@ fn builtin() -> LoadedValueSet {
             is_default: true,
             source: "builtin".to_string(),
             available: true,
+            coefficient: Some(coefficient_dto(&CURRENT)),
         },
         constant: CURRENT,
+    }
+}
+
+/// 等级常数 → 系数 DTO（供前端 seed「系数设置」）
+fn coefficient_dto(c: &LevelConstant) -> jpcg_api::CoefficientConfigDTO {
+    jpcg_api::CoefficientConfigDTO {
+        pofang_xishu: c.pofang_xishu,
+        huixin_xishu: c.huixin_xishu,
+        huixiao_xishu: c.huixiao_xishu,
+        yujin_xishu: c.yujin_xishu,
+        yuhui_xishu: c.yuhui_xishu,
+        huajin_xishu: c.huajin_xishu,
+        fangyu_xishu: c.fangyu_xishu,
+        pvp_global_jianshang: c.pvp_global_jianshang,
     }
 }
 
@@ -133,8 +150,16 @@ fn read_index(dir: &Path) -> Result<IndexFile, String> {
     Ok(index)
 }
 
+/// 快照文件名必须是纯文件名（拒绝路径分隔符 / `..` / 空名，防目录穿越）
+fn is_safe_relative_filename(file: &str) -> bool {
+    !file.is_empty() && !file.contains('/') && !file.contains('\\') && file != "." && file != ".."
+}
+
 /// 读取并校验单个快照
 fn read_snapshot(dir: &Path, file: &str) -> Result<LevelConstant, String> {
+    if !is_safe_relative_filename(file) {
+        return Err(format!("快照文件名非法（不得含路径分隔符）: {}", file));
+    }
     let text = std::fs::read_to_string(dir.join(file))
         .map_err(|e| format!("读取快照 {} 失败: {}", file, e))?;
     let snap: Snapshot =
@@ -142,23 +167,62 @@ fn read_snapshot(dir: &Path, file: &str) -> Result<LevelConstant, String> {
     snap.to_constant()
 }
 
-fn entry_to_dto(entry: &IndexEntry, index: &IndexFile, available: bool) -> ValueSetDTO {
+fn entry_to_dto(
+    entry: &IndexEntry,
+    index: &IndexFile,
+    constant: Option<&LevelConstant>,
+) -> ValueSetDTO {
     ValueSetDTO {
         id: entry.id.clone(),
         name: entry.name.clone(),
         level: entry.level,
         is_default: entry.id == index.default,
         source: "data".to_string(),
-        available,
+        available: constant.is_some(),
+        coefficient: constant.map(coefficient_dto),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 内存缓存：避免每次计算都读盘解析（index + 快照）。
+// 键含解析后的目录，故切换 JPCG_DATA_DIR 仍能命中正确条目；
+// 数据更新落盘后调用 [`invalidate_cache`] 使新数据即时生效。
+// ---------------------------------------------------------------------------
+
+#[derive(Default)]
+struct ValueCache {
+    loaded: HashMap<(PathBuf, Option<String>), LoadedValueSet>,
+    lists: HashMap<PathBuf, Vec<ValueSetDTO>>,
+}
+
+fn cache() -> &'static Mutex<ValueCache> {
+    static CACHE: OnceLock<Mutex<ValueCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(ValueCache::default()))
+}
+
+/// 清空内存缓存（数据更新落盘后调用）
+pub fn invalidate_cache() {
+    if let Ok(mut c) = cache().lock() {
+        c.loaded.clear();
+        c.lists.clear();
     }
 }
 
 /// 列出可用值集（同时逐项校验快照可用性；索引不可用时返回内置兜底项）
 pub fn list_value_sets() -> Vec<ValueSetDTO> {
-    match values_dir() {
-        Some(dir) => list_from(&dir),
-        None => vec![builtin().info],
+    let Some(dir) = values_dir() else {
+        return vec![builtin().info];
+    };
+    if let Ok(c) = cache().lock()
+        && let Some(v) = c.lists.get(&dir)
+    {
+        return v.clone();
     }
+    let computed = list_from(&dir);
+    if let Ok(mut c) = cache().lock() {
+        c.lists.insert(dir, computed.clone());
+    }
+    computed
 }
 
 fn list_from(dir: &Path) -> Vec<ValueSetDTO> {
@@ -166,7 +230,10 @@ fn list_from(dir: &Path) -> Vec<ValueSetDTO> {
         Ok(index) => index
             .value_sets
             .iter()
-            .map(|s| entry_to_dto(s, &index, read_snapshot(dir, &s.file).is_ok()))
+            .map(|s| {
+                let constant = read_snapshot(dir, &s.file).ok();
+                entry_to_dto(s, &index, constant.as_ref())
+            })
             .collect(),
         Err(e) => {
             crate::log::warn(&format!("数值集清单不可用（回退内置兜底）：{}", e));
@@ -178,10 +245,20 @@ fn list_from(dir: &Path) -> Vec<ValueSetDTO> {
 /// 加载指定数值集；`id = None` 用 index.toml 的 default；
 /// 任何失败（目录/文件/解析/校验）都回退内置兜底（体验服一测）。
 pub fn load_value_set(id: Option<&str>) -> LoadedValueSet {
-    match values_dir() {
-        Some(dir) => load_with_fallback(&dir, id),
-        None => builtin(),
+    let Some(dir) = values_dir() else {
+        return builtin();
+    };
+    let key = (dir.clone(), id.map(str::to_string));
+    if let Ok(c) = cache().lock()
+        && let Some(v) = c.loaded.get(&key)
+    {
+        return v.clone();
     }
+    let computed = load_with_fallback(&dir, id);
+    if let Ok(mut c) = cache().lock() {
+        c.loaded.insert(key, computed.clone());
+    }
+    computed
 }
 
 /// 从指定目录加载，失败回退内置兜底（显式目录版，便于测试）
@@ -207,7 +284,7 @@ fn load_from(dir: &Path, id: Option<&str>) -> Result<LoadedValueSet, String> {
         .ok_or_else(|| format!("未找到值集: {}", wanted))?;
     let constant = read_snapshot(dir, &entry.file)?;
     Ok(LoadedValueSet {
-        info: entry_to_dto(entry, &index, true),
+        info: entry_to_dto(entry, &index, Some(&constant)),
         constant,
     })
 }
@@ -261,6 +338,23 @@ mod tests {
         assert!(exp.is_default && exp.available && exp.source == "data");
         let live = sets.iter().find(|s| s.id == "live-130").unwrap();
         assert!(!live.is_default && live.available);
+    }
+
+    #[test]
+    fn dto_carries_coefficient_when_available() {
+        let t = TempData::new("coeff");
+        let sets = list_from(t.values());
+        let exp = sets.iter().find(|s| s.id == "cszj-exp-260908").unwrap();
+        assert!(exp.available);
+        assert_eq!(
+            exp.coefficient.as_ref().map(|c| c.huixin_xishu),
+            Some(CURRENT.huixin_xishu)
+        );
+        // 快照缺失 → 不可用且无系数
+        std::fs::remove_file(t.values().join("live-130.toml")).unwrap();
+        let sets = list_from(t.values());
+        let live = sets.iter().find(|s| s.id == "live-130").unwrap();
+        assert!(!live.available && live.coefficient.is_none());
     }
 
     #[test]
@@ -341,5 +435,29 @@ mod tests {
             values_dir_from_env(&shuxing),
             Some(t.values().to_path_buf())
         );
+    }
+
+    #[test]
+    fn rejects_path_traversal_in_index() {
+        let t = TempData::new("traversal");
+        // 目录外写一份“陷阱”快照（huixin=9999）
+        std::fs::write(
+            t.root().join("outside.toml"),
+            "level = 1\npofang_xishu = 1.0\nhuixin_xishu = 9999.0\nhuixiao_xishu = 1.0\nyujin_xishu = 1.0\nyuhui_xishu = 1.0\nhuajin_xishu = 1.0\nfangyu_xishu = 1.0\npvp_global_jianshang = 0.9\n",
+        )
+        .unwrap();
+        std::fs::write(
+            t.values().join("index.toml"),
+            "default = \"esc\"\n[[value_sets]]\nid = \"esc\"\nname = \"esc\"\nlevel = 1\nfile = \"../outside.toml\"\n",
+        )
+        .unwrap();
+
+        // 列表：该顶标记为不可用
+        let sets = list_from(t.values());
+        assert!(!sets.iter().find(|s| s.id == "esc").unwrap().available);
+        // 加载：回退内置兜底，绝不读到目录外
+        let v = load_with_fallback(t.values(), Some("esc"));
+        assert_eq!(v.info.source, "builtin");
+        assert_ne!(v.constant.huixin_xishu, 9999.0);
     }
 }

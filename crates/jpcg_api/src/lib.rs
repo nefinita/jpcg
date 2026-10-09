@@ -125,6 +125,9 @@ pub struct ValueSetDTO {
     pub source: String,
     /// 索引已列出且对应快照可读取、可解析且校验通过
     pub available: bool,
+    /// 快照可用时的换算常数（用于前端 seed「系数设置」；不可用时为 None）
+    #[serde(default)]
+    pub coefficient: Option<CoefficientConfigDTO>,
 }
 
 // ============ 计算/连招结果 DTO ============

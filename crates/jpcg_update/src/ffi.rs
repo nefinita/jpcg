@@ -111,8 +111,10 @@ pub unsafe extern "C" fn jpcg_update_check(request: *const c_char) -> *mut c_cha
         };
         let base_path =
             std::path::PathBuf::from(parsed.base_path.unwrap_or_else(|| ".".to_string()));
+        // 入参 base_path 为应用根；数据根取其下 data/（与 CLI 行为一致）
+        let data_root = base_path.join("data");
         match block_on(crate::check_updates(
-            &base_path,
+            &data_root,
             parsed.beta.unwrap_or(false),
             parsed.force.unwrap_or(false),
             parsed.current_version.as_deref(),

@@ -34,9 +34,10 @@ fn block_on<F: std::future::Future>(f: F) -> F::Output {
     rt.block_on(f)
 }
 
-fn base_path() -> Result<std::path::PathBuf, String> {
-    let p = Path::new(".").canonicalize().map_err(|e| e.to_string())?;
-    Ok(p)
+/// 数据根（更新落盘/比对基准）——与运行期读取共用同一解析（见 store::paths）
+fn data_root() -> Result<std::path::PathBuf, String> {
+    crate::store::paths::data_root_writable()
+        .ok_or_else(|| "无法确定数据目录（data_root）".to_string())
 }
 
 /// 检查更新（应用 + 数据）
@@ -46,9 +47,9 @@ pub fn check_update(
     force: bool,
     current_version: Option<&str>,
 ) -> Result<jpcg_update::UpdateCheckResult, String> {
-    let base_path = base_path()?;
+    let data_root = data_root()?;
     block_on(jpcg_update::check_updates(
-        &base_path,
+        &data_root,
         beta,
         force,
         current_version,
@@ -110,7 +111,7 @@ pub fn perform_update(
     latest_data_version: Option<String>,
     data_files_to_update: Vec<String>,
 ) -> Result<String, String> {
-    let base_path = base_path()?;
+    let data_root = data_root()?;
     let progress = HostProgress(events);
 
     if has_data_update {
@@ -127,12 +128,14 @@ pub fn perform_update(
             modules_files_to_update: vec![],
         };
         block_on(jpcg_update::download_updates(
-            &base_path,
+            &data_root,
             beta,
             &check_result,
             &progress,
         ))
         .map_err(|e| e.to_string())?;
+        // 新数据已落盘：清空值集缓存，使新数据即时生效
+        crate::store::values::invalidate_cache();
     }
 
     Ok("更新完成".to_string())
@@ -177,7 +180,6 @@ pub fn perform_app_update(
     beta: bool,
     current_version: Option<&str>,
 ) -> Result<String, String> {
-    let base_path = base_path()?;
     let progress = HostProgress(events);
 
     // 1. 获取应用更新信息
@@ -188,7 +190,7 @@ pub fn perform_app_update(
         None,
     ));
     let info = block_on(jpcg_update::fetch_app_update_info(
-        &base_path,
+        Path::new("."),
         beta,
         false,
         current_version,

@@ -55,5 +55,6 @@ export function toCalculateRequest(f: FormData): CalculateRequest {
       fangyu_xishu: toNum(f.coefficient.fangyu_xishu),
       pvp_global_jianshang: toNum(f.coefficient.pvp_global_jianshang),
     },
+    value_set: f.value_set ?? null,
   };
 }

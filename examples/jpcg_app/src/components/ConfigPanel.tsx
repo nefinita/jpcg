@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions } from "../types";
+import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions, ValueSetDTO } from "../types";
 import {
   XINFA_LIST as XINFA_FALLBACK, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS,
   BUFF_FIELDS, COEFFICIENT_FIELDS, DEFAULT_BUFF, DEFAULT_COEFFICIENT,
@@ -29,6 +29,7 @@ const defaultForm = (): FormData => ({
   },
   buff: { ...DEFAULT_BUFF },
   coefficient: { ...DEFAULT_COEFFICIENT },
+  value_set: null,
 });
 
 export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus, onXinfaChange }: Props) {
@@ -50,15 +51,38 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
   const [betaChannel, setBetaChannel] = useState(() => localStorage.getItem(STORAGE_KEYS.betaChannel) === "true");
   const [moduleVersions, setModuleVersions] = useState<ModuleVersions | null>(null);
+  const [valueSets, setValueSets] = useState<ValueSetDTO[]>([]);
   // 应用内确认（Tauri v2 禁用 window.confirm，需自绘）
   const [confirmKind, setConfirmKind] = useState<null | "app" | "modules">(null);
+
+  // 应用值集：写入选中 id + 用其常数填充「系数设置」（用户仍可再改）
+  const applyValueSet = useCallback((vs: ValueSetDTO) => {
+    setForm((prev): FormData => ({
+      ...prev,
+      value_set: vs.id,
+      coefficient: vs.coefficient ? { ...vs.coefficient } : prev.coefficient,
+    }));
+  }, []);
 
   useEffect(() => {
     api.listProfessions().then((list) => {
       if (list.length > 0) setProfessionOptions(list);
     }).catch(() => {});
     api.getModuleVersions().then(setModuleVersions).catch(() => {});
-  }, []);
+    api.listValueSets().then((sets) => {
+      if (sets.length === 0) return;
+      setValueSets(sets);
+      const stored = typeof localStorage !== "undefined"
+        ? localStorage.getItem(STORAGE_KEYS.valueSet)
+        : null;
+      const pick =
+        sets.find((s) => s.id === stored && s.available) ??
+        sets.find((s) => s.is_default) ??
+        sets.find((s) => s.available) ??
+        sets[0];
+      if (pick) applyValueSet(pick);
+    }).catch(() => {});
+  }, [applyValueSet]);
 
   const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
 
@@ -87,6 +111,19 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       }
     }).catch(() => {});
   }, [professionOptions, defaultXinfa, onXinfaChange]);
+
+  const handleValueSetChange = useCallback(async (id: string) => {
+    localStorage.setItem(STORAGE_KEYS.valueSet, id);
+    try {
+      const vs = await api.resolveValueSet(id);
+      applyValueSet(vs);
+      if (vs.id !== id) {
+        addToast(`数值集「${id}」不可用，已回退到「${vs.name}」`, "warning");
+      }
+    } catch (err) {
+      addToast(String(err), "error");
+    }
+  }, [applyValueSet, addToast]);
 
   const updateField = useCallback(
     (section: "player" | "hostile", id: string, value: string) => {
@@ -163,7 +200,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       }
       const xinfaVal = cfg.xinfa_config.profession || "mowen";
       localStorage.setItem(STORAGE_KEYS.lastXinfa, xinfaVal);
-      setForm({
+      setForm((prev) => ({
         xinfa: xinfaVal,
         player: {
           jichu_shuxing: cfg.player.jichu_shuxing,
@@ -184,7 +221,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         xinfa_config: cfg.xinfa_config,
         buff: cfg.buff ? { ...cfg.buff } : { ...DEFAULT_BUFF },
         coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
-      });
+        value_set: cfg.value_set ?? prev.value_set ?? null,
+      }));
       addToast("配置已加载", "success");
     } catch (err) {
       addToast(String(err), "error");
@@ -192,9 +230,19 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, [addToast]);
 
   const handleClear = useCallback(() => {
-    setForm(defaultForm());
+    const stored = typeof localStorage !== "undefined"
+      ? localStorage.getItem(STORAGE_KEYS.valueSet)
+      : null;
+    const pick =
+      valueSets.find((s) => s.id === stored) ??
+      valueSets.find((s) => s.is_default) ??
+      valueSets[0];
+    const base = defaultForm();
+    setForm(pick?.coefficient
+      ? { ...base, value_set: pick.id, coefficient: { ...pick.coefficient } }
+      : base);
     addToast("已清空", "info");
-  }, [addToast]);
+  }, [valueSets, addToast]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -377,6 +425,22 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         >
           {professionOptions.map((x) => (
             <option key={x.value} value={x.value}>{x.label}（{x.nom}）{x.version_label ?? ""}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionTitle}>数值版本</div>
+        <select
+          className={styles.select}
+          value={form.value_set ?? ""}
+          onChange={(e) => handleValueSetChange(e.target.value)}
+        >
+          {valueSets.length === 0 && <option value="">（内置默认）</option>}
+          {valueSets.map((s) => (
+            <option key={s.id} value={s.id} disabled={!s.available}>
+              {s.name}{s.source === "builtin" ? "（内置）" : ""}{s.available ? "" : "（不可用）"}
+            </option>
           ))}
         </select>
       </div>
