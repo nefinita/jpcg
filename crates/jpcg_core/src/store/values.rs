@@ -194,7 +194,7 @@ fn entry_to_dto(
 struct CacheEntry {
     loaded: LoadedValueSet,
     index_mtime: Option<SystemTime>,
-    snapshot_path: Option<PathBuf>,
+    snapshot_path: PathBuf,
     snapshot_mtime: Option<SystemTime>,
 }
 
@@ -223,10 +223,7 @@ fn cache_valid(e: &CacheEntry, index_mtime: Option<SystemTime>) -> bool {
     if e.index_mtime != index_mtime {
         return false;
     }
-    match &e.snapshot_path {
-        Some(p) => e.snapshot_mtime == mtime(p),
-        None => true,
-    }
+    e.snapshot_mtime == mtime(&e.snapshot_path)
 }
 
 /// 列出可用值集（同时逐项校验快照可用性；索引不可用时返回内置兜底项）
@@ -276,13 +273,18 @@ pub(crate) fn load_cached(dir: &Path, id: Option<&str>) -> LoadedValueSet {
     }
 
     let (loaded, snapshot_path) = match load_from(dir, id) {
-        Ok((v, p)) => (v, Some(p)),
+        Ok(loaded) => loaded,
         Err(e) => {
             crate::log::warn(&format!("数值集加载失败（回退内置兜底）：{}", e));
-            (builtin(), None)
+            // 失败时没有完整的快照依赖，不能缓存兜底：数据更新可能只修复快照，
+            // index 的 mtime 不变，且另一个 cdylib 不会收到显式清缓存通知。
+            if let Ok(mut c) = cache().lock() {
+                c.loaded.remove(&key);
+            }
+            return builtin();
         }
     };
-    let snapshot_mtime = snapshot_path.as_deref().and_then(mtime);
+    let snapshot_mtime = mtime(&snapshot_path);
     let entry = CacheEntry {
         loaded: loaded.clone(),
         index_mtime,
@@ -499,6 +501,46 @@ mod tests {
         let v = load_with_fallback(t.values(), Some("esc"));
         assert_eq!(v.info.source, "builtin");
         assert_ne!(v.constant.huixin_xishu, 9999.0);
+    }
+
+    /// 只修复快照，不改 index、不主动清缓存，模拟 combo 独立 cdylib 的读取。
+    fn assert_cache_recovers_after_snapshot_repair(tag: &str, broken: Option<&str>) {
+        let t = TempData::new(tag);
+        let snapshot = t.values().join("live-130.toml");
+        let index_mtime = mtime(&t.values().join(INDEX_FILENAME));
+        match broken {
+            Some(contents) => std::fs::write(&snapshot, contents).unwrap(),
+            None => std::fs::remove_file(&snapshot).unwrap(),
+        }
+        // 连续读取确保覆盖 load_cached 的失败路径，而非无缓存的测试辅助函数。
+        for _ in 0..2 {
+            let loaded = load_cached(t.values(), Some("live-130"));
+            assert_eq!(loaded.info.source, "builtin");
+            assert_eq!(loaded.constant, CURRENT);
+        }
+        std::fs::write(&snapshot, LIVE).unwrap();
+        assert_eq!(mtime(&t.values().join(INDEX_FILENAME)), index_mtime);
+        let loaded = load_cached(t.values(), Some("live-130"));
+        assert_eq!(loaded.info.id, "live-130");
+        assert_eq!(loaded.info.source, "data");
+        assert_eq!(loaded.constant, jpcg_const::level_constant::LIVE_130);
+    }
+
+    #[test]
+    fn cache_recovers_after_missing_snapshot_is_restored() {
+        assert_cache_recovers_after_snapshot_repair("cache-missing", None);
+    }
+
+    #[test]
+    fn cache_recovers_after_malformed_snapshot_is_repaired() {
+        assert_cache_recovers_after_snapshot_repair("cache-malformed", Some("invalid = ["));
+    }
+
+    #[test]
+    fn cache_recovers_after_invalid_snapshot_is_repaired() {
+        let bad = LIVE.replace("huixin_xishu  = 197703.0", "huixin_xishu  = 0.0");
+        assert_ne!(bad, LIVE);
+        assert_cache_recovers_after_snapshot_repair("cache-invalid", Some(&bad));
     }
 
     #[test]

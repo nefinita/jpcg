@@ -53,33 +53,56 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [moduleVersions, setModuleVersions] = useState<ModuleVersions | null>(null);
   const [valueSets, setValueSets] = useState<ValueSetDTO[]>([]);
   const [appliedValueSet, setAppliedValueSet] = useState<ValueSetDTO | null>(null);
+  const [valueSetReady, setValueSetReady] = useState(false);
   // 用户是否手动改过系数（改过则数据热更新后不自动覆盖）
   const coefficientCustomRef = useRef(false);
   // 应用内确认（Tauri v2 禁用 window.confirm，需自绘）
   const [confirmKind, setConfirmKind] = useState<null | "app" | "modules">(null);
 
-  // 用值集的常数填充「系数设置」（用户仍可再改）；记录实际使用的值集
-  const seedFromValueSet = useCallback((requestedId: string | null, vs: ValueSetDTO) => {
-    coefficientCustomRef.current = false;
-    setAppliedValueSet(vs);
-    setForm((prev): FormData => ({
-      ...prev,
-      value_set: requestedId,
-      coefficient: vs.coefficient ? { ...vs.coefficient } : prev.coefficient,
-    }));
+  // 当前选择是唯一来源；storage 仅用于启动恢复，异步结果必须匹配操作版本。
+  const selectedValueSetRef = useRef<string | null>(null);
+  const valueSetRevisionRef = useRef(0);
+  const valueSetResolveRef = useRef(0);
+
+  const persistValueSet = useCallback((id: string | null) => {
+    selectedValueSetRef.current = id;
+    if (id === null) localStorage.removeItem(STORAGE_KEYS.valueSet);
+    else localStorage.setItem(STORAGE_KEYS.valueSet, id);
   }, []);
 
-  // 解析（含不可用回退）→ seed；返回实际使用的值集
-  const resolveAndSeed = useCallback(async (requestedId: string | null): Promise<ValueSetDTO | null> => {
+  // 选择/清空会重新 seed；加载或用户编辑的系数在解析及热更新后保留。
+  const resolveCurrentValueSet = useCallback(async (
+    requestedId: string | null,
+    revision: number,
+  ): Promise<ValueSetDTO | null> => {
+    const resolveId = ++valueSetResolveRef.current;
+    setValueSetReady(false);
     try {
       const vs = await api.resolveValueSet(requestedId);
-      seedFromValueSet(requestedId, vs);
+      if (revision !== valueSetRevisionRef.current || resolveId !== valueSetResolveRef.current) return null;
+      setAppliedValueSet(vs);
+      setValueSetReady(true);
+      const coefficient = vs.coefficient;
+      if (!coefficientCustomRef.current && coefficient) {
+        setForm((prev) => ({ ...prev, coefficient: { ...coefficient } }));
+      }
       return vs;
     } catch (err) {
-      addToast(String(err), "error");
+      if (revision === valueSetRevisionRef.current && resolveId === valueSetResolveRef.current) {
+        addToast(String(err), "error");
+      }
       return null;
     }
-  }, [seedFromValueSet, addToast]);
+  }, [addToast]);
+
+  const selectValueSet = useCallback((id: string | null) => {
+    const revision = ++valueSetRevisionRef.current;
+    persistValueSet(id);
+    coefficientCustomRef.current = false;
+    setAppliedValueSet(null);
+    setForm((prev) => ({ ...prev, value_set: id }));
+    return resolveCurrentValueSet(id, revision);
+  }, [persistValueSet, resolveCurrentValueSet]);
 
   // 从列表选一个初始值集 id：localStorage（且可用）→ 默认（且可用）→ 首个可用 → 默认 → 首个
   const pickValueSetId = useCallback((sets: ValueSetDTO[]): string | null => {
@@ -100,13 +123,14 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       if (list.length > 0) setProfessionOptions(list);
     }).catch(() => {});
     api.getModuleVersions().then(setModuleVersions).catch(() => {});
+    const revision = valueSetRevisionRef.current;
     api.listValueSets().then((sets) => {
-      if (sets.length === 0) return;
       setValueSets(sets);
       // 统一走 resolveValueSet：即使默认项快照损坏，也应用实际回退的值集与常数
-      resolveAndSeed(pickValueSetId(sets));
+      if (revision === valueSetRevisionRef.current) selectValueSet(pickValueSetId(sets));
     }).catch(() => {});
-  }, [resolveAndSeed, pickValueSetId]);
+    return () => { ++valueSetRevisionRef.current; };
+  }, [selectValueSet, pickValueSetId]);
 
   const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
 
@@ -136,13 +160,13 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     }).catch(() => {});
   }, [professionOptions, defaultXinfa, onXinfaChange]);
 
-  const handleValueSetChange = useCallback(async (id: string) => {
-    localStorage.setItem(STORAGE_KEYS.valueSet, id);
-    const vs = await resolveAndSeed(id);
-    if (vs && vs.id !== id) {
+  const handleValueSetChange = useCallback(async (value: string) => {
+    const id = value || null;
+    const vs = await selectValueSet(id);
+    if (id !== null && vs && vs.id !== id) {
       addToast(`数值集「${id}」不可用，已回退到「${vs.name}」`, "warning");
     }
-  }, [resolveAndSeed, addToast]);
+  }, [selectValueSet, addToast]);
 
   const updateField = useCallback(
     (section: "player" | "hostile", id: string, value: string) => {
@@ -215,15 +239,22 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, [form, addToast, normalizeForm]);
 
   const handleLoad = useCallback(async () => {
+    const revision = ++valueSetRevisionRef.current;
+    setValueSetReady(false);
     try {
       const cfg = await api.loadConfig();
+      if (revision !== valueSetRevisionRef.current) return;
       if (!cfg) {
+        void resolveCurrentValueSet(selectedValueSetRef.current, revision);
         addToast("没有已保存的配置", "warning");
         return;
       }
+      const requestedId = cfg.value_set ?? null;
+      persistValueSet(requestedId);
+      setAppliedValueSet(null);
       const xinfaVal = cfg.xinfa_config.profession || "mowen";
       localStorage.setItem(STORAGE_KEYS.lastXinfa, xinfaVal);
-      setForm((prev) => ({
+      setForm({
         xinfa: xinfaVal,
         player: {
           jichu_shuxing: cfg.player.jichu_shuxing,
@@ -244,26 +275,26 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         xinfa_config: cfg.xinfa_config,
         buff: cfg.buff ? { ...cfg.buff } : { ...DEFAULT_BUFF },
         coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
-        value_set: cfg.value_set ?? prev.value_set ?? null,
-      }));
+        value_set: requestedId,
+      });
       // 加载的系数以存档为准（不再自动 seed）；标记为“已自定义”以免数据热更新覆盖
       coefficientCustomRef.current = true;
-      api.resolveValueSet(cfg.value_set ?? null).then(setAppliedValueSet).catch(() => {});
+      void resolveCurrentValueSet(requestedId, revision);
       addToast("配置已加载", "success");
     } catch (err) {
+      if (revision !== valueSetRevisionRef.current) return;
+      void resolveCurrentValueSet(selectedValueSetRef.current, revision);
       addToast(String(err), "error");
     }
-  }, [addToast]);
+  }, [addToast, persistValueSet, resolveCurrentValueSet]);
 
   const handleClear = useCallback(() => {
-    setForm(defaultForm());
-    // 清空后重新套用当前值集（不依赖可能已过时的 valueSets 快照）
-    const stored = typeof localStorage !== "undefined"
-      ? localStorage.getItem(STORAGE_KEYS.valueSet)
-      : null;
-    resolveAndSeed(stored);
+    const requestedId = selectedValueSetRef.current;
+    setForm({ ...defaultForm(), value_set: requestedId });
+    // 重新解析当前选择，不读取可能与当前表单不同的持久化偏好。
+    void selectValueSet(requestedId);
     addToast("已清空", "info");
-  }, [resolveAndSeed, addToast]);
+  }, [selectValueSet, addToast]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -356,12 +387,13 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         addToast("更新完成", "success");
         // 数据热更新：刷新值集列表并重解析当前选择（未手动改系数时重新 seed）
         try {
+          const revision = valueSetRevisionRef.current;
+          const requestedId = selectedValueSetRef.current;
           const sets = await api.listValueSets();
           setValueSets(sets);
-          const stored = localStorage.getItem(STORAGE_KEYS.valueSet);
-          const vs = await api.resolveValueSet(stored);
-          setAppliedValueSet(vs);
-          if (!coefficientCustomRef.current) seedFromValueSet(stored, vs);
+          if (revision === valueSetRevisionRef.current) {
+            await resolveCurrentValueSet(requestedId, revision);
+          }
         } catch {
           /* 刷新失败不影响更新结果 */
         }
@@ -374,7 +406,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     } finally {
       if (!needsConfirm) setUpdating(false);
     }
-  }, [updating, confirmKind, betaChannel, addToast, seedFromValueSet]);
+  }, [updating, confirmKind, betaChannel, addToast, resolveCurrentValueSet]);
 
   // —— 应用内确认的执行/取消（替代被 Tauri v2 禁用的 window.confirm）——
   const cancelUpdate = useCallback(() => {
@@ -468,7 +500,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           value={form.value_set ?? ""}
           onChange={(e) => handleValueSetChange(e.target.value)}
         >
-          {valueSets.length === 0 && <option value="">（内置默认）</option>}
+          <option value="">（默认数值集）</option>
           {valueSets.map((s) => (
             <option key={s.id} value={s.id} disabled={!s.available}>
               {s.name}{s.source === "builtin" ? "（内置）" : ""}{s.available ? "" : "（不可用）"}
@@ -479,7 +511,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           <div className={styles.fieldLabel} style={{ marginTop: 4 }}>
             实际使用：{appliedValueSet.name}
             {appliedValueSet.source === "builtin" ? "（内置兜底）" : ""}
-            {appliedValueSet.id !== form.value_set ? "（已回退）" : ""}
+            {form.value_set !== null && appliedValueSet.id !== form.value_set ? "（已回退）" : ""}
           </div>
         )}
       </div>
@@ -549,10 +581,10 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       <div className={styles.section}>
         <div className={styles.actions}>
           <button className={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={handleCalculate} disabled={calculating}>
+            onClick={handleCalculate} disabled={calculating || !valueSetReady}>
             {calculating ? "计算中..." : "开始计算"}
           </button>
-          <button className={styles.btn} onClick={handleSave}>保存</button>
+          <button className={styles.btn} onClick={handleSave} disabled={!valueSetReady}>保存</button>
           <button className={styles.btn} onClick={handleLoad}>加载</button>
           <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleClear}>清空</button>
           <button className={styles.btn} onClick={handleExport}>导出</button>
