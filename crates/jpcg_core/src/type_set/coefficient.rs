@@ -24,7 +24,13 @@ pub struct CoefficientConfig {
 
 impl Default for CoefficientConfig {
     fn default() -> Self {
-        let c = jpcg_const::level_constant::CURRENT;
+        Self::from_level_constant(&jpcg_const::level_constant::CURRENT)
+    }
+}
+
+impl CoefficientConfig {
+    /// 由等级常数构造（字段一一对应；与 [`Default`] 共用同一映射）
+    fn from_level_constant(c: &jpcg_const::level_constant::LevelConstant) -> Self {
         Self {
             pofang_xishu: c.pofang_xishu,
             huixin_xishu: c.huixin_xishu,

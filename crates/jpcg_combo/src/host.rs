@@ -7,67 +7,10 @@ use jpcg_api::{
     BuffConfigDTO, CoefficientConfigDTO, ComboPresetDTO, ComboResultDTO, ComboStepDTO,
     HostileConfigDTO, PlayerConfigDTO, XinfaConfigDTO,
 };
+use jpcg_core::host::conv as core_conv;
 use jpcg_core::type_set::combo::{ComboPreset, ComboStep};
-use jpcg_core::type_set::{
-    buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
-    player::PlayerConfig, xinfa::XinfaConfig,
-};
 
-use crate::conv;
 use crate::engine::{self, ComboConfig};
-
-fn into_core(
-    player: PlayerConfigDTO,
-    hostile: HostileConfigDTO,
-    xinfa: XinfaConfigDTO,
-    buff: BuffConfigDTO,
-    coeff: CoefficientConfigDTO,
-) -> (
-    PlayerConfig,
-    HostilepileConfig,
-    XinfaConfig,
-    BuffConfig,
-    CoefficientConfig,
-) {
-    let player = PlayerConfig::new(
-        player.jcsx,
-        player.jichu_shuxing,
-        player.jichu_gongji,
-        player.huixin_dengji,
-        player.huixin_xiaoguo,
-        player.pofang_dengji,
-        player.wuqi_shanghai,
-    );
-    let hostile = HostilepileConfig {
-        waigong_fangyu: hostile.waigong_fangyu,
-        neigong_fangyu: hostile.neigong_fangyu,
-        yujin_dengji: hostile.yujin_dengji,
-        huajin_dengji: hostile.huajin_dengji,
-        jianshang_bili: hostile.jianshang_bili,
-        target_hp: hostile.target_hp,
-        max_hp: hostile.max_hp,
-        current_hp: hostile.current_hp,
-    };
-    let xinfa = XinfaConfig::new(
-        xinfa.profession,
-        xinfa.xinfa_name,
-        xinfa.xinfa_nom,
-        xinfa.atk_up,
-        xinfa.pofang_up,
-        xinfa.huixin_up,
-    );
-    let buff = BuffConfig {
-        base_atk_pct: buff.base_atk_pct,
-        huixin_pct: buff.huixin_pct,
-        huixiao_pct: buff.huixiao_pct,
-        pofang_pct: buff.pofang_pct,
-        wushi_fangyu_pct: buff.wushi_fangyu_pct,
-        shanghai_pct: buff.shanghai_pct,
-        mode_is_point: buff.mode_is_point,
-    };
-    let coeff = CoefficientConfig::from(&coeff);
-    (player, hostile, xinfa, buff, coeff)
-}
 
 /// 连招伤害计算（含击杀率蒙特卡洛，host 层默认采样数）
 pub fn calculate_combo(
@@ -80,13 +23,13 @@ pub fn calculate_combo(
     config: ComboConfig,
 ) -> Result<ComboResultDTO, String> {
     let (player, hostile, xinfa, buff, coeff) =
-        into_core(player, hostile, xinfa, buff, coefficient);
+        core_conv::into_core(player, hostile, xinfa, buff, coefficient);
 
     let skilltypes: Vec<_> = steps
         .iter()
         .map(|s| {
             // 注：预设加载经 ComboPresetDTO 还原完整技能属性（快照），此处 DTO 直转即可
-            let mut st = conv::skill_dto_to_skilltype(&s.skill);
+            let mut st = core_conv::skill_pool_item_to_skilltype(&s.skill);
             if let Some(ref o) = s.overrides {
                 if let Some(v) = o.base_damage_override {
                     st.base_damage1 = v as u32;

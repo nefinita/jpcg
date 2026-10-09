@@ -1,41 +1,14 @@
 // ============================================================================
-// conv — 连招 DTO ↔ core 领域类型转换
+// conv — 连招结果 DTO 转换
 //
-// 注意：ComboStep/ComboPreset 的 From 实现留在 jpcg_core::host::conv
-// （孤儿规则：接收方类型须与 impl 同 crate）。此处仅存本 crate 自身结果的转换。
+// 技能 DTO ↔ core 的转换统一在 `jpcg_core::host::conv`（单一来源）；
+// `ComboStep` / `ComboPreset` 的 From 亦在彼处（孤儿规则）。
+// 此处仅存本 crate 自身结果的转换。
 // ============================================================================
 
 use jpcg_api::{ComboResultDTO, ComboStepResultDTO};
-use jpcg_core::type_set::skilltype::Skilltype;
 
 use crate::engine::{ComboResult, ComboStepResult};
-
-/// 技能池条目 → core 领域技能（连招计算输入；属性缺失用 Default 兜底）
-pub fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltype {
-    Skilltype {
-        skill_name: s.skill_name.clone(),
-        skill_id: s.skill_id,
-        sub_id: s.sub_id,
-        base_damage1: s.base_damage1,
-        base_damage2: s.base_damage2,
-        atk_xishu: s.atk_xishu,
-        watk_xishu: s.watk_xishu,
-        hit_up: s.hit_up,
-        huixin_up: s.huixin_up,
-        huixiao_up: s.huixiao_up,
-        wushifangyu: s.wushifangyu,
-        wushihuajin: s.wushihuajin,
-        dot_flag: s.dot_flag,
-        dot_interval: s.dot_interval,
-        dot_duration: s.dot_duration,
-        dot_up: s.dot_up,
-        wushijianshang: s.wushijianshang,
-        zhenshishanghai: s.zhenshishanghai,
-        has_critical_strike: s.has_critical_strike,
-        lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
-        ..Default::default()
-    }
-}
 
 impl From<ComboStepResult> for ComboStepResultDTO {
     fn from(s: ComboStepResult) -> Self {

@@ -5,12 +5,13 @@
 use jpcg_api::{CalculateRequest, DerivativesOutputDTO, SkillResultDTO};
 
 use crate::engine;
+use crate::host::conv;
 use crate::type_set::{
     buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
-    player::PlayerConfig, skilltype::Skilltype, xinfa::XinfaConfig,
+    player::PlayerConfig, xinfa::XinfaConfig,
 };
 
-/// 将 DTO 计算请求转换为 core 领域类型
+/// 将 DTO 计算请求转换为 core 领域类型（委托 [`host::conv`] 单一来源）
 pub(crate) fn into_core(
     req: CalculateRequest,
 ) -> (
@@ -20,44 +21,13 @@ pub(crate) fn into_core(
     BuffConfig,
     CoefficientConfig,
 ) {
-    let player = PlayerConfig::new(
-        req.player.jcsx,
-        req.player.jichu_shuxing,
-        req.player.jichu_gongji,
-        req.player.huixin_dengji,
-        req.player.huixin_xiaoguo,
-        req.player.pofang_dengji,
-        req.player.wuqi_shanghai,
-    );
-    let hostile = HostilepileConfig {
-        waigong_fangyu: req.hostile.waigong_fangyu,
-        neigong_fangyu: req.hostile.neigong_fangyu,
-        yujin_dengji: req.hostile.yujin_dengji,
-        huajin_dengji: req.hostile.huajin_dengji,
-        jianshang_bili: req.hostile.jianshang_bili,
-        target_hp: req.hostile.target_hp,
-        max_hp: req.hostile.max_hp,
-        current_hp: req.hostile.current_hp,
-    };
-    let xinfa = XinfaConfig::new(
-        req.xinfa_config.profession,
-        req.xinfa_config.xinfa_name,
-        req.xinfa_config.xinfa_nom,
-        req.xinfa_config.atk_up,
-        req.xinfa_config.pofang_up,
-        req.xinfa_config.huixin_up,
-    );
-    let buff = BuffConfig {
-        base_atk_pct: req.buff.base_atk_pct,
-        huixin_pct: req.buff.huixin_pct,
-        huixiao_pct: req.buff.huixiao_pct,
-        pofang_pct: req.buff.pofang_pct,
-        wushi_fangyu_pct: req.buff.wushi_fangyu_pct,
-        shanghai_pct: req.buff.shanghai_pct,
-        mode_is_point: req.buff.mode_is_point,
-    };
-    let coeff = CoefficientConfig::from(&req.coefficient);
-    (player, hostile, xinfa, buff, coeff)
+    conv::into_core(
+        req.player,
+        req.hostile,
+        req.xinfa_config,
+        req.buff,
+        req.coefficient,
+    )
 }
 
 /// 伤害计算（单技能表，不含连招）
@@ -81,26 +51,4 @@ pub fn compute_derivatives(req: CalculateRequest) -> Result<DerivativesOutputDTO
         &toml_config.skill,
     );
     Ok(DerivativesOutputDTO::from(output))
-}
-
-/// 技能池条目转换（combo 模块复用）
-pub(crate) fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltype {
-    Skilltype {
-        skill_name: s.skill_name.clone(),
-        skill_id: s.skill_id,
-        sub_id: s.sub_id,
-        base_damage1: s.base_damage1,
-        base_damage2: s.base_damage2,
-        atk_xishu: s.atk_xishu,
-        watk_xishu: s.watk_xishu,
-        hit_up: s.hit_up,
-        huixin_up: s.huixin_up,
-        huixiao_up: s.huixiao_up,
-        wushifangyu: s.wushifangyu,
-        wushihuajin: s.wushihuajin,
-        dot_flag: s.dot_flag,
-        has_critical_strike: s.has_critical_strike,
-        lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
-        ..Default::default()
-    }
 }
