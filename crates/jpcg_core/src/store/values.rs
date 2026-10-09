@@ -14,6 +14,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 use jpcg_api::ValueSetDTO;
 use jpcg_const::level_constant::{CURRENT, LevelConstant};
@@ -185,14 +186,21 @@ fn entry_to_dto(
 
 // ---------------------------------------------------------------------------
 // 内存缓存：避免每次计算都读盘解析（index + 快照）。
-// 键含解析后的目录，故切换 JPCG_DATA_DIR 仍能命中正确条目；
-// 数据更新落盘后调用 [`invalidate_cache`] 使新数据即时生效。
+// 以 index/快照文件的 mtime 做校验：文件被数据更新改写后，下次读取自动失效——
+// 该机制对**每个 cdylib 各自生效**（dynamic 模式下 core 与 combo 各持一份缓存，
+// 无需跨库广播失效）。
 // ---------------------------------------------------------------------------
+
+struct CacheEntry {
+    loaded: LoadedValueSet,
+    index_mtime: Option<SystemTime>,
+    snapshot_path: Option<PathBuf>,
+    snapshot_mtime: Option<SystemTime>,
+}
 
 #[derive(Default)]
 struct ValueCache {
-    loaded: HashMap<(PathBuf, Option<String>), LoadedValueSet>,
-    lists: HashMap<PathBuf, Vec<ValueSetDTO>>,
+    loaded: HashMap<(PathBuf, Option<String>), CacheEntry>,
 }
 
 fn cache() -> &'static Mutex<ValueCache> {
@@ -200,29 +208,33 @@ fn cache() -> &'static Mutex<ValueCache> {
     CACHE.get_or_init(|| Mutex::new(ValueCache::default()))
 }
 
-/// 清空内存缓存（数据更新落盘后调用）
+/// 清空内存缓存（数据更新落盘后调用；mtime 校验亦会自动失效）
 pub fn invalidate_cache() {
     if let Ok(mut c) = cache().lock() {
         c.loaded.clear();
-        c.lists.clear();
+    }
+}
+
+fn mtime(p: &Path) -> Option<SystemTime> {
+    std::fs::metadata(p).ok().and_then(|m| m.modified().ok())
+}
+
+fn cache_valid(e: &CacheEntry, index_mtime: Option<SystemTime>) -> bool {
+    if e.index_mtime != index_mtime {
+        return false;
+    }
+    match &e.snapshot_path {
+        Some(p) => e.snapshot_mtime == mtime(p),
+        None => true,
     }
 }
 
 /// 列出可用值集（同时逐项校验快照可用性；索引不可用时返回内置兜底项）
 pub fn list_value_sets() -> Vec<ValueSetDTO> {
-    let Some(dir) = values_dir() else {
-        return vec![builtin().info];
-    };
-    if let Ok(c) = cache().lock()
-        && let Some(v) = c.lists.get(&dir)
-    {
-        return v.clone();
+    match values_dir() {
+        Some(dir) => list_from(&dir),
+        None => vec![builtin().info],
     }
-    let computed = list_from(&dir);
-    if let Ok(mut c) = cache().lock() {
-        c.lists.insert(dir, computed.clone());
-    }
-    computed
 }
 
 fn list_from(dir: &Path) -> Vec<ValueSetDTO> {
@@ -245,26 +257,49 @@ fn list_from(dir: &Path) -> Vec<ValueSetDTO> {
 /// 加载指定数值集；`id = None` 用 index.toml 的 default；
 /// 任何失败（目录/文件/解析/校验）都回退内置兜底（体验服一测）。
 pub fn load_value_set(id: Option<&str>) -> LoadedValueSet {
-    let Some(dir) = values_dir() else {
-        return builtin();
-    };
-    let key = (dir.clone(), id.map(str::to_string));
-    if let Ok(c) = cache().lock()
-        && let Some(v) = c.loaded.get(&key)
-    {
-        return v.clone();
+    match values_dir() {
+        Some(dir) => load_cached(&dir, id),
+        None => builtin(),
     }
-    let computed = load_with_fallback(&dir, id);
-    if let Ok(mut c) = cache().lock() {
-        c.loaded.insert(key, computed.clone());
-    }
-    computed
 }
 
-/// 从指定目录加载，失败回退内置兜底（显式目录版，便于测试）
+/// 从指定目录加载（带 mtime 校验的缓存；显式目录版便于测试）
+pub(crate) fn load_cached(dir: &Path, id: Option<&str>) -> LoadedValueSet {
+    let key = (dir.to_path_buf(), id.map(str::to_string));
+    let index_mtime = mtime(&dir.join(INDEX_FILENAME));
+
+    if let Ok(c) = cache().lock()
+        && let Some(e) = c.loaded.get(&key)
+        && cache_valid(e, index_mtime)
+    {
+        return e.loaded.clone();
+    }
+
+    let (loaded, snapshot_path) = match load_from(dir, id) {
+        Ok((v, p)) => (v, Some(p)),
+        Err(e) => {
+            crate::log::warn(&format!("数值集加载失败（回退内置兜底）：{}", e));
+            (builtin(), None)
+        }
+    };
+    let snapshot_mtime = snapshot_path.as_deref().and_then(mtime);
+    let entry = CacheEntry {
+        loaded: loaded.clone(),
+        index_mtime,
+        snapshot_path,
+        snapshot_mtime,
+    };
+    if let Ok(mut c) = cache().lock() {
+        c.loaded.insert(key, entry);
+    }
+    loaded
+}
+
+/// 从指定目录加载，失败回退内置兜底（显式目录版，仅供测试）
+#[cfg(test)]
 pub(crate) fn load_with_fallback(dir: &Path, id: Option<&str>) -> LoadedValueSet {
     match load_from(dir, id) {
-        Ok(v) => v,
+        Ok((v, _)) => v,
         Err(e) => {
             crate::log::warn(&format!("数值集加载失败（回退内置兜底）：{}", e));
             builtin()
@@ -272,7 +307,8 @@ pub(crate) fn load_with_fallback(dir: &Path, id: Option<&str>) -> LoadedValueSet
     }
 }
 
-fn load_from(dir: &Path, id: Option<&str>) -> Result<LoadedValueSet, String> {
+/// 加载指定值集，返回 (值集, 实际使用的快照文件路径)
+fn load_from(dir: &Path, id: Option<&str>) -> Result<(LoadedValueSet, PathBuf), String> {
     let index = read_index(dir)?;
     let wanted = id.unwrap_or(&index.default);
     // 指定 id 未命中时回退默认项；默认项也缺失才报错
@@ -283,10 +319,14 @@ fn load_from(dir: &Path, id: Option<&str>) -> Result<LoadedValueSet, String> {
         .or_else(|| index.value_sets.iter().find(|s| s.id == index.default))
         .ok_or_else(|| format!("未找到值集: {}", wanted))?;
     let constant = read_snapshot(dir, &entry.file)?;
-    Ok(LoadedValueSet {
-        info: entry_to_dto(entry, &index, Some(&constant)),
-        constant,
-    })
+    let snapshot_path = dir.join(&entry.file);
+    Ok((
+        LoadedValueSet {
+            info: entry_to_dto(entry, &index, Some(&constant)),
+            constant,
+        },
+        snapshot_path,
+    ))
 }
 
 #[cfg(test)]
@@ -360,14 +400,14 @@ mod tests {
     #[test]
     fn loads_default_and_explicit_set() {
         let t = TempData::new("load");
-        assert_eq!(load_from(t.values(), None).unwrap().constant, CURRENT);
+        assert_eq!(load_from(t.values(), None).unwrap().0.constant, CURRENT);
         assert_eq!(
-            load_from(t.values(), Some("live-130")).unwrap().constant,
+            load_from(t.values(), Some("live-130")).unwrap().0.constant,
             jpcg_const::level_constant::LIVE_130
         );
         // 未知 id → 回退默认项（体验服一测），而非报错
         assert_eq!(
-            load_from(t.values(), Some("nope")).unwrap().constant,
+            load_from(t.values(), Some("nope")).unwrap().0.constant,
             CURRENT
         );
     }
@@ -459,5 +499,24 @@ mod tests {
         let v = load_with_fallback(t.values(), Some("esc"));
         assert_eq!(v.info.source, "builtin");
         assert_ne!(v.constant.huixin_xishu, 9999.0);
+    }
+
+    #[test]
+    fn cache_reloads_after_snapshot_change() {
+        let t = TempData::new("cache");
+        assert_eq!(
+            load_cached(t.values(), Some("live-130")).constant,
+            jpcg_const::level_constant::LIVE_130
+        );
+        // 改写同一快照文件（同 id、同路径）——mtime 变化应使缓存失效
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let modified = LIVE.replace("huixin_xishu  = 197703.0", "huixin_xishu  = 111.0");
+        std::fs::write(t.values().join("live-130.toml"), modified).unwrap();
+        assert_eq!(
+            load_cached(t.values(), Some("live-130"))
+                .constant
+                .huixin_xishu,
+            111.0
+        );
     }
 }

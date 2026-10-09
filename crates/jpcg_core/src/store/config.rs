@@ -36,21 +36,22 @@ pub struct SaveConfig {
 // 输出文件: 工作目录下的 saved_config.toml
 // ============================================================================
 
-/// 将当前玩家、目标、心法配置保存到 saved_config.toml
+/// 将当前配置（含 buff / 系数 / 数值集）保存到 saved_config.toml
 pub fn save_config(
     player: player::PlayerConfig,
     hostilepile: hostilepile::HostilepileConfig,
     xinfa: xinfa::XinfaConfig,
+    buff: BuffConfig,
+    coefficient: CoefficientConfig,
+    value_set: Option<String>,
 ) {
-    // 保留已存的 buff / 系数 / 数值集：本函数不接收这三项，避免保存时被重置/丢失
-    let prev = load_save_config();
     let save_config = SaveConfig {
         player,
         hostilepile,
         xinfa,
-        buff: prev.buff,
-        coefficient: prev.coefficient,
-        value_set: prev.value_set,
+        buff,
+        coefficient,
+        value_set,
     };
     // 序列化为 TOML 字符串
     match toml::to_string(&save_config) {

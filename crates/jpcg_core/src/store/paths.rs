@@ -89,26 +89,31 @@ pub fn data_root_writable() -> Option<PathBuf> {
     writable_root(exe_dir, env_dir.as_deref(), home.as_deref())
 }
 
-pub fn data_dir() -> Option<PathBuf> {
-    // 环境变量覆盖（CLI/Python/跨进程场景：current_exe 不可用时指向任意数据目录）
+/// shuxing 目录候选（按优先级，仅返回存在的）——用于**多目录合并读取**：
+/// 安装版用户目录（更新/编辑落盘处）优先，其后随包只读资源；同文件以先出现者为准。
+pub fn data_dirs() -> Vec<PathBuf> {
     if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
         let p = PathBuf::from(dir);
-        return if p.join("shuxing").is_dir() {
-            Some(p.join("shuxing"))
-        } else if p.is_dir() {
-            Some(p)
+        let shuxing = if p.join("shuxing").is_dir() {
+            p.join("shuxing")
         } else {
-            None
+            p
+        };
+        return if shuxing.is_dir() {
+            vec![shuxing]
+        } else {
+            Vec::new()
         };
     }
     read_root_candidates()
         .into_iter()
         .map(|r| r.join("shuxing"))
-        .find(|d| d.is_dir())
+        .filter(|d| d.is_dir())
+        .collect()
 }
 
 /// 数值集目录（data/values）：存放 index.toml 与各值集快照。
-/// 解析顺序与 [`data_dir`] 一致，且兼容 `JPCG_DATA_DIR` 直接指向 `data/shuxing` 的既有用法。
+/// 解析顺序与 [`data_dirs`] 一致，且兼容 `JPCG_DATA_DIR` 直接指向 `data/shuxing` 的既有用法。
 pub fn values_dir() -> Option<PathBuf> {
     if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
         return values_dir_from_env(&PathBuf::from(dir));

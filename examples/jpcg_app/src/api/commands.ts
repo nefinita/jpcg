@@ -66,17 +66,30 @@ export async function calculateDamage(req: CalculateRequest): Promise<SkillResul
 }
 
 export async function saveConfig(config: Record<string, unknown>): Promise<void> {
+  const xinfa = config.xinfa_config as Record<string, unknown>;
+  const buff = (config.buff ?? {}) as Record<string, unknown>;
   return invoke("save_config_cmd", {
     player: _sanitizeNumbers(config.player as Record<string, unknown>),
     hostile: _sanitizeNumbers(config.hostile as Record<string, unknown>),
     xinfa: {
-      profession: (config.xinfa_config as Record<string, unknown>).profession as string,
-      xinfa_name: (config.xinfa_config as Record<string, unknown>).xinfa_name as string,
-      xinfa_nom: (config.xinfa_config as Record<string, unknown>).xinfa_nom,
-      atk_up: Number((config.xinfa_config as Record<string, unknown>).atk_up) || 0,
-      pofang_up: Number((config.xinfa_config as Record<string, unknown>).pofang_up) || 0,
-      huixin_up: Number((config.xinfa_config as Record<string, unknown>).huixin_up) || 0,
+      profession: xinfa.profession as string,
+      xinfa_name: xinfa.xinfa_name as string,
+      xinfa_nom: xinfa.xinfa_nom,
+      atk_up: Number(xinfa.atk_up) || 0,
+      pofang_up: Number(xinfa.pofang_up) || 0,
+      huixin_up: Number(xinfa.huixin_up) || 0,
     },
+    buff: {
+      base_atk_pct: Number(buff.base_atk_pct) || 0,
+      huixin_pct: Number(buff.huixin_pct) || 0,
+      huixiao_pct: Number(buff.huixiao_pct) || 0,
+      pofang_pct: Number(buff.pofang_pct) || 0,
+      wushi_fangyu_pct: Number(buff.wushi_fangyu_pct) || 0,
+      shanghai_pct: Number(buff.shanghai_pct) || 0,
+      mode_is_point: !!buff.mode_is_point,
+    },
+    coefficient: _sanitizeNumbers(config.coefficient as Record<string, unknown>),
+    valueSet: (config.value_set as string | null | undefined) ?? null,
   });
 }
 

@@ -19,6 +19,6 @@ pub use combo::{delete_combo_preset, list_combo_presets, load_combo_preset, save
 pub use config::{
     SaveConfig, export_config_toml, import_config_toml, load_save_config, save_config,
 };
-pub use paths::data_dir;
+pub use paths::data_dirs;
 pub use profession::list_available_professions;
 pub use toml::{TomlConfig, load_config, save_skill_toml, toml_input};

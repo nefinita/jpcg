@@ -5,8 +5,11 @@ pub fn save_config_cmd(
     player: PlayerConfigDTO,
     hostile: HostileConfigDTO,
     xinfa: XinfaConfigDTO,
+    buff: BuffConfigDTO,
+    coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<(), String> {
-    save_config_impl(player, hostile, xinfa)
+    save_config_impl(player, hostile, xinfa, buff, coefficient, value_set)
 }
 
 #[cfg(feature = "static")]
@@ -14,8 +17,11 @@ fn save_config_impl(
     player: PlayerConfigDTO,
     hostile: HostileConfigDTO,
     xinfa: XinfaConfigDTO,
+    buff: BuffConfigDTO,
+    coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<(), String> {
-    jpcg_core::host::config::save_config(player, hostile, xinfa);
+    jpcg_core::host::config::save_config(player, hostile, xinfa, buff, coefficient, value_set);
     Ok(())
 }
 
@@ -24,8 +30,18 @@ fn save_config_impl(
     player: PlayerConfigDTO,
     hostile: HostileConfigDTO,
     xinfa: XinfaConfigDTO,
+    buff: BuffConfigDTO,
+    coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<(), String> {
-    let req = serde_json::json!({ "player": player, "hostile": hostile, "xinfa": xinfa });
+    let req = serde_json::json!({
+        "player": player,
+        "hostile": hostile,
+        "xinfa": xinfa,
+        "buff": buff,
+        "coefficient": coefficient,
+        "value_set": value_set,
+    });
     crate::commands::ffi_bridge::call::<_, serde_json::Value>("save_config", &req).map(|_| ())
 }
 
