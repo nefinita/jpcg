@@ -26,6 +26,9 @@ pub struct SaveConfig {
     pub buff: BuffConfig,       // 阵眼/奇穴增益
     #[serde(default)]
     pub coefficient: CoefficientConfig, // 系数设置
+    /// 选中的数值集 id（None = 默认值集；见 data/values/index.toml）
+    #[serde(default)]
+    pub value_set: Option<String>,
 }
 
 // ============================================================================
@@ -33,18 +36,22 @@ pub struct SaveConfig {
 // 输出文件: 工作目录下的 saved_config.toml
 // ============================================================================
 
-/// 将当前玩家、目标、心法配置保存到 saved_config.toml
+/// 将当前配置（含 buff / 系数 / 数值集）保存到 saved_config.toml
 pub fn save_config(
     player: player::PlayerConfig,
     hostilepile: hostilepile::HostilepileConfig,
     xinfa: xinfa::XinfaConfig,
+    buff: BuffConfig,
+    coefficient: CoefficientConfig,
+    value_set: Option<String>,
 ) {
     let save_config = SaveConfig {
         player,
         hostilepile,
         xinfa,
-        buff: BuffConfig::default(),
-        coefficient: CoefficientConfig::default(),
+        buff,
+        coefficient,
+        value_set,
     };
     // 序列化为 TOML 字符串
     match toml::to_string(&save_config) {

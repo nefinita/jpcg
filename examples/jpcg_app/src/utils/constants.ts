@@ -87,6 +87,7 @@ export const STORAGE_KEYS = {
   theme: "jpcg_theme",
   lastXinfa: "jpcg_last_xinfa",
   betaChannel: "jpcg_beta_channel",
+  valueSet: "jpcg_value_set",
 };
 
 export const FORUM_URL = "https://forum.nefinita-ai.com";

@@ -23,12 +23,17 @@ pub async fn check_update(
 
 #[cfg(feature = "static")]
 fn check_update_impl(beta: bool, force: bool) -> Result<jpcg_update::UpdateCheckResult, String> {
-    jpcg_core::host::update::check_update(beta, force)
+    // 以当前 app 二进制编译版本作为本地版本（唯一真相，不依赖 local_update_info）
+    jpcg_core::host::update::check_update(beta, force, Some(env!("CARGO_PKG_VERSION")))
 }
 
 #[cfg(feature = "dynamic")]
 fn check_update_impl(beta: bool, force: bool) -> Result<jpcg_update::UpdateCheckResult, String> {
-    let req = serde_json::json!({ "beta": beta, "force": force });
+    let req = serde_json::json!({
+        "beta": beta,
+        "force": force,
+        "current_version": env!("CARGO_PKG_VERSION"),
+    });
     crate::commands::ffi_bridge::call("update_check", &req)
 }
 
@@ -106,13 +111,16 @@ fn perform_app_update_impl(app_handle: tauri::AppHandle, beta: bool) -> Result<S
     let events = TauriEvents {
         app_handle: app_handle.clone(),
     };
-    jpcg_core::host::update::perform_app_update(&events, beta)
+    jpcg_core::host::update::perform_app_update(&events, beta, Some(env!("CARGO_PKG_VERSION")))
 }
 
 #[cfg(feature = "dynamic")]
 fn perform_app_update_impl(app_handle: tauri::AppHandle, beta: bool) -> Result<String, String> {
     crate::commands::ffi_bridge::register_host_events(&app_handle)?;
-    let req = serde_json::json!({ "beta": beta });
+    let req = serde_json::json!({
+        "beta": beta,
+        "current_version": env!("CARGO_PKG_VERSION"),
+    });
     crate::commands::ffi_bridge::call("update_app", &req)
 }
 
