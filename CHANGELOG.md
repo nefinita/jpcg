@@ -5216,6 +5216,656 @@ beta.2 更新到新版后**白屏**。排查：
 ## 验证
 - 本机对照：cargo build 产物无 `index-*.js`；tauri build 产物有（UI 正常）
 
+## [2.1.0-beta.4] - 2026-10-11
+
+### 来自 changes/2026-09-04-200540.md
+
+# 修复 release.sh：独立版本降级中断 + prep 分支命名冲突
+
+日期：2026-09-04
+
+## 背景
+首次执行 `scripts/release.sh beta`（2.1.0-beta.1）暴露两处缺陷：
+
+1. `cargo set-version "$VERSION"` 会把 workspace 内**所有**成员都尝试改成新版本，
+   但 `jpcg_const` 使用独立版本号（`130.3.20260602`，等级.赛季.日期），
+   直接被判定 "Cannot downgrade from 130.3.20260602 to 2.1.0-beta.1" 中断脚本。
+2. prep 分支名 `release/prep-${VERSION}` 与已有分支 `release` 冲突
+   （GitHub 禁止 `release/xxx` 与分支 `release` 共存），push 被拒。
+
+## 变更
+- `scripts/release.sh`：
+  - 版本 bump 改为**仅改根 `[workspace.package]` version**（继承成员自动生效，
+    独立版本 crate 不动），随后 `sync-version.sh` 同步前端/tauri/模拟串，
+    再 `cargo metadata` 刷新 Cargo.lock
+  - prep 分支改为 `prep/${VERSION}`，避开 `release/` 命名空间
+- `scripts/README.md`：同步两处描述
+
+## 验证
+- beta.1 实际发布时手工等价步骤跑通（根版本改 + sync-version + lock 刷新 + prep/v2.1.0-beta.1 + tag）
+- 本修复让 `release.sh beta` 可全自动复现
+
+## 注意
+- 更新器 `jpcg_updater` 同样为独立版本（2.1.0），不受 workspace bump 影响
+
+### 来自 changes/2026-09-04-210000.md
+
+# 修复 release.yml：Windows runner 两步缺 shell: bash
+
+日期：2026-09-04
+
+## 背景
+`v2.1.0-beta.1` 触发 release.yml 时 windows-latest job 在"判断更新通道"步骤失败：
+该步（及"提取版本号"）未指定 `shell: bash`，Windows runner 默认用 PowerShell，
+`[[ "$GITHUB_REF_NAME" == *-beta* ]]` 为 bash 语法 → 报错，导致三平台只产出 darwin/linux 资产。
+
+## 变更
+- `.github/workflows/release.yml`：为"提取版本号（tag）"与"判断更新通道"两步显式加 `shell: bash`
+
+## 验证
+- 失败 run 335...（33870657978）三 job 结论：darwin/linux success、windows 唯一失败步 = 判断更新通道
+- 修复后重建 tag 重跑，windows 应产出 app exe / dll / 清单
+
+### 来自 changes/2026-09-04-220000.md
+
+# feat: 以 GitHub Release 为载具的更新自动部署（deploy-gen + package job + 模块平台过滤）
+
+日期：2026-09-04
+
+## 背景
+beta.1（v2.1.0-beta.1）发布与服务器落盘全程手工。目标：tag 构建成功后自动产出
+服务器可直接应用的"通道 tgz"，随 Release 推送；服务器侧以 webhook 拉取落位
+（服务器接收端为独立私有仓库实现，不随本仓库发布）。
+
+## 变更（本仓库 jpcg）
+- 新增 `server_tools/deploy-gen`（workspace 成员）：
+  - 输入：GitHub Release 资产目录 + 仓库 data + version/channel
+  - 输出：更新服务器 downloads 根布局 stage（beta 根式 / stable 版本目录式）
+  - 生成 update.toml / manifest.toml（app 二进制 sha256）/ 三平台合并
+    modules_manifest.toml（platform="multi"，core/update 版本随 app、
+    const 反查自身 Cargo.toml 独立版本）/ data 布局（按 data_manifest 列出的文件拷贝）
+  - beta 与 stable 双通道本地试跑通过，与 beta.1 手工部署布局一致
+- `.github/workflows/release.yml`：`deploy`(SSH 直推) 方案废弃，改为新增
+  `package` job（needs: build，仅 tag push）：下载资产 → deploy-gen → tar 为
+  `jpcg-<channel>-<tag>.tgz` 并附 `.sha256` → `gh release upload` 到同一 Release
+- `crates/jpcg_update/src/modules.rs`：模块更新按本机平台扩展名过滤
+  （mac=.dylib / linux=.so / windows=.dll），适配多平台合并清单，避免下载无关 dll
+
+## 验证
+- `cargo build -p deploy-gen` / beta、stable 双通道试跑通过
+- `cargo check -p jpcg_update` 通过
+
+## 待办（服务器接收端，独立私有仓库，不在本仓库实现）
+- 服务器 webhook 接收（验签）→ 拉取该 tgz → 校验 .sha256 →
+  原子切换（beta 覆写根 / stable 合并保留 3 版）
+- 下载服务目录列表处理（stable 客户端依赖 /updates/JPCG/ 的 HTML 目录列表）
+
+### 来自 changes/2026-09-08-214000.md
+
+# fix: 更新检查/执行无限等待 + Tauri v2 中 window.confirm 失效导致无法确认更新
+
+日期：2026-09-08
+
+## 背景
+- beta.1 构建中点击"检查更新"卡在"正在检查更新..."不返回（Beta 开关开/关都卡）。
+  服务器侧所有被请求 URL 均 200，定位为客户端代码层。
+- 修复后 beta 仍"点了无反应"：Tauri v2 的 WebView **禁用 window.confirm**（恒返 false），
+  检测到新版本时的确认框被当"取消"处理 → 界面直接复位、既不更新也不提示。
+
+## 变更
+- `crates/jpcg_update/src/download.rs`：新增 `http_client()`（统一 60s 超时），
+  全部 5 处 `reqwest::Client::new()` 改用之
+- `crates/jpcg_update/src/modules.rs`：模块清单请求同样走带超时客户端
+- `examples/jpcg_app/src-tauri/src/commands/update.rs`：`check_update` / `perform_update` /
+  `perform_app_update` / `perform_modules_update` 同步实现移入
+  `tauri::async_runtime::spawn_blocking`，避免在 async 命令线程内嵌套新建 tokio runtime
+- `examples/jpcg_app/src/components/ConfigPanel.tsx`：废弃 `window.confirm`，改为应用内
+  确认区（发现应用/模块更新时显示"下载更新/取消"按钮），确认后走原下载→验证→重启流程。
+  补充状态修正：命中确认时 `updating` 保持 true（禁用重复触发）、进度框与确认框互斥避免
+  叠显；取消有 toast 反馈；确保点"下载更新"后进度条可见（否则又像"无反应"）
+
+## 验证
+- `cargo check -p jpcg_update` / `-p jpcg_app` 通过；前端 `tsc --noEmit` 通过
+- 效果：任何网络卡点 60s 内转为明确报错；命令不再无界等待；更新确认不再被静默吞掉
+
+### 来自 changes/2026-09-08-223000.md
+
+# fix: macOS 产物架构错标 + 全面切到 Apple Silicon（aarch64）单架构
+
+日期：2026-09-08
+
+## 背景
+- GitHub 标准 macOS runner 已全部迁移到 arm64（macOS 26，Intel 已被官方淘汰），
+  `macos-latest` 上 `cargo build` 产出的就是原生 aarch64 二进制，但此前产物名与清单
+  一直写死 `jpcg-app-darwin-x86_64` / `arch = "x86_64"`——**错标**。
+- 更隐蔽的是 manifest `os` 字段写的是 `"darwin"`，而客户端按
+  `std::env::consts::OS` 比对（= `"macos"`），导致 macOS 客户端永远匹配不到二进制，
+  报 "未找到适用于 macos aarch64 的二进制文件"（Apple Silicon 上必现）。
+
+## 变更
+- `.github/workflows/release.yml`：matrix 增 `arch`；mac 资产命名为
+  `jpcg-app-macos-aarch64`，linux/windows 保持 `x86_64`；命名不再硬编码
+- `server_tools/deploy-gen/src/main.rs`：`APP_BINS` → macos/aarch64，清单 `os` 字段
+  用客户端词汇（`macos` 而非 `darwin`）
+- `server_tools/manifest-gen/src/main.rs`：`detect_platform` darwin → macos
+- `server_manifest.md`：目录/清单示例修正为实际 `{os}-{arch}` 命名，去掉 Intel mac
+
+## 决策
+- **不保留 Intel macOS**：苹果已淘汰全部 Intel Mac，不为旧机型维护 x86_64 构建；
+  每平台单架构，模块 dylib 亦无同名冲突
+- 产物命名/清单 `os+arch` 与客户端 `std::env::consts::{OS,ARCH}` 严格对齐
+
+## 验证
+- 本机（arm64）dev 构建此前因清单缺 macos/aarch64 命中报错；beta.2 发布后此路径应打通
+
+### 来自 changes/2026-09-08-223500.md
+
+# chore: dev 补齐 release.sh 修复（#11）+ 清理已聚合 changes
+
+日期：2026-09-08
+
+## 背景
+- dev 分支此前缺失 #11 的 `scripts/release.sh` 修复（仅 beta 有）：dev 版仍是
+  `cargo set-version`（会因 jpcg_const 独立版本降级而中断）+ `release/prep-` 分支名
+  （与已有 `release` 分支冲突）。dev 作为最上游分支必须与修复同步，避免后续提升把
+  未修版脚本带回 beta/release。
+- `changes/` 累积了 56 个已聚合进 beta 分支 `[2.1.0-beta.1]` CHANGELOG 的旧条目，
+  若不清除，下次发布会把这些历史再聚合一遍（重复）。
+
+## 变更
+- `scripts/release.sh` / `scripts/README.md`：从 beta 同步 #11 修复
+  （版本 bump 仅改根 `[workspace.package]` + `sync-version.sh` + `cargo metadata`
+  刷 lock；prep 分支名改 `prep/<版本>`）
+- `changes/`：删除 56 个已聚合条目，保留未发布条目
+  （2026-09-04-200540/210000/220000、2026-09-08-214000 与本仓库内新条目）
+
+## 验证
+- 与 origin/beta 对比 `scripts/` 差异为空（完全对齐）
+
+### 来自 changes/2026-09-08-231500.md
+
+# fix: release.sh 在 set -u 下 `$VAR` 紧跟全角标点触发 unbound variable
+
+日期：2026-09-08
+
+## 背景
+`scripts/release.sh` 第 7 步 `gh pr create` 的 `--body` 及末尾提示语中，
+`$STAGE` / `$TARGET_BRANCH` 后面紧跟全角字符（`，`、`。`）。在 `set -u`
+（`set -euo pipefail`）下，bash 会把多字节字符的首字节并入变量名，导致
+`STAGE�: unbound variable` 报错，脚本在 beta.2 发布时于第 7/8 步中断
+（commit + tag 已生成、prep 分支已推，但 PR 与 tag 推送需手工补做）。
+
+## 变更
+- `scripts/release.sh`：`$STAGE，` → `${STAGE}，`；`$TARGET_BRANCH。` →
+  `${TARGET_BRANCH}。`（用花括号显式界定变量名，避免紧跟多字节字符被并入）
+
+## 验证
+- 复现：`bash -uc 'STAGE=beta; x="…（$STAGE，…"'` 报 `STAGE�: unbound variable`；
+  加花括号后通过
+- 已用于 beta.2 发布的手工补做（PR + tag 推送）
+
+### 来自 changes/2026-09-08-233000.md
+
+# fix: 更新 URL 拼接缺分隔符（beta/stable/all_updates 三处 404）
+
+日期：2026-09-08
+
+## 背景
+beta 通道点"下载更新"报 `下载失败: 下载文件失败，HTTP 状态码: 404 Not Found`。
+
+根因：`fetch_app_update_info` / `all_updates` 里用
+`format!("{}{}", base_url.trim_end_matches('/'), path)` 直接拼接，
+而 base trim 后无结尾 `/`、path 也无前导 `/`，导致：
+- beta：`.../updates/JPCG_beta` + `jpcg-app-macos-aarch64`
+  → `.../JPCG_betajpcg-app-...`
+- stable：`.../updates/JPCG` + `v2.1.0` + `/...`
+  → `.../JPCGv2.1.0/jpcg-app-...`
+- `all_updates` 的 `version_url`：`.../JPCG` + `v2.1.0/`
+  → `.../JPCGv2.1.0/`
+
+3 处均为同一类漏分隔符问题（stable/CLI 通道此前未被实际使用，故只有 beta 显现）。
+
+## 变更
+- `crates/jpcg_update/src/lib.rs`：
+  - 新增 `join_url(base, segments)` 统一拼接（base 去尾 `/`，各段去首尾 `/` 后以 `/` 连接）
+  - 三处（beta 二进制、stable 版本目录、all_updates version_url）改用 `join_url`
+  - 补 3 个单测覆盖 beta/stable/缺斜杠容错
+
+## 验证
+- `cargo test -p jpcg_update --lib`：3 passed
+- 修复后 URL = `https://nefinita-ai.com/updates/JPCG_beta/jpcg-app-macos-aarch64`（服务器实际 200）
+
+### 来自 changes/2026-09-08-234500.md
+
+# fix: Release 产物用 tauri build 嵌入前端（裸 cargo build 产物白屏）
+
+日期：2026-09-08
+
+## 背景
+beta.2 更新到新版后**白屏**。排查：
+- 浏览器 mock / `tauri dev` 前端正常 → 排除 JS 回归
+- 本地 `cargo build -p jpcg_app --release` 产物直接运行也白屏
+- 对比二进制内容：裸 cargo build 产物搜不到前端资源（如 `index-*.js`）；
+  同一份源码用 `npx tauri build --no-bundle` 产物含 `index-*.js`
+
+结论：Tauri v2 前端资源由 `tauri` CLI 构建流程嵌入二进制；
+只跑 `cargo build` 不嵌入 frontendDist → 产物无 UI，被 updater 替换后白屏。
+
+## 变更
+- `.github/workflows/release.yml`：构建 app 改为
+  `npx tauri build --no-bundle`（在 examples/jpcg_app 下，产物仍落在
+  target/release/jpcg_app），updater 仍用 `cargo build -p jpcg_updater`
+
+## 验证
+- 本机对照：cargo build 产物无 `index-*.js`；tauri build 产物有（UI 正常）
+
+### 来自 changes/2026-09-12-215500.md
+
+# fix: 应用更新判定改用二进制版本（不再依赖 local_update_info.toml）
+
+日期：2026-09-12
+
+## 背景
+更新到 beta.3 成功后，界面仍提示"发现新版本 v2.1.0-beta.3，是否下载并重启应用？"。
+根因：`check_updates` 用 `local_update_info.toml`（CWD）里的 `version` 与服务器比对，
+而 **GUI 更新路径（`jpcg_core::host::update::perform_app_update`）从不写回该文件**
+（仅 CLI 路径会写），于是更新后本地版本仍是旧值/缺失（None）→ 恒报同一版本可更新。
+另有一个连带问题：CLI 写回时 `data_version: None` 直接覆盖文件，会丢掉已记录的数据版本。
+
+## 变更
+- `crates/jpcg_update/src/lib.rs`：
+  - **以当前运行二进制版本为唯一真相**：`check_updates` / `fetch_app_update_info`
+    新增 `current_version: Option<&str>` 参数（宿主注入；None 回退本 crate 编译版本），
+    判定统一走 `needs_app_update(force, current, latest)`
+  - **版本号归一后再比**：`CARGO_PKG_VERSION` 为 `2.1.0-beta.3`（无 v），服务器
+    `update.toml` 为 `v2.1.0-beta.3`（deploy-gen 带 v）——`normalize_version`
+    统一去空白与 `v` 前缀，否则同版本仍会被判为有更新
+  - `all_updates`（CLI）同样改用本 crate 编译版本；新增 4 个单测
+    （相同/不同/force、v 前缀归一）
+- `crates/jpcg_core/src/host/update.rs`：`check_update` / `perform_app_update`
+  透传 `current_version`
+- `crates/jpcg_core/src/ffi.rs`：`update_check` / `update_app` 请求新增可选
+  `current_version`
+- `examples/jpcg_app/src-tauri/src/commands/update.rs`：static 直调传
+  `env!("CARGO_PKG_VERSION")`；dynamic 在 JSON 中带 `current_version`
+- `crates/jpcg_update/src/ffi.rs`：update dll 的 check / fetch_app_info 请求同步支持
+- `crates/jpcg_update/src/download.rs`：CLI 写回改读-改-写，**保留 data_version**
+
+## 决策
+- `local_update_info.toml` 退化为"更新渠道 + 数据版本记忆"，不再参与应用版本判定；
+  文件缺失/过时/首装/手动替换二进制都不会误报更新
+- 数据版本比较仍按记录值（数据文件无编译期版本，语义不同）
+
+## 验证
+- `cargo check -p jpcg_update -p jpcg_core`、`-p jpcg_app`（static 与 dynamic）通过
+- `cargo test -p jpcg_update --lib`：6 passed（含版本比较三态、v 前缀归一、回退）
+
+### 来自 changes/2026-09-18-133000.md
+
+# feat(values): 数值集外置到 data 通道 + 运行期选择（P1，默认体验服一测）
+
+日期：2026-09-18
+
+## 背景
+2.1.0 目标：一个包同时兼容体验服/正式服数值。原实现把等级常数/换算分母
+**编译期固化**（`crates/jpcg_const/preset/*.toml` + `include_str!`），换数值必须重打包。
+按决策改为**架构 C**：数值真源外置到 data 通道，运行期按"值集"加载；
+体验服·苍生铸世一测作为**默认值集**，可切换正式服。技能/装备/血量等留待后续 data 更新。
+
+## 变更
+- **新增 `data/values/`**（随 data 通道下发，manifest-gen 递归收集已覆盖）
+  - `index.toml`：`default = "cszj-exp-260908"` + 两个 `[[value_sets]]`（体验服一测 / 正式服130）
+  - `cszj-exp-260908.toml`：体验服一测数值（原 exp 分支 preset 迁入）
+  - `live-130.toml`：正式服 130 数值（原 `crates/jpcg_const/preset/level_constant.toml` 迁入）
+- **`crates/jpcg_const`**：删除 `preset/`；`include_str!` 改指 `data/values/*`；
+  新增 `LIVE_130`（正式服基线）；`CURRENT`/`LEVEL` 语义改为**内置兜底默认（体验服一测）**
+- **`crates/jpcg_core/src/store/values.rs`（新增）**：运行期加载
+  - `list_value_sets()` / `load_value_set(id)`；白名单严格解析（`deny_unknown_fields`）
+  - 校验：换算分母须为有限正数、`pvp_global_jianshang ∈ [0,1]`、`level > 0`
+  - 任一失败（目录/文件/解析/校验）→ 回退内置兜底并告警；`source` 字段区分 `data`/`builtin`
+- **`store/paths.rs`**：新增 `values_dir()`（JPCG_DATA_DIR → exe 同目录/data/values → .app Resources）
+- **`type_set/coefficient.rs`**：`Default` 固定为 `LIVE_130`（历史/测试基线，保持金标准不变）；
+  新增 `from_dto(dto, base)` 与 `from_level_constant`；`From<&DTO>` 保留为兼容入口
+- **`host/calc.rs`**：按 `req.value_set` 加载值集，作为 0/缺失字段的回退基准
+- **`host/values.rs`（新增）+ `ffi.rs` + Tauri `list_value_sets_cmd`**：值集查询入口（双模式）
+- **`jpcg_api`**：`CalculateRequest`/`ConfigDataDTO` 增 `value_set`；新增 `ValueSetDTO`
+- **`store/config.rs`**：`saved_config.toml` 增 `value_set`（保存时保留旧值，避免丢失）
+- **`tauri.conf.json`**：bundle.resources 增 `data/values/*.toml`（打包进 .app）
+
+## 决策
+- 数值真源外置（架构 C），**不改技能/装备/血量**（留后续 data 更新）
+- `CoefficientConfig::Default` 保持正式服 130 基线 → 正式服金标准预期值**完全不变**
+- 产品默认值集由 `data/values/index.toml` 的 `default` 决定（当前=体验服一测）
+
+## 验证
+- `cargo check`：const/api/core/app（static+dynamic）/combo/update 全过
+- `cargo test -p jpcg_const -p jpcg_core`：const 5 passed、core 19 passed（金标准未变）
+- `store::values` 单测：无 data → 内置兜底；`JPCG_DATA_DIR=./data` → 按 id 加载 live-130 与默认体验服
+
+## 后续（P2/P3）
+- 前端：值集下拉 + 持久化 + 状态栏展示；`CalculateRequest` 携带 `value_set`；去 `?raw`
+- 双平台打包与 beta.4 公测 → 2.1.0 正式 → stable 通道首次落位
+
+### 来自 changes/2026-09-18-150000.md
+
+# fix(values): 修复 review 三项（连招值集一致性 / DATA_DIR 同级 values / 可用性与回退可观察）
+
+日期：2026-09-18
+
+针对 PigeonMuyz 对 PR #28 的审核意见（1×P1 + 2×P2）逐项修复。
+
+## 1. [P1] 单技能与连招使用同一运行期值集解析
+- 新增 `jpcg_core::host::values::value_set_constant(id)` 作为**唯一取值入口**
+- `jpcg_combo::host::calculate_combo` / `into_core` 新增 `value_set` 参数，
+  改用 `CoefficientConfig::from_dto(&dto, &value_set_constant(id))`（原为固定 `LIVE_130`）
+- 打通调用链：combo FFI `ComboRequest` 增 `value_set`；Tauri `calculate_combo_cmd`（static/dynamic）
+  增参并透传；前端 `calculateCombo` 透传 `value_set`
+- 效果：省略/置 0 分母时，单技能、求导、连招回退到**同一值集**（默认=体验服一测）
+
+## 2. [P2] `JPCG_DATA_DIR` 直接指向 `data/shuxing` 时 values 解析错误
+- 新增 `paths::values_dir_from_env()`：兼容指向数据根与指向 `<root>/shuxing`（取同级 values）
+- `values_dir()` 走该函数；`data_dir()` 语义保持不变
+
+## 3. [P2] 单快照损坏时无法反映实际使用的值集
+- `ValueSetDTO` 增 `available`：`list_value_sets()` **逐项校验快照**（读取+解析+校验）
+- 新增 `host::values::resolve_value_set(id)` + core FFI `resolve_value_set` +
+  Tauri `resolve_value_set_cmd`：返回本次**实际使用**的值集信息（含 `source=builtin` 回退标记）
+
+## 4. 测试（确定性，不依赖真实 data / 环境变量）
+- `store::values`：改用**隔离临时目录**注入 `*_from` / `load_with_fallback`，覆盖
+  - 列表可用性与默认标记；显式/默认/未知 id 加载
+  - 快照**缺失**、**分母置 0**、**未知字段** → `available=false` 且加载回退 `builtin`
+  - `values_dir_from_env` 两种写法（数据根 / `<root>/shuxing`）均命中 `<root>/values`
+- `jpcg_combo`：新增跨入口一致性回归（省略分母时连招与单技能取同一值集）
+- `jpcg_core::ffi_tests`：加串行锁（全局 `last_error` 并行覆盖导致偶发失败）
+
+## 验证
+- `cargo check`：core/combo/app（static+dynamic）通过
+- `cargo test --workspace` 连跑 3 次全绿（combo 12 / const 5 / core 21 …）
+- 前端 `tsc --noEmit` 通过
+
+### 来自 changes/2026-10-09-080730.md
+
+# fix(values): 快照修复后独立动态库自动恢复值集
+
+日期：2026-10-09
+
+## 改动与原因
+
+PR #28 在快照缺失、TOML 损坏或系数非法时缓存内置兜底，却没有保存快照依赖。
+当数据更新只修复快照、不改 `index.toml` 时，combo 独立动态库会继续命中失败缓存。
+
+- `load_cached` 不再缓存失败结果，并移除同键的旧条目；合法快照仍使用原有 mtime 缓存。
+- `CacheEntry.snapshot_path` 改为必需路径，消除无快照依赖却被判为有效的缓存状态。
+- 保留内置回退和告警；不增加跨 cdylib 广播接口，不改变计算公式或数据版本。
+- 取舍：仅故障状态下重试读盘/告警，优先保证修复立即可见；正常计算保留缓存性能。
+- 增加缺失、语法损坏、非法分母三种恢复回归：预热失败读取，只修快照，确认 index mtime 不变，
+  随后同 ID 自动恢复正式服常数，不调用显式缓存失效。
+
+## 动态库回归
+
+新增 `scripts/test-values-dynamic.py`（Python 3.11+，仅标准库）：真实加载 core 与 combo 两个 cdylib，
+在缺失、TOML 损坏、非法分母三种场景预热两份缓存；修复时只写快照，断言 index 内容、inode、
+大小、mtime 都不变。先检查 combo，再检查 core，均与显式正式服系数的完整计算响应比较。
+目标 HP 设为 0，避开随机蒙特卡洛；缺少模块直接失败，不悄悄跳过。CI 已接入。
+
+运行方式：
+
+```sh
+cargo build -p jpcg_core -p jpcg_combo
+python3 scripts/test-values-dynamic.py
+```
+
+## 验证
+
+- `cargo test -p jpcg_core -- golden`：9/9 通过。
+- `cargo test -p jpcg_core -p jpcg_combo`：core 36/36、combo 12/12 通过。
+- `cargo build -p jpcg_core -p jpcg_combo` + Python 双 cdylib 回归：缺失/语法损坏/非法分母三例全部通过。
+- `cargo fmt --all -- --check`：通过。
+- `make check-all`：通过。static/dynamic app、四个 cdylib 构建成功；workspace 59 个测试通过，
+  dynamic app FFI roundtrip 1 个测试通过。
+- 实际 CI 命令 `cargo clippy --workspace --all-targets`：通过，仅保留未改动的
+  `crates/jpcg_combo/src/host.rs:77` 八参数既有告警。
+- 同时执行 CONTRIBUTING 中的严格命令 `cargo clippy --workspace --all-targets -- -D warnings`：
+  因上述既有 `too_many_arguments` 告警失败（rc 101），未将其记为通过，也未扩大修复范围。
+  AGENTS/当前 CI 明确不将既有告警作为门禁。
+- dynamic 构建仍有未改动的 `ffi_bridge.rs:315` 冗余 unsafe 告警。
+- 完整矩阵后再次运行金标准、双 cdylib 回归、rustfmt 与 `git diff --check`，全部通过。
+
+验证在 Linux 云环境完成，工具链和 Tauri 依赖安装在工作区用户目录，没有修改用户电脑。
+本次未发布、合并或打 tag；远端新提交的 CI 仍需在提交后确认。
+
+### 来自 changes/2026-10-09-080731.md
+
+# fix(app): 存档加载后保持当前数值版本一致
+
+日期：2026-10-09
+
+## 改动与原因
+
+PR #28 加载正式服存档时只改变表单，清空和数据更新仍从旧 localStorage 读取体验服选择，
+导致当前请求、下拉选择和“实际使用”提示不一致。
+
+以当前选择为运行期真源，持久化只用于启动恢复；加载、切换、清空和热更新沿用同一选择。
+异步解析需要确认请求仍有效，避免旧响应覆盖更新选择；热更新继续保留用户修改或存档中的系数，
+明确清空/切换时才重新套用值集常数。
+
+- 分开跟踪选择操作与解析请求，防止切换、加载、热更新响应乱序覆盖新状态。
+- 等待当前值集解析期间禁用计算/保存，避免新 ID 配旧系数提交；解析失败需重试成功后再提交。
+- 旧存档无 `value_set` 时使用默认语义（null），清除旧持久化选集；默认选择不误报“不可用”。
+- 新增 Vitest + jsdom（真实 React DOM、仅 mock 命令边界），`npm test` 接入前端 CI；
+  lockfile 同步，既有依赖版本保持不变。
+
+## 验证
+
+在 `examples/jpcg_app/` 执行：
+
+- `npm ci`：通过。
+- `npm test`：16/16 通过，覆盖体验服→加载正式服→清空/更新、计算请求和“实际使用”提示，
+  存档/手动系数保留、默认选择、失败加载恢复、初始化/加载/切换/热更新响应乱序、待解析提交阻止。
+- 负向回归验证：临时替换为原 HEAD 组件时 16 例中 13 例失败；恢复修复版后重新全绿。
+- `npm run build`（tsc + Vite）：通过；仍有既有产物体积提示（chunk > 500 kB）。
+- `git diff --check`：通过。
+
+本次为普通修复，不 bump 产品版本、不提前聚合发布 CHANGELOG。锁文件根包版本由过期的
+`2.1.0-alpha.1` 同步到原 `package.json` 已有的 `2.1.0-alpha.2`，不是新版本升级。
+
+### 来自 changes/2026-10-09-083600.md
+
+# fix(app): 阻止新值集基线待解析时混入旧系数
+
+日期：2026-10-09
+
+## 问题与复现
+
+提交 `5e11d3b` 的提交后复核发现：切换值集或清空后、解析完成前，表单仍保留旧系数。
+此时修改一个系数会把全局自定义标记设为 true，令整个新值集的 seed 被跳过，形成
+“新 ID + 一个手改系数 + 其余旧系数”的请求。计算/保存等待解析的门禁不能阻止这种混合状态。
+
+先新增真实组件回归，在已发布实现上确认“切换待解析”和“清空待解析”两例都失败，
+然后再修改实现。
+
+## 修复与取舍
+
+单独跟踪新值集基线是否待解析，在初始加载、切换和清空的基线未就绪期间禁用系数编辑，
+同时在编辑处理函数中拒绝待解析期间的旧事件。成功解析后恢复编辑，避免将旧系数误作新集自定义值。
+
+同一选集的数据热更新仍允许手动编辑并保留自定义系数；存档系数已构成完整基线，也保持可编辑。
+不引入逐字段覆盖模型，不改数值计算或后端缓存，不扩大修复范围。
+
+## 验证
+
+- `npm ci`、`npm test`、`npm run build`：通过，20 个真实组件回归全部通过。
+- 新增四例：切换/清空待解析时不混入单字段编辑；存档基线在来源解析期间仍可编辑；
+  迟到的旧解析不能解锁，解析失败保持锁定直至重试成功。
+- 原同选集热更新测试增加输入仍可编辑的断言，验证手工覆盖策略未退化。
+- 补丁前的已发布实现明确失败前述切换与清空两例；修复后全部通过。
+- 仍有既有 Vite chunk > 500 kB 提示。
+- `make check-all`：完整通过，static/dynamic app、四模块构建成功；workspace 59 个测试、
+  dynamic FFI roundtrip 1 个测试通过。
+- 金标准 9/9、真实双 cdylib 三类快照恢复、rustfmt、普通 workspace/all-targets clippy、
+  `git diff --check` 全部通过。
+- 独立提交后复核再次运行 20 个前端测试并检查差异，原发现关闭。
+- 全量重跑曾遭云执行连接中断，恢复后重新完成全部检查，没有把中断运行记为通过。
+- 本轮没有 Rust 改动；既有 combo 参数过多及 dynamic 冗余 unsafe 告警仍在，
+  严格 `-D warnings` 的既有失败情况见 `changes/2026-10-09-080730.md`。
+
+验证仅在云工作区进行；未合并、打 tag 或发布。
+
+### 来自 changes/2026-10-09-124157.md
+
+# fix(update/data): 统一数据根（写读一致）+ 值集内存缓存 + 保存不再重置 buff/系数 + 快照路径校验
+
+日期：2026-10-09
+
+PR #28 自检发现的问题（先经临时探针**实测复现**再修，避免误判）。共修 4 项。
+
+## 1. [高·既有 bug] 数据更新落盘位置 ≠ 运行期读取位置
+**现象（实测）**：`download_and_install_data` / `check_data_updates` 用 `base_path.join("data")`，
+而 `base_path = Path::new(".").canonicalize()`（**CWD**）。读取侧走 `exe_dir/data`、bundle
+`Contents/Resources/data`、`JPCG_DATA_DIR`。探针：往 `CWD/data` 写好后，读者**完全忽略**
+（`list_professions=0`、`value_sets` 仍为 `builtin`）。
+安装版（Finder 启动 CWD=`/`）会把数据写到 `/data`（失败/写错位置），`values/` 永远回退内置，
+`check_data_updates` 反复判定需更新。此 bug 在 P1 之前即存在。
+
+**修复**：引入「数据根」单一真源，读写共用同一解析。
+- `store::paths`：新增 `data_root_writable()`（更新落盘目标）与纯函数 `writable_root` / `read_roots`，
+  并新增 `bundle_user_data(home)`（`~/Library/Application Support/com.qinthirteen.jpcg/data`，
+  与连招预设目录同源）。`data_dir()` / `values_dir()` 改为基于 `read_root_candidates()`。
+  - 写入：`JPCG_DATA_DIR` → bundle 用户目录 → `exe_dir/data`
+  - 读取：`JPCG_DATA_DIR` → bundle 用户目录（更新落盘处，**优先**）→ bundle `Resources/data` → `exe_dir/data`
+- `jpcg_update`：`check_data_updates` / `download_and_install_data` 改为显式 `data_root` 参数
+  （去掉内部 `.join("data")`）；`check_updates` / `download_updates` 的参数语义改为 `data_root`
+  （二者原本就只用于 data）。`all_updates`（CLI）与 update FFI 传 `<应用根>/data` 保持既有行为。
+- `host::update`：`base_path()`（CWD）→ `data_root()`（`store::paths::data_root_writable()`）；
+  `perform_app_update` 不再依赖 CWD（`fetch_app_update_info` 本就不用该参数）。
+
+## 2. [中·既有 bug] 保存配置会重置 buff 与系数
+**现象（实测）**：`store::save_config` 硬编码 `buff: default()` / `coefficient: default()`，
+而前端 `saveConfig` 只传 player/hostile/xinfa → 一保存就把阵眼/奇穴增益与系数清零。
+（`value_set` 实际**保留**：早前探针因输入缺必填段导致“解析失败”，属误判，已更正。）
+
+**修复**：`save_config` 改为**保留**已存的 `buff` / `coefficient` / `value_set`（不再写默认值）。
+真正的“保存用户改过的 buff/系数”需前端传参，属 P2 范畴。
+
+## 3. [低] `index.toml` 的 `file` 可目录穿越
+**现象（实测）**：`file = "../outside.toml"` 能读到 values 目录外（`huixin=9999` 加载成功）。
+**修复**：`read_snapshot` 前置 `is_safe_relative_filename`（拒绝 `/`、`\`、`.`、`..`、空名），
+非法即视为不可用并回退内置。
+
+## 4. [优化] 每次计算读盘 → 内存缓存
+**现象（实测）**：每次 `value_set_constant` 都读 index + 快照 + 校验，1000 次 ≈ 69ms。
+**修复**：`store::values` 增进程内缓存（`Mutex<ValueCache>`，键含解析目录与 id）；
+新增 `invalidate_cache()`，在 `host::update::perform_update` 数据落盘后调用，使新数据即时生效。
+
+## 测试（确定性，不依赖真实 data / 环境变量）
+- `store::paths`：`writable_root`（dev / bundle / env）、`env_data_root`、
+  `read_roots`（bundle 下用户目录优先于 Resources）、以及「可写根 == 读取首选」的写读一致不变式
+- `store::values`：`rejects_path_traversal_in_index`
+- `jpcg_core::ffi_tests`：`save_config_preserves_buff_coefficient_and_value_set`
+
+## 验证
+- `cargo test -p jpcg_core -p jpcg_update -p jpcg_const -p jpcg_combo` 全绿（core 29 / update 6 / const 5 / combo 12）
+- `cargo build-app-static` / `cargo build-app-dynamic` 通过
+- `cargo fmt --check` / `cargo clippy -p jpcg_core -p jpcg_update` 无告警
+
+### 来自 changes/2026-10-09-125428.md
+
+# feat(values): P2 前端接线——数值版本下拉 + 系数 seed + 持久化（架构 C 落地）
+
+日期：2026-10-09
+
+架构 C 的「可更换数值」需前端真正生效，否则值集选择形同虚设。本笔补齐 P2，并顺带修复 2 个相关 bug。
+
+## 1. 前端「数值版本」下拉（核心）
+- `ConfigPanel` 顶部新增「数值版本」下拉：列出 `list_value_sets_cmd` 结果（不可用项禁用）
+- 选中即调 `resolve_value_set_cmd`，用返回的**实际使用**值集（含回退）的常数**填充「系数设置」**
+  （用户仍可再改），并写入 `form.value_set`
+- 启动时：读取 `localStorage[jpcg_value_set]` → 命中且可用则用；否则用 `is_default`（体验服一测）；
+  再否则第一个可用项。**App 默认数值因此从硬编码正式服 130 改为体验服一测**（架构 C 决策）
+- 选择持久化用 localStorage（与 `lastXinfa`/`betaChannel` 同款）；`清空` 后重新套用当前值集
+
+## 2. DTO：值集携带换算常数
+- `jpcg_api::ValueSetDTO` 增 `coefficient: Option<CoefficientConfigDTO>`（快照可用时给出 8 个常数）
+- `store::values`：`entry_to_dto` 接收已解析常数；`list_value_sets`/`resolve_value_set` 一次返回即可 seed
+
+## 3. 全链路透传 `value_set`
+- 前端 `CalculateRequest`/`FormData` 增 `value_set`；`toCalculateRequest` 携带
+- `ComboPage` 调 `calculateCombo` 时透传 `req.value_set`；`OptimizePage` 经 `compute_derivatives`
+  随 `CalculateRequest` 自动携带
+- `api`：新增 `listValueSets()` / `resolveValueSet(id)`
+
+## 4. 顺带修复的 bug
+- **`calculateCombo` 参数名错误**：Tauri v2 命令参数为 **camelCase**（JS 侧 `forumUrl`→Rust `forum_url`），
+  原代码发 `value_set`（snake_case）→ 被当作未知键忽略 → 连招的值集透传**一直是死代码**。
+  改为 `valueSet`，连招现在真正随值集计算。
+- **技能编辑保存写只读 bundle**：`store::save_skill_toml` 原写 `data_dir()`（安装版指向只读
+  `Resources/data/shuxing`）→ 改为写 `data_root_writable()/shuxing`，与读取侧统一。
+
+## 测试 / 验证
+- `store::values`：`dto_carries_coefficient_when_available`（可用带常数 / 缺失为 None）
+- `cargo test --workspace` 全绿（core 30 / combo 12 / update 6 / const 5）
+- 前端 `tsc --noEmit` + `npm run build` 通过
+- `cargo build-app-static` / `cargo build-app-dynamic` 通过
+
+### 来自 changes/2026-10-09-132651.md
+
+# fix(values): 修复 PigeonMuyz 复审（1×P1 + 4×P2）——多目录合并 / 保存一致性 / 初始化回退 / 热更新 / 双库缓存
+
+日期：2026-10-09
+
+针对 `76b6891` 的复审逐项修复。所有问题均**对照代码核实为真**后再修，并补确定性回归。
+
+## 1. [P1] 安装版保存单个心法后，用户目录遮蔽其他随包心法
+**问题**：`save_skill_toml` 在用户目录创建 `shuxing/A.toml` 后，`data_dir()` 按目录存在性选中
+**整个**用户 `shuxing`，不再读 `Resources/data/shuxing` → 其他心法加载为空、门派列表只剩已保存者。
+
+**修复**：改为**多目录合并读取**（用户覆盖优先，其后随包资源）：
+- `paths::data_dirs()`：返回 shuxing 目录候选（存在者，按优先级）；`store::data_dirs` 导出
+- `store::toml::load_config_from(dirs, profession)`：取**首个**存在该文件的目录
+- `store::profession::list_from_dirs(dirs)`：先按文件名去重（先到先得）再分组 → 跨目录并集
+- `engine::start_calculation_with_config`：在 `data_dirs()` 中定位文件
+- 测试：`load_config_merges_across_dirs_user_first`、`list_merges_across_dirs_user_first`
+  （资源有 A/B、用户仅 A → A 取用户、B 仍可加载、列表含 A/B）
+
+## 2. [P2] 默认体验服的“保存→加载”变成体验服标签、正式服系数
+**问题**：`handleSave` 不传 `coefficient`/`value_set`，后端按缺失文件取默认（LIVE130 + None）；
+加载后 value_set 回用 prev（体验服）→ id 与系数不一致。
+
+**修复**：保存时携带完整配置。
+- `store::save_config(player, hostile, xinfa, buff, coefficient, value_set)`（不再从文件“保留”）
+- `host::config::save_config` 增三参；core FFI `save_config` 请求增 `buff/coefficient/value_set`；
+  Tauri `save_config_cmd` 增参（static/dynamic）
+- 前端 `saveConfig` 发送 `buff`（`mode_is_point` 保布尔）、`coefficient`、`valueSet`
+- `handleSave` 传 `form.buff` / `norm.coefficient` / `form.value_set`
+- 旧存档兼容：缺 `value_set` → `None`（`#[serde(default)]`）；系数按存档恢复
+- 测试：`save_config_persists_buff_coefficient_value_set`
+
+## 3. [P2] 默认快照损坏时初始化未应用回退，仍发送正式服系数
+**修复**：初始化与用户切换**统一走 `resolveValueSet`**：
+- `resolveAndSeed(id)`：`resolveValueSet` 返回**实际使用**的值集（含 builtin 回退）与其常数 → seed
+- 挂载时 `pickValueSetId`（localStorage→默认→首个可用→…）后 `resolveAndSeed`
+- 下拉下方显示「实际使用：…（内置兜底 / 已回退）」
+
+## 4. [P2] 数据热更新后前端仍把旧快照常数作为显式覆盖发送
+**修复**：
+- 数据更新成功后重新 `listValueSets()` + `resolveValueSet(当前)`：刷新列表、更新“实际使用”显示，
+  且**未手动改过系数时**重新 seed（`coefficientCustomRef` 跟踪用户是否改过系数）
+- `handleClear` 改为重新 `resolveAndSeed(当前)`（不再依赖可能过时的 `valueSets` 快照）
+
+## 5. [P2] dynamic 模式仅清 core 缓存，combo 动态库继续用旧值集
+**修复**：缓存改为 **mtime 校验**（`CacheEntry` 记 index/快照 mtime）——文件被数据更新改写后，
+**每个 cdylib 各自**在下次读取时自动失效，无需跨库广播。
+- 键仍为 (目录, id)；`cache_valid` 比对 index 与快照 mtime
+- `list_value_sets` 去掉缓存（非热点）；新增 `load_cached(dir, id)` 便于测试
+- 测试：`cache_reloads_after_snapshot_change`（同 id 快照改写后重载）
+
+## 验证
+- `cargo test --workspace` 全绿（core 33 / combo 12 / const 5 / update 6）
+- `cargo build-app-static` / `cargo build-app-dynamic` 通过
+- 前端 `tsc --noEmit` + `npm run build` 通过
+- `cargo fmt --check` 通过；clippy 仅余既有告警（combo 8 参 / app unused_unsafe）
+
 ## [Unreleased]
 
 ### 新增
