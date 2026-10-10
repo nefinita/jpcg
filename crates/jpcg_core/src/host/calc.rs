@@ -29,6 +29,8 @@ pub(crate) fn into_core(
         req.player.pofang_dengji,
         req.player.wuqi_shanghai,
     );
+    // 数值集：按请求选择（None = index.toml 默认）；加载失败回退内置兜底
+    let value_set = crate::store::values::load_value_set(req.value_set.as_deref());
     let hostile = HostilepileConfig {
         waigong_fangyu: req.hostile.waigong_fangyu,
         neigong_fangyu: req.hostile.neigong_fangyu,
@@ -56,7 +58,7 @@ pub(crate) fn into_core(
         shanghai_pct: req.buff.shanghai_pct,
         mode_is_point: req.buff.mode_is_point,
     };
-    let coeff = CoefficientConfig::from(&req.coefficient);
+    let coeff = CoefficientConfig::from_dto(&req.coefficient, &value_set.constant);
     (player, hostile, xinfa, buff, coeff)
 }
 

@@ -74,6 +74,11 @@ jobs:
           cargo test --workspace
           cargo test -p jpcg_app --lib --no-default-features --features dynamic
 
+      - name: 双 cdylib 数值快照修复回归
+        run: |
+          cargo build -p jpcg_core -p jpcg_combo
+          python3 scripts/test-values-dynamic.py
+
   golden-regression:
     name: 金标准回归（计算数值）
     runs-on: ubuntu-latest
@@ -98,4 +103,5 @@ jobs:
           cache: npm
           cache-dependency-path: examples/jpcg_app/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build

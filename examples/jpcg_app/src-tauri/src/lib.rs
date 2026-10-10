@@ -9,6 +9,8 @@ pub fn run() {
             commands::config::save_config_cmd,
             commands::config::load_config_cmd,
             commands::config::list_professions_cmd,
+            commands::config::list_value_sets_cmd,
+            commands::config::resolve_value_set_cmd,
             commands::config::load_profession_config,
             commands::update::check_update,
             commands::update::perform_update,

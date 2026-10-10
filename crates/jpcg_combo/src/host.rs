@@ -22,6 +22,7 @@ fn into_core(
     xinfa: XinfaConfigDTO,
     buff: BuffConfigDTO,
     coeff: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> (
     PlayerConfig,
     HostilepileConfig,
@@ -65,11 +66,14 @@ fn into_core(
         shanghai_pct: buff.shanghai_pct,
         mode_is_point: buff.mode_is_point,
     };
-    let coeff = CoefficientConfig::from(&coeff);
+    // 与单技能/求导一致：按值集解析回退基准（None = 默认值集，当前体验服一测）
+    let base = jpcg_core::host::values::value_set_constant(value_set.as_deref());
+    let coeff = CoefficientConfig::from_dto(&coeff, &base);
     (player, hostile, xinfa, buff, coeff)
 }
 
 /// 连招伤害计算（含击杀率蒙特卡洛，host 层默认采样数）
+/// - `value_set`: 数值集 id（None = 默认值集；与单技能计算共用同一解析）
 pub fn calculate_combo(
     steps: Vec<ComboStepDTO>,
     player: PlayerConfigDTO,
@@ -77,10 +81,11 @@ pub fn calculate_combo(
     xinfa: XinfaConfigDTO,
     buff: BuffConfigDTO,
     coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
     config: ComboConfig,
 ) -> Result<ComboResultDTO, String> {
     let (player, hostile, xinfa, buff, coeff) =
-        into_core(player, hostile, xinfa, buff, coefficient);
+        into_core(player, hostile, xinfa, buff, coefficient, value_set);
 
     let skilltypes: Vec<_> = steps
         .iter()
@@ -232,6 +237,43 @@ mod tests {
         )
     }
 
+    /// 回归：连招与单技能/求导共用同一运行期值集解析（分母省略时按值集回退）
+    #[test]
+    fn combo_uses_runtime_value_set_base() {
+        let dto = CoefficientConfigDTO {
+            pvp_global_jianshang: 0.9,
+            ..Default::default()
+        };
+        let base = jpcg_core::host::values::value_set_constant(None);
+        let (_, _, _, _, coeff) = into_core(
+            player(),
+            hostile(),
+            xinfa(),
+            buff_coeff().0,
+            dto.clone(),
+            None,
+        );
+        assert_eq!(
+            coeff.huixin_xishu, base.huixin_xishu,
+            "省略分母应按运行期默认值集回退"
+        );
+        assert_eq!(coeff.pofang_xishu, base.pofang_xishu);
+
+        // 显式值集与单技能入口使用同一解析
+        let (_, _, _, _, coeff2) = into_core(
+            player(),
+            hostile(),
+            xinfa(),
+            buff_coeff().0,
+            dto,
+            Some("live-130".into()),
+        );
+        assert_eq!(
+            coeff2.huixin_xishu,
+            jpcg_core::host::values::value_set_constant(Some("live-130")).huixin_xishu
+        );
+    }
+
     /// 预设往返：DTO → ComboStep(快照) → 预设 TOML → DTO，技能全属性（含追加真伤）不丢失
     #[test]
     fn preset_roundtrip_keeps_full_skill() {
@@ -274,7 +316,8 @@ mod tests {
         let (b, c) = buff_coeff();
         let (p, h, x) = (player(), hostile(), xinfa());
         let result: ComboResultDTO =
-            calculate_combo(rounds.steps, p, h, x, b, c, ComboConfig::default()).expect("计算");
+            calculate_combo(rounds.steps, p, h, x, b, c, None, ComboConfig::default())
+                .expect("计算");
         let s0: &ComboStepResultDTO = &result.steps[0];
         assert!(
             s0.lost_hp_zhenshi_damage > 0.0,

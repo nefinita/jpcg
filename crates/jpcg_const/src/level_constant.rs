@@ -1,7 +1,9 @@
 // ============================================================================
 // level_constant —— 等级常数（编译期固化）
 //
-// 数据源：preset/level_constant.toml（include_str! 内嵌，改文件即自动重编）。
+// 数据源：data/values/*.toml（运行期真源，随 data 通道下发）。本 crate 以
+//         include_str! 将其编译为内置兜底（本地 data 缺失/损坏时使用）。
+//         默认兜底 = 体验服·苍生铸世一测（cszj-exp-260908）。
 // 解析：const fn 逐行白名单解析，任何未知 key / 缺字段 / 坏值都会在
 //       编译期 panic（const 求值 = 编译错误），防"策划改字段忘同步解析器"。
 // 设计：运行时零依赖、零 I/O；level 只作快照记录（LEVEL），不进入结构。
@@ -48,14 +50,17 @@ impl LevelConstant {
     }
 }
 
-/// 快照文本（改 preset 即触发重编）
-const SNAPSHOT_TEXT: &str = include_str!("../preset/level_constant.toml");
+/// 内置兜底快照（默认值集：体验服·苍生铸世一测）
+const FALLBACK_SNAPSHOT: &str = include_str!("../../../data/values/cszj-exp-260908.toml");
+/// 正式服 130 级快照（历史金标准 / 对照用）
+pub const LIVE_130: LevelConstant =
+    parse_snapshot(include_str!("../../../data/values/live-130.toml")).1;
 
-/// 快照对应等级（仅记录/预计算用）
-pub const LEVEL: u32 = parse_snapshot(SNAPSHOT_TEXT).0;
+/// 内置兜底快照对应等级（仅记录/预计算用）
+pub const LEVEL: u32 = parse_snapshot(FALLBACK_SNAPSHOT).0;
 
-/// 当前快照的等级常数（编译期解析固化）
-pub const CURRENT: LevelConstant = parse_snapshot(SNAPSHOT_TEXT).1;
+/// 内置兜底默认的等级常数（体验服一测；运行期真源在 data/values/index.toml）
+pub const CURRENT: LevelConstant = parse_snapshot(FALLBACK_SNAPSHOT).1;
 
 /// 解析快照文本 → (level, LevelConstant)
 /// 未知 key / 缺字段 / 值非法一律 panic（const 场景即编译错误）
@@ -295,11 +300,11 @@ const fn parse_f32(b: &[u8], s: usize, e: usize) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{CURRENT, LEVEL, LevelConstant, parse_snapshot};
+    use super::{CURRENT, LEVEL, LIVE_130, LevelConstant, parse_snapshot};
 
     #[test]
-    fn snapshot_matches_rust_literal_bits() {
-        // 与 preset/level_constant.toml 当前值逐项 bit 校验（防解析精度漂移）
+    fn live_130_matches_rust_literal_bits() {
+        // 与 data/values/live-130.toml 当前值逐项 bit 校验（防解析精度漂移）
         let expect = LevelConstant {
             pofang_xishu: 225957.6,
             huixin_xishu: 197703.0,
@@ -310,15 +315,37 @@ mod tests {
             fangyu_xishu: 126007.2,
             pvp_global_jianshang: 0.9,
         };
-        assert_eq!(LEVEL, 130);
+        assert_eq!(LIVE_130, expect);
+    }
+
+    #[test]
+    fn builtin_fallback_is_cangsheng_first_test() {
+        // 内置兜底默认 = 体验服·苍生铸世一测（50 级）
+        let expect = LevelConstant {
+            pofang_xishu: 10378.17,
+            huixin_xishu: 9512.91,
+            huixiao_xishu: 3504.60,
+            yujin_xishu: 19025.82,
+            yuhui_xishu: 9422.82,
+            huajin_xishu: 5148.00,
+            fangyu_xishu: 10802.88,
+            pvp_global_jianshang: 0.9,
+        };
+        assert_eq!(LEVEL, 50);
         assert_eq!(CURRENT, expect);
     }
 
     #[test]
     fn full_text_parse_roundtrip() {
-        let (level, val) = parse_snapshot(include_str!("../preset/level_constant.toml"));
-        assert_eq!(level, LEVEL);
-        assert_eq!(val, CURRENT);
+        let (live_level, live_val) =
+            parse_snapshot(include_str!("../../../data/values/live-130.toml"));
+        assert_eq!(live_level, 130);
+        assert_eq!(live_val, LIVE_130);
+
+        let (exp_level, exp_val) =
+            parse_snapshot(include_str!("../../../data/values/cszj-exp-260908.toml"));
+        assert_eq!(exp_level, LEVEL);
+        assert_eq!(exp_val, CURRENT);
     }
 
     #[test]

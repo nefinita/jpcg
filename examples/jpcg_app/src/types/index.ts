@@ -60,6 +60,21 @@ export interface CalculateRequest {
   xinfa_config: XinfaConfigDTO;
   buff: BuffConfigDTO;
   coefficient: CoefficientConfigDTO;
+  /** 数值集 id（null/缺省 = 默认值集；见 data/values/index.toml） */
+  value_set?: string | null;
+}
+
+/** 数值集信息（对应 data/values/index.toml 条目） */
+export interface ValueSetDTO {
+  id: string;
+  name: string;
+  level: number;
+  is_default: boolean;
+  /** "data"（本地 data/values）或 "builtin"（内置兜底） */
+  source: string;
+  available: boolean;
+  /** 快照可用时的换算常数（用于 seed「系数设置」） */
+  coefficient: CoefficientConfigDTO | null;
 }
 
 export interface SkillResultDTO {
@@ -290,4 +305,6 @@ export interface FormData {
   };
   buff: Record<string, number | string | boolean>;
   coefficient: Record<string, number | string>;
+  /** 选中的数值集 id（null/缺省 = 默认值集） */
+  value_set?: string | null;
 }

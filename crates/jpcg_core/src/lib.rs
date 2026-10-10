@@ -29,14 +29,20 @@ pub mod load_config {
 
 pub mod save_config {
     use crate::store::save_config;
-    use crate::type_set::{hostilepile::HostilepileConfig, player::PlayerConfig};
+    use crate::type_set::{
+        buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
+        player::PlayerConfig,
+    };
 
     pub fn save(
         player: PlayerConfig,
         hostilepile: HostilepileConfig,
         xinfa: crate::type_set::xinfa::XinfaConfig,
+        buff: BuffConfig,
+        coefficient: CoefficientConfig,
+        value_set: Option<String>,
     ) {
-        save_config(player, hostilepile, xinfa);
+        save_config(player, hostilepile, xinfa, buff, coefficient, value_set);
     }
 }
 
