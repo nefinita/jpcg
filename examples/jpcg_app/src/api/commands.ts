@@ -17,6 +17,7 @@ import type {
   PlayerConfigDTO,
   HostileConfigDTO,
   XinfaConfigDTO,
+  ValueSetDTO,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -65,17 +66,30 @@ export async function calculateDamage(req: CalculateRequest): Promise<SkillResul
 }
 
 export async function saveConfig(config: Record<string, unknown>): Promise<void> {
+  const xinfa = config.xinfa_config as Record<string, unknown>;
+  const buff = (config.buff ?? {}) as Record<string, unknown>;
   return invoke("save_config_cmd", {
     player: _sanitizeNumbers(config.player as Record<string, unknown>),
     hostile: _sanitizeNumbers(config.hostile as Record<string, unknown>),
     xinfa: {
-      profession: (config.xinfa_config as Record<string, unknown>).profession as string,
-      xinfa_name: (config.xinfa_config as Record<string, unknown>).xinfa_name as string,
-      xinfa_nom: (config.xinfa_config as Record<string, unknown>).xinfa_nom,
-      atk_up: Number((config.xinfa_config as Record<string, unknown>).atk_up) || 0,
-      pofang_up: Number((config.xinfa_config as Record<string, unknown>).pofang_up) || 0,
-      huixin_up: Number((config.xinfa_config as Record<string, unknown>).huixin_up) || 0,
+      profession: xinfa.profession as string,
+      xinfa_name: xinfa.xinfa_name as string,
+      xinfa_nom: xinfa.xinfa_nom,
+      atk_up: Number(xinfa.atk_up) || 0,
+      pofang_up: Number(xinfa.pofang_up) || 0,
+      huixin_up: Number(xinfa.huixin_up) || 0,
     },
+    buff: {
+      base_atk_pct: Number(buff.base_atk_pct) || 0,
+      huixin_pct: Number(buff.huixin_pct) || 0,
+      huixiao_pct: Number(buff.huixiao_pct) || 0,
+      pofang_pct: Number(buff.pofang_pct) || 0,
+      wushi_fangyu_pct: Number(buff.wushi_fangyu_pct) || 0,
+      shanghai_pct: Number(buff.shanghai_pct) || 0,
+      mode_is_point: !!buff.mode_is_point,
+    },
+    coefficient: _sanitizeNumbers(config.coefficient as Record<string, unknown>),
+    valueSet: (config.value_set as string | null | undefined) ?? null,
   });
 }
 
@@ -89,6 +103,16 @@ export async function loadConfig(): Promise<CalculateRequest | null> {
 
 export async function listProfessions(): Promise<XinfaSummaryDTO[]> {
   return invoke("list_professions_cmd");
+}
+
+/** 列出可用数值集（正式服/体验服等；来源 data/values/index.toml） */
+export async function listValueSets(): Promise<ValueSetDTO[]> {
+  return invoke("list_value_sets_cmd");
+}
+
+/** 解析指定值集**实际使用**的信息（含不可用回退；返回 coefficient 供 seed 系数） */
+export async function resolveValueSet(id?: string | null): Promise<ValueSetDTO> {
+  return invoke("resolve_value_set_cmd", { valueSet: id ?? null });
 }
 
 export async function loadProfessionConfig(profession: string): Promise<Record<string, unknown> | null> {
@@ -178,6 +202,7 @@ export async function calculateCombo(
   xinfa: XinfaConfigDTO,
   buff: BuffConfigDTO,
   coefficient: CoefficientConfigDTO,
+  valueSet?: string | null,
 ): Promise<ComboResultDTO> {
   return invoke("calculate_combo_cmd", {
     steps,
@@ -186,6 +211,7 @@ export async function calculateCombo(
     xinfa,
     buff,
     coefficient,
+    valueSet: valueSet ?? null,
   });
 }
 
@@ -301,6 +327,18 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       const saved = typeof localStorage !== "undefined"
         ? localStorage.getItem("jpcg_mock_config") : null;
       return saved ? JSON.parse(saved) : null;
+    }
+    case "list_value_sets_cmd":
+      return [
+        { id: "cszj-exp-260908", name: "体验服·苍生铸世一测", level: 50, is_default: true, source: "builtin", available: true,
+          coefficient: { pofang_xishu: 10378.17, huixin_xishu: 9512.91, huixiao_xishu: 3504.60, yujin_xishu: 19025.82, yuhui_xishu: 9422.82, huajin_xishu: 5148.00, fangyu_xishu: 10802.88, pvp_global_jianshang: 0.9 } },
+        { id: "live-130", name: "正式服·130级", level: 130, is_default: false, source: "builtin", available: true,
+          coefficient: { pofang_xishu: 225957.6, huixin_xishu: 197703, huixiao_xishu: 72844.2, yujin_xishu: 197703, yuhui_xishu: 55123.2, huajin_xishu: 30115.8, fangyu_xishu: 126007.2, pvp_global_jianshang: 0.9 } },
+      ];
+    case "resolve_value_set_cmd": {
+      const id = (args?.valueSet ?? args?.value_set) as string | null | undefined;
+      const sets = (await mockResponse("list_value_sets_cmd")) as ValueSetDTO[];
+      return sets.find((s) => s.id === id) ?? sets.find((s) => s.is_default) ?? sets[0];
     }
     case "forum_list_files":
       return [

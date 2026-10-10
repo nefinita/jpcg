@@ -13,7 +13,7 @@ use std::io::Error;
 use crate::{
     engine::atkcal::JpcgConfig,
     log::{error, success},
-    store::{TomlConfig, data_dir, toml_input},
+    store::{TomlConfig, data_dirs},
     type_set::{
         buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
         player::PlayerConfig, xinfa::XinfaConfig,
@@ -57,35 +57,36 @@ pub fn start_calculation_with_config(
 ) -> Result<Vec<CalculateResult>, Error> {
     success("Calculation started!");
 
-    // ---- 步骤1: 定位心法数据文件路径 ----
-    let dir = match data_dir() {
-        Some(d) => d,
-        None => {
-            error("无法获取数据文件目录");
-            return Err(Error::other("无法获取数据文件目录"));
-        }
-    };
+    // ---- 步骤1+3: 定位并读取心法技能表（多目录合并：用户覆盖优先，其后随包资源）----
+    let dirs = data_dirs();
+    if dirs.is_empty() {
+        error("无法获取数据文件目录");
+        return Err(Error::other("无法获取数据文件目录"));
+    }
+    let file_path = dirs
+        .iter()
+        .map(|d| d.join(format!("{}.toml", xinfa.profession)))
+        .find(|p| p.exists());
 
-    let file_path = dir.join(xinfa.profession.clone());
-    let file_path_str = match file_path.to_str() {
-        Some(s) => s.to_string(),
-        None => {
-            error("配置文件路径包含非法 UTF-8 字符");
-            return Err(Error::other("配置文件路径包含非法 UTF-8 字符"));
-        }
-    };
-
-    // ---- 步骤3: 读取 TOML 内容并解析 ----
-    let skill_table: TomlConfig = match toml_input(&file_path_str) {
-        // 文件不存在时返回 None，使用默认空技能表
+    let skill_table: TomlConfig = match file_path {
+        // 文件不存在时使用默认空技能表
         None => TomlConfig::default(),
-        Some(content) => match toml::from_str(content.as_str()) {
-            Ok(config) => config,
-            Err(e) => {
-                error(format!("心法技能 TOML 解析失败: {}", e).as_str());
-                return Err(Error::other(format!("心法技能 TOML 解析失败: {}", e)));
+        Some(p) => {
+            let content = match std::fs::read_to_string(&p) {
+                Ok(c) => c,
+                Err(e) => {
+                    error(format!("读取心法技能 TOML 失败: {}", e).as_str());
+                    return Err(Error::other(format!("读取心法技能 TOML 失败: {}", e)));
+                }
+            };
+            match toml::from_str(content.as_str()) {
+                Ok(config) => config,
+                Err(e) => {
+                    error(format!("心法技能 TOML 解析失败: {}", e).as_str());
+                    return Err(Error::other(format!("心法技能 TOML 解析失败: {}", e)));
+                }
             }
-        },
+        }
     };
 
     // ---- 步骤4: 逐技能计算伤害 ----

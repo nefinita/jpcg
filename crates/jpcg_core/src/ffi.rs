@@ -161,10 +161,23 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
                 player: jpcg_api::PlayerConfigDTO,
                 hostile: jpcg_api::HostileConfigDTO,
                 xinfa: jpcg_api::XinfaConfigDTO,
+                #[serde(default)]
+                buff: jpcg_api::BuffConfigDTO,
+                #[serde(default)]
+                coefficient: jpcg_api::CoefficientConfigDTO,
+                #[serde(default)]
+                value_set: Option<String>,
             }
             let req: SaveConfigReq =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            crate::host::config::save_config(req.player, req.hostile, req.xinfa);
+            crate::host::config::save_config(
+                req.player,
+                req.hostile,
+                req.xinfa,
+                req.buff,
+                req.coefficient,
+                req.value_set,
+            );
             serde_json::to_string(&serde_json::Value::Null)
                 .map_err(|e| format!("响应序列化失败: {}", e))
         }
@@ -174,6 +187,21 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
         }
         "list_professions" => {
             let out = crate::host::config::list_professions();
+            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
+        }
+        "list_value_sets" => {
+            let out = crate::host::values::list_value_sets();
+            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
+        }
+        "resolve_value_set" => {
+            #[derive(serde::Deserialize)]
+            struct ResolveValueSetRequest {
+                #[serde(default)]
+                value_set: Option<String>,
+            }
+            let req: ResolveValueSetRequest =
+                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
+            let out = crate::host::values::resolve_value_set(req.value_set.as_deref());
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
         "load_skill_data" => {
@@ -397,6 +425,14 @@ pub unsafe extern "C" fn jpcg_core_version() -> *mut c_char {
 mod ffi_tests {
     use super::*;
     use serde_json::Value;
+    use std::sync::Mutex;
+
+    /// FFI 错误经全局 last_error 传递；测试并行执行会相互覆盖 → 串行化
+    static FFI_LOCK: Mutex<()> = Mutex::new(());
+
+    fn ffi_guard() -> std::sync::MutexGuard<'static, ()> {
+        FFI_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     unsafe fn call_owned(method: &str, req: &str) -> Result<String, String> {
         let handle = unsafe { jpcg_handle_create(cstring("{}").as_ptr()) };
@@ -436,6 +472,7 @@ mod ffi_tests {
 
     #[test]
     fn list_professions_roundtrip() {
+        let _g = ffi_guard();
         let out = unsafe { call_owned("list_professions", "{}") }.expect("调用失败");
         let v: Value = serde_json::from_str(&out).expect("响应应为合法 JSON");
         assert!(v.is_array());
@@ -443,18 +480,21 @@ mod ffi_tests {
 
     #[test]
     fn unknown_method_sets_error() {
+        let _g = ffi_guard();
         let err = unsafe { call_owned("no_such_method", "{}") }.expect_err("应返回错误");
         assert!(err.contains("未知方法"), "错误信息: {}", err);
     }
 
     #[test]
     fn invalid_request_json_sets_error() {
+        let _g = ffi_guard();
         let err = unsafe { call_owned("calculate", "not json") }.expect_err("应返回错误");
         assert!(err.contains("解析失败"), "错误信息: {}", err);
     }
 
     #[test]
     fn save_config_roundtrip() {
+        let _g = ffi_guard();
         // 不落盘验证 JSON 契约，仅确认方法可达（会写 saved_config.toml 到 CWD）
         let req = r#"{
             "player": {"jcsx":"gengu","jichu_shuxing":18888,"jichu_gongji":4666,"huixin_dengji":33000,"huixin_xiaoguo":22000,"pofang_dengji":25000,"wuqi_shanghai":2800},
@@ -463,6 +503,34 @@ mod ffi_tests {
         }"#;
         let out = unsafe { call_owned("save_config", req) }.expect("调用失败");
         assert_eq!(out, "null");
+        let _ = std::fs::remove_file("saved_config.toml");
+    }
+
+    #[test]
+    fn save_config_persists_buff_coefficient_value_set() {
+        let _g = ffi_guard();
+        let req = r#"{
+            "player": {"jcsx":"gengu","jichu_shuxing":18888,"jichu_gongji":4666,"huixin_dengji":33000,"huixin_xiaoguo":22000,"pofang_dengji":25000,"wuqi_shanghai":2800},
+            "hostile": {"waigong_fangyu":21000,"neigong_fangyu":21000,"yujin_dengji":8500,"huajin_dengji":35000,"jianshang_bili":35,"target_hp":2000000},
+            "xinfa": {"profession":"mowen","xinfa_name":"莫问","xinfa_nom":"根骨","atk_up":1.96,"pofang_up":2.0,"huixin_up":0.0},
+            "buff": {"base_atk_pct":0.0,"huixin_pct":7.7,"huixiao_pct":0.0,"pofang_pct":0.0,"wushi_fangyu_pct":0.0,"shanghai_pct":0.0,"mode_is_point":false},
+            "coefficient": {"pofang_xishu":225957.6,"huixin_xishu":12345.0,"huixiao_xishu":72844.2,"yujin_xishu":197703.0,"yuhui_xishu":55123.2,"huajin_xishu":30115.8,"fangyu_xishu":126007.2,"pvp_global_jianshang":0.9},
+            "value_set": "live-130"
+        }"#;
+        let out = unsafe { call_owned("save_config", req) }.expect("调用失败");
+        assert_eq!(out, "null");
+        let after = std::fs::read_to_string("saved_config.toml").expect("读取结果失败");
+        assert!(
+            after.contains("value_set = \"live-130\""),
+            "值集丢失: {}",
+            after
+        );
+        assert!(after.contains("huixin_pct = 7.7"), "buff 丢失: {}", after);
+        assert!(
+            after.contains("huixin_xishu = 12345.0"),
+            "系数丢失: {}",
+            after
+        );
         let _ = std::fs::remove_file("saved_config.toml");
     }
 }

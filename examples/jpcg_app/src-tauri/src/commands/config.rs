@@ -5,8 +5,11 @@ pub fn save_config_cmd(
     player: PlayerConfigDTO,
     hostile: HostileConfigDTO,
     xinfa: XinfaConfigDTO,
+    buff: BuffConfigDTO,
+    coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<(), String> {
-    save_config_impl(player, hostile, xinfa)
+    save_config_impl(player, hostile, xinfa, buff, coefficient, value_set)
 }
 
 #[cfg(feature = "static")]
@@ -14,8 +17,11 @@ fn save_config_impl(
     player: PlayerConfigDTO,
     hostile: HostileConfigDTO,
     xinfa: XinfaConfigDTO,
+    buff: BuffConfigDTO,
+    coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<(), String> {
-    jpcg_core::host::config::save_config(player, hostile, xinfa);
+    jpcg_core::host::config::save_config(player, hostile, xinfa, buff, coefficient, value_set);
     Ok(())
 }
 
@@ -24,8 +30,18 @@ fn save_config_impl(
     player: PlayerConfigDTO,
     hostile: HostileConfigDTO,
     xinfa: XinfaConfigDTO,
+    buff: BuffConfigDTO,
+    coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<(), String> {
-    let req = serde_json::json!({ "player": player, "hostile": hostile, "xinfa": xinfa });
+    let req = serde_json::json!({
+        "player": player,
+        "hostile": hostile,
+        "xinfa": xinfa,
+        "buff": buff,
+        "coefficient": coefficient,
+        "value_set": value_set,
+    });
     crate::commands::ffi_bridge::call::<_, serde_json::Value>("save_config", &req).map(|_| ())
 }
 
@@ -57,6 +73,41 @@ fn list_professions_impl() -> Result<Vec<XinfaSummaryDTO>, String> {
 #[cfg(feature = "dynamic")]
 fn list_professions_impl() -> Result<Vec<XinfaSummaryDTO>, String> {
     crate::commands::ffi_bridge::call_no_args("list_professions")
+}
+
+/// 列出可用数值集（正式服/体验服等；来源 data/values/index.toml，缺失时为内置兜底）
+#[tauri::command]
+pub fn list_value_sets_cmd() -> Result<Vec<ValueSetDTO>, String> {
+    list_value_sets_impl()
+}
+
+#[cfg(feature = "static")]
+fn list_value_sets_impl() -> Result<Vec<ValueSetDTO>, String> {
+    Ok(jpcg_core::host::values::list_value_sets())
+}
+
+#[cfg(feature = "dynamic")]
+fn list_value_sets_impl() -> Result<Vec<ValueSetDTO>, String> {
+    crate::commands::ffi_bridge::call_no_args("list_value_sets")
+}
+
+/// 解析指定值集**实际使用**的信息（含回退：如请求 live-130 但快照不可用时返回 builtin）
+#[tauri::command]
+pub fn resolve_value_set_cmd(value_set: Option<String>) -> Result<ValueSetDTO, String> {
+    resolve_value_set_impl(value_set)
+}
+
+#[cfg(feature = "static")]
+fn resolve_value_set_impl(value_set: Option<String>) -> Result<ValueSetDTO, String> {
+    Ok(jpcg_core::host::values::resolve_value_set(
+        value_set.as_deref(),
+    ))
+}
+
+#[cfg(feature = "dynamic")]
+fn resolve_value_set_impl(value_set: Option<String>) -> Result<ValueSetDTO, String> {
+    let req = serde_json::json!({ "value_set": value_set });
+    crate::commands::ffi_bridge::call("resolve_value_set", &req)
 }
 
 #[tauri::command]

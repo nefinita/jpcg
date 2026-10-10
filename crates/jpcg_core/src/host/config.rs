@@ -10,7 +10,14 @@ use jpcg_api::{
 use crate::store;
 
 /// 保存配置（saved_config.toml）
-pub fn save_config(player: PlayerConfigDTO, hostilepile: HostileConfigDTO, xinfa: XinfaConfigDTO) {
+pub fn save_config(
+    player: PlayerConfigDTO,
+    hostilepile: HostileConfigDTO,
+    xinfa: XinfaConfigDTO,
+    buff: BuffConfigDTO,
+    coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
+) {
     let player_core = crate::type_set::player::PlayerConfig::new(
         player.jcsx,
         player.jichu_shuxing,
@@ -38,7 +45,33 @@ pub fn save_config(player: PlayerConfigDTO, hostilepile: HostileConfigDTO, xinfa
         xinfa.pofang_up,
         xinfa.huixin_up,
     );
-    store::save_config(player_core, hostile_core, xinfa_core);
+    let buff_core = crate::type_set::buff::BuffConfig {
+        base_atk_pct: buff.base_atk_pct,
+        huixin_pct: buff.huixin_pct,
+        huixiao_pct: buff.huixiao_pct,
+        pofang_pct: buff.pofang_pct,
+        wushi_fangyu_pct: buff.wushi_fangyu_pct,
+        shanghai_pct: buff.shanghai_pct,
+        mode_is_point: buff.mode_is_point,
+    };
+    let coeff_core = crate::type_set::coefficient::CoefficientConfig {
+        pofang_xishu: coefficient.pofang_xishu,
+        huixin_xishu: coefficient.huixin_xishu,
+        huixiao_xishu: coefficient.huixiao_xishu,
+        yujin_xishu: coefficient.yujin_xishu,
+        yuhui_xishu: coefficient.yuhui_xishu,
+        huajin_xishu: coefficient.huajin_xishu,
+        fangyu_xishu: coefficient.fangyu_xishu,
+        pvp_global_jianshang: coefficient.pvp_global_jianshang,
+    };
+    store::save_config(
+        player_core,
+        hostile_core,
+        xinfa_core,
+        buff_core,
+        coeff_core,
+        value_set,
+    );
 }
 
 /// 加载默认配置（saved_config.toml，无则默认）
@@ -91,6 +124,7 @@ pub fn load_config() -> jpcg_api::ConfigDataDTO {
             fangyu_xishu: saved.coefficient.fangyu_xishu,
             pvp_global_jianshang: saved.coefficient.pvp_global_jianshang,
         },
+        value_set: saved.value_set,
     }
 }
 

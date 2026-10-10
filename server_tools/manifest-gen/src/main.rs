@@ -120,22 +120,13 @@ fn workspace_version() -> Option<String> {
     None
 }
 
-fn detect_platform() -> &'static str {
-    match std::env::consts::OS {
-        "macos" => "macos",
-        "linux" => "linux",
-        "windows" => "windows",
-        other => other,
-    }
-}
-
 fn main() {
     let args = Args::parse();
 
     let platform = args
         .platform
         .clone()
-        .unwrap_or_else(|| detect_platform().to_string());
+        .unwrap_or_else(|| std::env::consts::OS.to_string());
 
     if !args.data_dir.is_dir() {
         eprintln!("错误: '{}' 不是有效的目录", args.data_dir.display());

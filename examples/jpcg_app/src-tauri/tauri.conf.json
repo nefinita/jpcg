@@ -26,7 +26,8 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "data/shuxing/*.toml"
+     "data/shuxing/*.toml",
+     "data/values/*.toml"
     ],
     "externalBin": [
       "binaries/jpcg_updater"

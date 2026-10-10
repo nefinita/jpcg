@@ -8,8 +8,9 @@ pub fn calculate_combo_cmd(
     xinfa: XinfaConfigDTO,
     buff: BuffConfigDTO,
     coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<ComboResultDTO, String> {
-    calculate_combo_impl(steps, player, hostile, xinfa, buff, coefficient)
+    calculate_combo_impl(steps, player, hostile, xinfa, buff, coefficient, value_set)
 }
 
 #[cfg(feature = "static")]
@@ -20,6 +21,7 @@ fn calculate_combo_impl(
     xinfa: XinfaConfigDTO,
     buff: BuffConfigDTO,
     coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<ComboResultDTO, String> {
     use jpcg_combo::engine::ComboConfig;
     jpcg_combo::host::calculate_combo(
@@ -29,6 +31,7 @@ fn calculate_combo_impl(
         xinfa,
         buff,
         coefficient,
+        value_set,
         ComboConfig::default(),
     )
 }
@@ -41,10 +44,12 @@ fn calculate_combo_impl(
     xinfa: XinfaConfigDTO,
     buff: BuffConfigDTO,
     coefficient: CoefficientConfigDTO,
+    value_set: Option<String>,
 ) -> Result<ComboResultDTO, String> {
     let req = serde_json::json!({
         "steps": steps, "player": player, "hostile": hostile,
-        "xinfa": xinfa, "buff": buff, "coefficient": coefficient
+        "xinfa": xinfa, "buff": buff, "coefficient": coefficient,
+        "value_set": value_set
     });
     crate::commands::ffi_bridge::call_combo("calculate_combo", &req)
 }
