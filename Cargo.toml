@@ -24,7 +24,7 @@ toml = "1.1.2"
 colorized = "1.0.0"
 libc = "0.2.186"
 axum = "0.8.9"
-tower-http = { version = "0.6.8", features = ["fs", "cors"] }
+tower-http = { version = "0.7.1", features = ["fs", "cors"] }
 reqwest = { version = "0.13.3", features = ["json"] }
 indicatif = "0.18.4"
 clap = { version = "4.6.1", features = ["derive"] }
