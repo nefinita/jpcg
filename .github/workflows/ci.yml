@@ -19,7 +19,7 @@ jobs:
     name: Rust 构建 + 测试 + lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
@@ -83,7 +83,7 @@ jobs:
     name: 金标准回归（计算数值）
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: 金标准测试
@@ -96,7 +96,7 @@ jobs:
       run:
         working-directory: examples/jpcg_app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
