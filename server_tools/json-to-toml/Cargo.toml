@@ -1,0 +1,16 @@
+[package]
+name = "json-to-toml"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+description = "IcyTide/Generator 技能 JSON → JPCG data/shuxing TOML 转换器"
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+
+[lints]
+workspace = true

@@ -13,6 +13,11 @@ import type {
   XinfaSummaryDTO,
   SkillEditorDataDTO,
   DerivativesOutputDTO,
+  ModuleVersions,
+  PlayerConfigDTO,
+  HostileConfigDTO,
+  XinfaConfigDTO,
+  ValueSetDTO,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -61,17 +66,30 @@ export async function calculateDamage(req: CalculateRequest): Promise<SkillResul
 }
 
 export async function saveConfig(config: Record<string, unknown>): Promise<void> {
+  const xinfa = config.xinfa_config as Record<string, unknown>;
+  const buff = (config.buff ?? {}) as Record<string, unknown>;
   return invoke("save_config_cmd", {
     player: _sanitizeNumbers(config.player as Record<string, unknown>),
     hostile: _sanitizeNumbers(config.hostile as Record<string, unknown>),
     xinfa: {
-      profession: (config.xinfa_config as Record<string, unknown>).profession as string,
-      xinfa_name: (config.xinfa_config as Record<string, unknown>).xinfa_name as string,
-      xinfa_nom: (config.xinfa_config as Record<string, unknown>).xinfa_nom,
-      atk_up: Number((config.xinfa_config as Record<string, unknown>).atk_up) || 0,
-      pofang_up: Number((config.xinfa_config as Record<string, unknown>).pofang_up) || 0,
-      huixin_up: Number((config.xinfa_config as Record<string, unknown>).huixin_up) || 0,
+      profession: xinfa.profession as string,
+      xinfa_name: xinfa.xinfa_name as string,
+      xinfa_nom: xinfa.xinfa_nom,
+      atk_up: Number(xinfa.atk_up) || 0,
+      pofang_up: Number(xinfa.pofang_up) || 0,
+      huixin_up: Number(xinfa.huixin_up) || 0,
     },
+    buff: {
+      base_atk_pct: Number(buff.base_atk_pct) || 0,
+      huixin_pct: Number(buff.huixin_pct) || 0,
+      huixiao_pct: Number(buff.huixiao_pct) || 0,
+      pofang_pct: Number(buff.pofang_pct) || 0,
+      wushi_fangyu_pct: Number(buff.wushi_fangyu_pct) || 0,
+      shanghai_pct: Number(buff.shanghai_pct) || 0,
+      mode_is_point: !!buff.mode_is_point,
+    },
+    coefficient: _sanitizeNumbers(config.coefficient as Record<string, unknown>),
+    valueSet: (config.value_set as string | null | undefined) ?? null,
   });
 }
 
@@ -87,6 +105,16 @@ export async function listProfessions(): Promise<XinfaSummaryDTO[]> {
   return invoke("list_professions_cmd");
 }
 
+/** 列出可用数值集（正式服/体验服等；来源 data/values/index.toml） */
+export async function listValueSets(): Promise<ValueSetDTO[]> {
+  return invoke("list_value_sets_cmd");
+}
+
+/** 解析指定值集**实际使用**的信息（含不可用回退；返回 coefficient 供 seed 系数） */
+export async function resolveValueSet(id?: string | null): Promise<ValueSetDTO> {
+  return invoke("resolve_value_set_cmd", { valueSet: id ?? null });
+}
+
 export async function loadProfessionConfig(profession: string): Promise<Record<string, unknown> | null> {
   try {
     return await invoke("load_profession_config", { profession });
@@ -99,6 +127,10 @@ export async function checkUpdate(beta = false, force = false): Promise<UpdateCh
   return invoke("check_update", { beta, force });
 }
 
+export async function getModuleVersions(): Promise<ModuleVersions> {
+  return invoke("get_module_versions");
+}
+
 export async function performUpdate(
   beta: boolean,
   checkResult: UpdateCheckResult,
@@ -108,6 +140,17 @@ export async function performUpdate(
     hasDataUpdate: checkResult.has_data_update,
     latestDataVersion: checkResult.latest_data_version,
     dataFilesToUpdate: checkResult.data_files_to_update,
+  });
+}
+
+export async function performModulesUpdate(
+  beta: boolean,
+  checkResult: UpdateCheckResult,
+): Promise<string> {
+  return invoke("perform_modules_update", {
+    beta,
+    modulesVersion: checkResult.modules_version,
+    modulesFilesToUpdate: checkResult.modules_files_to_update,
   });
 }
 
@@ -154,11 +197,12 @@ export async function loadSkillPool(profession: string): Promise<SkillPoolItemDT
 
 export async function calculateCombo(
   steps: ComboStepDTO[],
-  player: Record<string, unknown>,
-  hostile: Record<string, unknown>,
-  xinfa: Record<string, unknown>,
+  player: PlayerConfigDTO,
+  hostile: HostileConfigDTO,
+  xinfa: XinfaConfigDTO,
   buff: BuffConfigDTO,
   coefficient: CoefficientConfigDTO,
+  valueSet?: string | null,
 ): Promise<ComboResultDTO> {
   return invoke("calculate_combo_cmd", {
     steps,
@@ -167,6 +211,7 @@ export async function calculateCombo(
     xinfa,
     buff,
     coefficient,
+    valueSet: valueSet ?? null,
   });
 }
 
@@ -252,21 +297,48 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
     case "calculate_damage": {
       const req = args?.req as CalculateRequest | undefined;
       const base = (req?.player?.jichu_gongji ?? 1000) * 2;
-      const skills = ["剑气纵横", "流风回雪", "万剑归宗", "听雷诀", "九溪弥烟"];
-      return skills.map((name) => ({
-        skill_name: name,
-        y: 1024 + Math.floor(Math.random() * 200),
-        b: base + Math.floor(Math.random() * 500),
-        i: Math.floor(base * 1.2),
-        n: Math.floor(base * 1.5),
-        h: Math.floor(base * 2.8),
-        q: Math.floor(base * 2.1),
-      }));
+      // 模拟技能（dev 模式兜底数据）：dot=跳数、wuzhi=无质标记，由标记生成，不依赖技能名判定
+      const skills = [
+        { name: "剑气纵横" },
+        { name: "流风回雪" },
+        { name: "万剑归宗" },
+        { name: "听雷诀" },
+        { name: "九溪弥烟" },
+        { name: "商（dot）", dot: 6 },
+        { name: "相依", wuzhi: true },
+      ];
+      return skills.map(({ name, dot, wuzhi }) => {
+        const jumps = dot ? Array.from({ length: dot }, () => Math.floor(base * 1.2)) : [];
+        return {
+          skill_name: name,
+          y: 1024 + Math.floor(Math.random() * 200),
+          b: base + Math.floor(Math.random() * 500),
+          i: Math.floor(base * 1.2),
+          n: Math.floor(base * 1.5),
+          h: Math.floor(base * 2.8),
+          q: jumps.length > 0 ? jumps.reduce((s, j) => s + j, 0) : Math.floor(base * 2.1),
+          dot_jumps: jumps,
+          has_critical_strike: !!wuzhi,
+          zhenshishanghai: 0,
+        };
+      });
     }
     case "load_config_cmd": {
       const saved = typeof localStorage !== "undefined"
         ? localStorage.getItem("jpcg_mock_config") : null;
       return saved ? JSON.parse(saved) : null;
+    }
+    case "list_value_sets_cmd":
+      return [
+        { id: "cszj-exp-260908", name: "体验服·苍生铸世一测", level: 50, is_default: true, source: "builtin", available: true,
+          coefficient: { pofang_xishu: 10378.17, huixin_xishu: 9512.91, huixiao_xishu: 3504.60, yujin_xishu: 19025.82, yuhui_xishu: 9422.82, huajin_xishu: 5148.00, fangyu_xishu: 10802.88, pvp_global_jianshang: 0.9 } },
+        { id: "live-130", name: "正式服·130级", level: 130, is_default: false, source: "builtin", available: true,
+          coefficient: { pofang_xishu: 225957.6, huixin_xishu: 197703, huixiao_xishu: 72844.2, yujin_xishu: 197703, yuhui_xishu: 55123.2, huajin_xishu: 30115.8, fangyu_xishu: 126007.2, pvp_global_jianshang: 0.9 } },
+      ];
+    case "resolve_value_set_cmd": {
+      const id = (args?.valueSet ?? args?.value_set) as string | null | undefined;
+      const sets = (await mockResponse("list_value_sets_cmd")) as ValueSetDTO[];
+      return sets.find((s) => s.id === id) ?? sets.find((s) => s.is_default) ?? sets[0];
     }
     case "forum_list_files":
       return [
@@ -284,9 +356,14 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       return ["shuxing", "combo"];
     case "load_skill_pool":
       return [
-        { skill_name: "宫", skill_id: 10447, base_damage1: 160, base_damage2: 200, atk_xishu: 501, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0 },
-        { skill_name: "商", skill_id: 10448, base_damage1: 120, base_damage2: 160, atk_xishu: 400, watk_xishu: 0, hit_up: 0, huixin_up: 5, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0 },
-        { skill_name: "角", skill_id: 10449, base_damage1: 100, base_damage2: 140, atk_xishu: 350, watk_xishu: 0, hit_up: 10, huixin_up: 0, huixiao_up: 0, wushifangyu: 512, wushihuajin: 0, dot_flag: 0 },
+        { skill_name: "宫", skill_id: 10447, sub_id: 14474, base_damage1: 160, base_damage2: 200, atk_xishu: 501, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "商", skill_id: 10448, sub_id: 14475, base_damage1: 120, base_damage2: 160, atk_xishu: 400, watk_xishu: 0, hit_up: 0, huixin_up: 5, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "角", skill_id: 10449, sub_id: 14476, base_damage1: 100, base_damage2: 140, atk_xishu: 350, watk_xishu: 0, hit_up: 10, huixin_up: 0, huixiao_up: 0, wushifangyu: 512, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "引窍·0点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 3.51, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "引窍·50点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 10.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "引窍·100点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 17.55, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "破·0点能量", skill_id: 38014, sub_id: 38093, base_damage1: 20, base_damage2: 20, atk_xishu: 8.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "破·50点能量", skill_id: 38014, sub_id: 38093, base_damage1: 20, base_damage2: 20, atk_xishu: 8.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
       ];
     case "calculate_combo_cmd": {
       const steps = (args?.steps as ComboStepDTO[]) || [];
@@ -305,6 +382,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
             crit_rate: 0.35,
             cumulative_mean_wan: cum / 10000,
             kill_prob: Math.min(1, (i + 1) * 0.2),
+            has_critical_strike: s.skill.has_critical_strike,
           };
         }),
       };
@@ -332,7 +410,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
           kind_type: 0, cast_mode: 0, guaranteed_hit: false, has_critical_strike: false,
           effect_type: 0, jihuoqixue: "", watk_xishu: 0, hit_up: 0,
           huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0,
-          wushijianshang: 0, zhenshishanghai: 0, dot_flag: 0, dot_num: 0, dot_up: 0,
+          wushijianshang: 0, zhenshishanghai: 0, dot_flag: 0, dot_interval: 0, dot_duration: 0, dot_up: 0,
         })),
       };
     }
@@ -384,7 +462,29 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         },
       };
     }
+    case "check_update":
+      return {
+        current_app_version: "v2.1.0-beta.4",
+        latest_app_version: "v2.1.0-beta.4",
+        has_app_update: false,
+        current_data_version: null,
+        latest_data_version: null,
+        has_data_update: false,
+        data_files_to_update: [],
+        has_modules_update: false,
+        modules_version: null,
+        modules_files_to_update: [],
+      };
+    case "get_module_versions":
+      return {
+        core: "2.1.0-alpha.1",
+        update: "2.1.0-alpha.1",
+        const: "130.3.20260602",
+        app: "2.1.0-alpha.1",
+      };
     case "perform_app_update":
+      return "重启中...（模拟）";
+    case "perform_modules_update":
       return "重启中...（模拟）";
     case "save_skill_data":
       return null;

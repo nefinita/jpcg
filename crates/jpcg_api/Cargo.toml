@@ -1,0 +1,15 @@
+[package]
+name = "jpcg_api"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+
+# 纯类型契约 crate：仅包含跨进程（Tauri IPC / FFI JSON）共享的 DTO 类型。
+# 不依赖 jpcg_core，保证 app 在 dynamic 模式下可与 core dll 解耦。
+
+[dependencies]
+serde = { workspace = true }
+
+[lints]
+workspace = true

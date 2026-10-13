@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO } from "../types";
+import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions, ValueSetDTO } from "../types";
 import {
   XINFA_LIST as XINFA_FALLBACK, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS,
   BUFF_FIELDS, COEFFICIENT_FIELDS, DEFAULT_BUFF, DEFAULT_COEFFICIENT,
@@ -29,6 +29,7 @@ const defaultForm = (): FormData => ({
   },
   buff: { ...DEFAULT_BUFF },
   coefficient: { ...DEFAULT_COEFFICIENT },
+  value_set: null,
 });
 
 export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus, onXinfaChange }: Props) {
@@ -49,12 +50,91 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
   const [betaChannel, setBetaChannel] = useState(() => localStorage.getItem(STORAGE_KEYS.betaChannel) === "true");
+  const [moduleVersions, setModuleVersions] = useState<ModuleVersions | null>(null);
+  const [valueSets, setValueSets] = useState<ValueSetDTO[]>([]);
+  const [appliedValueSet, setAppliedValueSet] = useState<ValueSetDTO | null>(null);
+  const [valueSetReady, setValueSetReady] = useState(false);
+  // 新选择/清空的系数基线尚未就绪时禁止编辑；同值集热更新仍允许自定义。
+  const [coefficientBaselinePending, setCoefficientBaselinePending] = useState(true);
+  // 用户是否手动改过系数（改过则数据热更新后不自动覆盖）
+  const coefficientCustomRef = useRef(false);
+  // 应用内确认（Tauri v2 禁用 window.confirm，需自绘）
+  const [confirmKind, setConfirmKind] = useState<null | "app" | "modules">(null);
+
+  // 当前选择是唯一来源；storage 仅用于启动恢复，异步结果必须匹配操作版本。
+  const selectedValueSetRef = useRef<string | null>(null);
+  const valueSetRevisionRef = useRef(0);
+  const valueSetResolveRef = useRef(0);
+
+  const persistValueSet = useCallback((id: string | null) => {
+    selectedValueSetRef.current = id;
+    if (id === null) localStorage.removeItem(STORAGE_KEYS.valueSet);
+    else localStorage.setItem(STORAGE_KEYS.valueSet, id);
+  }, []);
+
+  // 选择/清空会重新 seed；加载或用户编辑的系数在解析及热更新后保留。
+  const resolveCurrentValueSet = useCallback(async (
+    requestedId: string | null,
+    revision: number,
+  ): Promise<ValueSetDTO | null> => {
+    const resolveId = ++valueSetResolveRef.current;
+    setValueSetReady(false);
+    try {
+      const vs = await api.resolveValueSet(requestedId);
+      if (revision !== valueSetRevisionRef.current || resolveId !== valueSetResolveRef.current) return null;
+      setAppliedValueSet(vs);
+      setValueSetReady(true);
+      setCoefficientBaselinePending(false);
+      const coefficient = vs.coefficient;
+      if (!coefficientCustomRef.current && coefficient) {
+        setForm((prev) => ({ ...prev, coefficient: { ...coefficient } }));
+      }
+      return vs;
+    } catch (err) {
+      if (revision === valueSetRevisionRef.current && resolveId === valueSetResolveRef.current) {
+        addToast(String(err), "error");
+      }
+      return null;
+    }
+  }, [addToast]);
+
+  const selectValueSet = useCallback((id: string | null) => {
+    const revision = ++valueSetRevisionRef.current;
+    persistValueSet(id);
+    coefficientCustomRef.current = false;
+    setCoefficientBaselinePending(true);
+    setAppliedValueSet(null);
+    setForm((prev) => ({ ...prev, value_set: id }));
+    return resolveCurrentValueSet(id, revision);
+  }, [persistValueSet, resolveCurrentValueSet]);
+
+  // 从列表选一个初始值集 id：localStorage（且可用）→ 默认（且可用）→ 首个可用 → 默认 → 首个
+  const pickValueSetId = useCallback((sets: ValueSetDTO[]): string | null => {
+    const stored = typeof localStorage !== "undefined"
+      ? localStorage.getItem(STORAGE_KEYS.valueSet)
+      : null;
+    const pick =
+      sets.find((s) => s.id === stored && s.available) ??
+      sets.find((s) => s.is_default && s.available) ??
+      sets.find((s) => s.available) ??
+      sets.find((s) => s.is_default) ??
+      sets[0];
+    return pick ? pick.id : null;
+  }, []);
 
   useEffect(() => {
     api.listProfessions().then((list) => {
       if (list.length > 0) setProfessionOptions(list);
     }).catch(() => {});
-  }, []);
+    api.getModuleVersions().then(setModuleVersions).catch(() => {});
+    const revision = valueSetRevisionRef.current;
+    api.listValueSets().then((sets) => {
+      setValueSets(sets);
+      // 统一走 resolveValueSet：即使默认项快照损坏，也应用实际回退的值集与常数
+      if (revision === valueSetRevisionRef.current) selectValueSet(pickValueSetId(sets));
+    }).catch(() => {});
+    return () => { ++valueSetRevisionRef.current; };
+  }, [selectValueSet, pickValueSetId]);
 
   const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
 
@@ -84,57 +164,99 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     }).catch(() => {});
   }, [professionOptions, defaultXinfa, onXinfaChange]);
 
+  const handleValueSetChange = useCallback(async (value: string) => {
+    const id = value || null;
+    const vs = await selectValueSet(id);
+    if (id !== null && vs && vs.id !== id) {
+      addToast(`数值集「${id}」不可用，已回退到「${vs.name}」`, "warning");
+    }
+  }, [selectValueSet, addToast]);
+
   const updateField = useCallback(
     (section: "player" | "hostile", id: string, value: string) => {
-      const num = value === "" ? 0 : Number(value);
+      const num = Number(value);
+      const stored = value === "" || isNaN(num) ? "" : num;
       setForm((prev) => ({
         ...prev,
-        [section]: { ...prev[section], [id]: isNaN(num) ? 0 : num },
+        [section]: { ...prev[section], [id]: stored },
       }));
     },
     [],
   );
 
   const updateBuff = useCallback((id: string, value: string) => {
-    const num = value === "" ? 0 : Number(value);
+    const num = Number(value);
+    const stored = value === "" || isNaN(num) ? "" : num;
     setForm((prev) => ({
       ...prev,
-      buff: { ...prev.buff, [id]: isNaN(num) ? 0 : num },
+      buff: { ...prev.buff, [id]: stored },
     }));
   }, []);
 
   const updateCoefficient = useCallback((id: string, value: string) => {
-    const num = value === "" ? 0 : Number(value);
+    if (coefficientBaselinePending) return;
+    coefficientCustomRef.current = true;
+    const num = Number(value);
+    const stored = value === "" || isNaN(num) ? "" : num;
     setForm((prev) => ({
       ...prev,
-      coefficient: { ...prev.coefficient, [id]: isNaN(num) ? 0 : num },
+      coefficient: { ...prev.coefficient, [id]: stored },
     }));
+  }, [coefficientBaselinePending]);
+
+  // 数字兜底：空串/NaN → 0（提交 core 前统一 normalize）
+  const normalizeNum = useCallback((v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
   }, []);
 
+  const normalizeForm = useCallback((f: typeof form) => {
+    const num = (o: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(o).map(([k, v]) => [k, normalizeNum(v)]));
+    return {
+      ...f,
+      player: num(f.player),
+      hostile: num(f.hostile),
+      buff: num(f.buff),
+      coefficient: num(f.coefficient),
+    } as typeof form;
+  }, [normalizeNum]);
+
   const handleCalculate = useCallback(() => {
-    onCalculate(form);
-  }, [form, onCalculate]);
+    onCalculate(normalizeForm(form));
+  }, [form, onCalculate, normalizeForm]);
 
   const handleSave = useCallback(async () => {
     try {
+      const norm = normalizeForm(form);
       await api.saveConfig({
-        player: form.player as never,
-        hostile: form.hostile as never,
-        xinfa_config: form.xinfa_config,
+        player: norm.player as never,
+        hostile: norm.hostile as never,
+        xinfa_config: norm.xinfa_config,
+        buff: form.buff,
+        coefficient: norm.coefficient,
+        value_set: form.value_set ?? null,
       });
       addToast("配置已保存", "success");
     } catch (err) {
       addToast(String(err), "error");
     }
-  }, [form, addToast]);
+  }, [form, addToast, normalizeForm]);
 
   const handleLoad = useCallback(async () => {
+    const revision = ++valueSetRevisionRef.current;
+    setValueSetReady(false);
     try {
       const cfg = await api.loadConfig();
+      if (revision !== valueSetRevisionRef.current) return;
       if (!cfg) {
+        void resolveCurrentValueSet(selectedValueSetRef.current, revision);
         addToast("没有已保存的配置", "warning");
         return;
       }
+      const requestedId = cfg.value_set ?? null;
+      persistValueSet(requestedId);
+      setAppliedValueSet(null);
       const xinfaVal = cfg.xinfa_config.profession || "mowen";
       localStorage.setItem(STORAGE_KEYS.lastXinfa, xinfaVal);
       setForm({
@@ -156,19 +278,29 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           target_hp: cfg.hostile.target_hp,
         },
         xinfa_config: cfg.xinfa_config,
-        buff: cfg.buff || { ...DEFAULT_BUFF },
-        coefficient: cfg.coefficient || { ...DEFAULT_COEFFICIENT },
+        buff: cfg.buff ? { ...cfg.buff } : { ...DEFAULT_BUFF },
+        coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
+        value_set: requestedId,
       });
+      // 加载的系数以存档为准（不再自动 seed）；标记为“已自定义”以免数据热更新覆盖
+      coefficientCustomRef.current = true;
+      setCoefficientBaselinePending(false);
+      void resolveCurrentValueSet(requestedId, revision);
       addToast("配置已加载", "success");
     } catch (err) {
+      if (revision !== valueSetRevisionRef.current) return;
+      void resolveCurrentValueSet(selectedValueSetRef.current, revision);
       addToast(String(err), "error");
     }
-  }, [addToast]);
+  }, [addToast, persistValueSet, resolveCurrentValueSet]);
 
   const handleClear = useCallback(() => {
-    setForm(defaultForm());
+    const requestedId = selectedValueSetRef.current;
+    setForm({ ...defaultForm(), value_set: requestedId });
+    // 重新解析当前选择，不读取可能与当前表单不同的持久化偏好。
+    void selectValueSet(requestedId);
     addToast("已清空", "info");
-  }, [addToast]);
+  }, [selectValueSet, addToast]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -214,45 +346,36 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, []);
 
   const handleUpdateClick = useCallback(async () => {
-    if (updating) return;
+    if (updating || confirmKind) return;
     setUpdating(true);
     setUpdateProgress(0);
     setUpdateMessage("正在检查更新...");
+    // 命中应用/模块更新时进入确认态（updating 保持 true，禁用重复触发）；
+    // 只有未进入确认态才允许 finally 复位 updating。
+    let needsConfirm = false;
     try {
       const result = await api.checkUpdate(betaChannel, false);
       setUpdateCheckResult(result);
-      if (!result.has_data_update && !result.has_app_update) {
+      if (!result.has_data_update && !result.has_app_update && !result.has_modules_update) {
         setUpdateMessage("已是最新版本");
         addToast("已是最新版本", "info");
-        setUpdating(false);
         return;
       }
 
-      // 处理应用更新
+      // 处理应用更新：改为应用内确认（Tauri v2 中 window.confirm 恒返回 false）
       if (result.has_app_update && result.latest_app_version) {
-        const ok = window.confirm(
-          `发现新版本 ${result.latest_app_version}，是否下载并重启应用？`
-        );
-        if (!ok) {
-          setUpdateMessage("已取消");
-          setUpdating(false);
-          return;
-        }
-        setUpdateMessage("正在下载更新...");
-        addToast(`开始更新到 ${result.latest_app_version}`, "info");
-        const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
-          setUpdateProgress(evt.progress);
-          setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
-        });
-        try {
-          await api.performAppUpdate(betaChannel);
-        } finally {
-          unlisten();
-        }
-        // 执行到这里说明重启失败
-        setUpdateMessage("重启失败");
-        addToast("重启失败，请手动重启应用", "error");
-        setUpdating(false);
+        setUpdateMessage(`发现新版本 ${result.latest_app_version}，是否下载并重启应用？`);
+        setConfirmKind("app");
+        needsConfirm = true;
+        return;
+      }
+
+      // 模块库（dll）增量更新
+      if (result.has_modules_update && result.modules_files_to_update?.length) {
+        const names = result.modules_files_to_update.map((f) => f.name).join(", ");
+        setUpdateMessage(`发现模块更新：${names}，是否下载并重启应用？`);
+        setConfirmKind("modules");
+        needsConfirm = true;
         return;
       }
 
@@ -263,18 +386,88 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         setUpdateProgress(evt.progress);
         setUpdateMessage(`正在下载: ${evt.file || evt.message}`);
       });
-      await api.performUpdate(betaChannel, result);
-      unlisten();
-      setUpdateProgress(1);
-      setUpdateMessage("更新完成");
-      addToast("更新完成", "success");
+      try {
+        await api.performUpdate(betaChannel, result);
+        setUpdateProgress(1);
+        setUpdateMessage("更新完成");
+        addToast("更新完成", "success");
+        // 数据热更新：刷新值集列表并重解析当前选择（未手动改系数时重新 seed）
+        try {
+          const revision = valueSetRevisionRef.current;
+          const requestedId = selectedValueSetRef.current;
+          const sets = await api.listValueSets();
+          setValueSets(sets);
+          if (revision === valueSetRevisionRef.current) {
+            await resolveCurrentValueSet(requestedId, revision);
+          }
+        } catch {
+          /* 刷新失败不影响更新结果 */
+        }
+      } finally {
+        unlisten();
+      }
     } catch (err) {
       setUpdateMessage("更新失败");
       addToast(String(err), "error");
     } finally {
+      if (!needsConfirm) setUpdating(false);
+    }
+  }, [updating, confirmKind, betaChannel, addToast, resolveCurrentValueSet]);
+
+  // —— 应用内确认的执行/取消（替代被 Tauri v2 禁用的 window.confirm）——
+  const cancelUpdate = useCallback(() => {
+    setConfirmKind(null);
+    setUpdateMessage("已取消");
+    setUpdating(false);
+    addToast("已取消更新", "info");
+  }, [addToast]);
+
+  const runAppUpdate = useCallback(async () => {
+    setConfirmKind(null);
+    setUpdateProgress(0);
+    setUpdateMessage("正在下载更新...");
+    const ver = updateCheckResult?.latest_app_version;
+    if (ver) addToast(`开始更新到 ${ver}`, "info");
+    const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
+      setUpdateProgress(evt.progress);
+      setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
+    });
+    try {
+      await api.performAppUpdate(betaChannel);
+      // 正常会由后端发起退出重启；走到这里说明失败
+      setUpdateMessage("重启失败");
+      addToast("重启失败，请手动重启应用", "error");
+    } catch (err) {
+      setUpdateMessage("更新失败");
+      addToast(String(err), "error");
+    } finally {
+      unlisten();
       setUpdating(false);
     }
-  }, [updating, betaChannel, addToast]);
+  }, [betaChannel, updateCheckResult, addToast]);
+
+  const runModulesUpdate = useCallback(async () => {
+    setConfirmKind(null);
+    setUpdateProgress(0);
+    setUpdateMessage("正在更新模块库...");
+    const unlisten = api.listenUpdateProgress((evt: UpdateProgressEvent) => {
+      setUpdateProgress(evt.progress);
+      setUpdateMessage(evt.file ? `正在下载: ${evt.file}` : evt.message);
+    });
+    try {
+      if (updateCheckResult) {
+        await api.performModulesUpdate(betaChannel, updateCheckResult);
+      }
+      setUpdateMessage("重启失败");
+      addToast("重启失败，请手动重启应用", "error");
+    } catch (err) {
+      setUpdateMessage("更新失败");
+      addToast(String(err), "error");
+    } finally {
+      unlisten();
+      setUpdating(false);
+    }
+  }, [betaChannel, updateCheckResult, addToast]);
 
   useEffect(() => {
     handleXinfaChange(form.xinfa);
@@ -282,14 +475,14 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const playerStats = React.useMemo(() => {
     const pct = (v: number) => (v * 100).toFixed(1) + "%";
-    const huixinRate = form.player.huixin_dengji / (form.coefficient.huixin_xishu || 197703);
-    const pofangRate = form.player.pofang_dengji / (form.coefficient.pofang_xishu || 225957.6);
+    const huixinRate = normalizeNum(form.player.huixin_dengji) / (normalizeNum(form.coefficient.huixin_xishu) || 197703);
+    const pofangRate = normalizeNum(form.player.pofang_dengji) / (normalizeNum(form.coefficient.pofang_xishu) || 225957.6);
     return {
-      huixinRate: pct(huixinRate + form.buff.huixin_pct / 100),
-      pofangRate: pct(pofangRate + form.buff.pofang_pct / 100),
-      jianshang: form.hostile.jianshang_bili + "%",
+      huixinRate: pct(huixinRate + normalizeNum(form.buff.huixin_pct) / 100),
+      pofangRate: pct(pofangRate + normalizeNum(form.buff.pofang_pct) / 100),
+      jianshang: normalizeNum(form.hostile.jianshang_bili) + "%",
     };
-  }, [form]);
+  }, [form, normalizeNum]);
 
   return (
     <div className={styles.card}>
@@ -304,6 +497,29 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
             <option key={x.value} value={x.value}>{x.label}（{x.nom}）{x.version_label ?? ""}</option>
           ))}
         </select>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionTitle}>数值版本</div>
+        <select
+          className={styles.select}
+          value={form.value_set ?? ""}
+          onChange={(e) => handleValueSetChange(e.target.value)}
+        >
+          <option value="">（默认数值集）</option>
+          {valueSets.map((s) => (
+            <option key={s.id} value={s.id} disabled={!s.available}>
+              {s.name}{s.source === "builtin" ? "（内置）" : ""}{s.available ? "" : "（不可用）"}
+            </option>
+          ))}
+        </select>
+        {appliedValueSet && (
+          <div className={styles.fieldLabel} style={{ marginTop: 4 }}>
+            实际使用：{appliedValueSet.name}
+            {appliedValueSet.source === "builtin" ? "（内置兜底）" : ""}
+            {form.value_set !== null && appliedValueSet.id !== form.value_set ? "（已回退）" : ""}
+          </div>
+        )}
       </div>
 
       <div className={styles.section}>
@@ -342,6 +558,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
               <label className={styles.fieldLabel}>{f.label}</label>
               <input className={styles.input} type="number" min={0} step={0.1}
                 value={form.coefficient[f.id as keyof typeof form.coefficient] ?? ""}
+                disabled={coefficientBaselinePending}
                 onChange={(e) => updateCoefficient(f.id, e.target.value)} />
             </div>
           ))}
@@ -371,10 +588,10 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       <div className={styles.section}>
         <div className={styles.actions}>
           <button className={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={handleCalculate} disabled={calculating}>
+            onClick={handleCalculate} disabled={calculating || !valueSetReady}>
             {calculating ? "计算中..." : "开始计算"}
           </button>
-          <button className={styles.btn} onClick={handleSave}>保存</button>
+          <button className={styles.btn} onClick={handleSave} disabled={!valueSetReady}>保存</button>
           <button className={styles.btn} onClick={handleLoad}>加载</button>
           <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleClear}>清空</button>
           <button className={styles.btn} onClick={handleExport}>导出</button>
@@ -387,12 +604,31 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
             {updating ? "更新中..." : "检查更新"}
           </button>
         </div>
-        {updating && (
+        {updating && !confirmKind && (
           <div className={styles.progress}>
             <div className={styles.progressTrack}>
               <div className={styles.progressFill} style={{ width: `${Math.round(updateProgress * 100)}%` }} />
             </div>
             <div className={styles.progressText}>{updateMessage}</div>
+          </div>
+        )}
+        {confirmKind && (
+          <div className={styles.progress}>
+            <div className={styles.progressText}>{updateMessage}</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                onClick={confirmKind === "app" ? runAppUpdate : runModulesUpdate}
+              >
+                下载更新
+              </button>
+              <button className={styles.btn} onClick={cancelUpdate}>取消</button>
+            </div>
+          </div>
+        )}
+        {moduleVersions && (
+          <div className={styles.moduleVersions}>
+            App {moduleVersions.app} · Core {moduleVersions.core} · Update {moduleVersions.update} · Const {moduleVersions.const}
           </div>
         )}
       </div>

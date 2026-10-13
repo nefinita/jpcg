@@ -1,0 +1,25 @@
+[package]
+name = "jpcg_combo"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+
+# 连招计算引擎（core 体系的子模块）：
+# 负责连招伤害编排、击杀率（蒙特卡洛）、hp 扣血步进与追加真伤结算；
+# 单技能公式全部委托 jpcg_core（JpcgConfig，金标准单源）。
+# 双产物：rlib（static 模式 Tauri 直调）/ cdylib（dynamic 模式 ffi_bridge 加载）。
+
+[dependencies]
+jpcg_api.workspace = true
+jpcg_core.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true

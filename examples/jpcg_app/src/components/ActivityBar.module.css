@@ -19,22 +19,31 @@
 .btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-xs);
-  width: 100%;
-  padding: 6px var(--space-sm);
-  border-radius: var(--radius-sm);
+  margin: 2px 6px;
+  width: calc(100% - 12px);
+  padding: 7px var(--space-sm);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   font-size: 1rem;
   transition: all var(--duration-fast) var(--ease-out);
   flex-shrink: 0;
 }
 
 .btn:hover {
+  color: var(--primary-600);
   background: var(--glass-highlight);
 }
 
 .active {
+  color: #fff;
   background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
   box-shadow: var(--shadow-glow);
+}
+
+.active:hover {
+  color: #fff;
 }
 
 .icon {

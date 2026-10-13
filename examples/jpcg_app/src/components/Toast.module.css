@@ -32,7 +32,13 @@
 
 .icon {
   flex-shrink: 0;
+  display: inline-flex;
 }
+
+.toast.success .icon { color: var(--success); }
+.toast.error .icon { color: var(--error); }
+.toast.warning .icon { color: var(--warning); }
+.toast.info .icon { color: var(--info); }
 
 .close {
   margin-left: auto;

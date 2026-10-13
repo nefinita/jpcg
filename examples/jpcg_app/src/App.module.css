@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(135deg, var(--bg-base) 0%, var(--bg-surface) 100%);
+  background: linear-gradient(160deg, var(--bg-base) 0%, var(--bg-surface) 100%);
 }
 
 .body {
@@ -32,12 +32,26 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--primary-400), var(--accent-500));
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.logoMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
+  box-shadow: var(--shadow-glow);
+  -webkit-text-fill-color: initial;
 }
 
 .headerActions {
@@ -53,16 +67,18 @@
   width: 36px;
   height: 36px;
   border-radius: var(--radius-md);
+  color: var(--text-secondary);
   background: var(--glass-bg);
   border: 1px solid var(--border-subtle);
-  font-size: 1.1rem;
   transition: all var(--duration-fast) var(--ease-out);
   cursor: pointer;
 }
 
 .headerBtn:hover {
+  color: var(--primary-600);
   background: var(--glass-highlight);
   border-color: var(--border-default);
+  transform: translateY(-1px);
 }
 
 .calcLayout {

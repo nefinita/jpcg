@@ -5,6 +5,11 @@
 // ============================================================================
 
 mod download;
+pub mod ffi;
+pub mod modules;
+
+/// 本 update 模块库版本（供宿主 UI 展示，与 FFI jpcg_update_version 一致）
+pub const UPDATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// 更新检查服务器基础 URL（稳定版）
 const UPDATE_BASE_URL: &str = "https://nefinita-ai.com/updates/JPCG/";
@@ -16,8 +21,39 @@ const CURRENT_DIR: &str = ".";
 use std::env;
 use std::path::Path;
 
+/// 拼接更新 URL：base 去尾 `/`，各段去首尾 `/` 后以 `/` 连接。
+/// 统一入口，避免 `format!("{}{}", base, path)` 漏分隔符（曾致 404）。
+pub(crate) fn join_url(base: &str, segments: &[&str]) -> String {
+    let mut out = base.trim_end_matches('/').to_string();
+    for seg in segments {
+        out.push('/');
+        out.push_str(seg.trim_matches('/'));
+    }
+    out
+}
+
 // 将 download 模块的所有公有类型和函数重新导出
 pub use download::*;
+
+/// 当前运行二进制版本（宿主注入；缺省回退本 crate 编译版本）。
+/// 应用是否有更新以二进制版本为唯一真相，避免 local_update_info.toml 缺失/过时误报。
+fn resolve_current_version(current: Option<&str>) -> String {
+    match current.map(str::trim) {
+        Some(v) if !v.is_empty() => v.to_string(),
+        _ => env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
+/// 版本号规范化：去首尾空白与 `v` 前缀。
+/// 服务器 update.toml 写的是 `vX.Y.Z`，而 `CARGO_PKG_VERSION` 不带 `v`，必须归一后再比。
+fn normalize_version(v: &str) -> &str {
+    v.trim().trim_start_matches('v')
+}
+
+/// 应用是否需要更新：强制，或当前二进制版本与服务器最新版本不同
+pub(crate) fn needs_app_update(force: bool, current_version: &str, latest_version: &str) -> bool {
+    force || normalize_version(current_version) != normalize_version(latest_version)
+}
 
 // ============================================================================
 // check_updates — 检查更新（只检查不下载）
@@ -28,20 +64,27 @@ pub use download::*;
 // ============================================================================
 
 /// 检查应用版本和数据更新
-/// - `base_path`: 应用根目录路径
+/// - `data_root`: 数据根目录（含 shuxing/、values/；data 文件落盘与比对基准）
 /// - `beta`: 是否使用 Beta 通道
-/// - `force`: 是否强制检查（忽略本地版本比较）
+/// - `force`: 是否强制检查
+/// - `current_version`: 当前运行二进制版本（宿主注入；None 回退本 crate 版本）
 /// - 返回: UpdateCheckResult 包含所有检查结果
 pub async fn check_updates(
-    base_path: &Path,
+    data_root: &Path,
     beta: bool,
     force: bool,
+    current_version: Option<&str>,
 ) -> Result<UpdateCheckResult, Box<dyn std::error::Error + Send + Sync>> {
-    // 加载本地版本信息
+    let current_version = resolve_current_version(current_version);
+    // 加载本地版本信息（仅用于渠道与 data 版本记忆）
     let local_info = load_local_version_info()?;
     // 判断更新通道：参数指定优先，否则使用上次记录的通道
     let use_beta = beta || local_info.channel == "beta";
-    let base_url = if use_beta { BETA_BASE_URL } else { UPDATE_BASE_URL };
+    let base_url = if use_beta {
+        BETA_BASE_URL
+    } else {
+        UPDATE_BASE_URL
+    };
     let channel = if use_beta { "beta" } else { "stable" };
 
     // 从服务器获取最新版本信息
@@ -51,20 +94,22 @@ pub async fn check_updates(
         None => {
             // 服务器不可用时，返回无可用版本信息
             return Ok(UpdateCheckResult {
-                current_app_version: local_info.version.clone(),
+                current_app_version: Some(current_version.clone()),
                 latest_app_version: None,
                 has_app_update: false,
                 current_data_version: local_info.data_version.clone(),
                 latest_data_version: None,
                 has_data_update: false,
                 data_files_to_update: vec![],
+                has_modules_update: false,
+                modules_version: None,
+                modules_files_to_update: vec![],
             });
         }
     };
 
-    // 判断应用是否有新版本
-    let has_app_update = force
-        || local_info.version.as_deref() != Some(&latest_info.version);
+    // 判断应用是否有新版本（以当前二进制版本为准）
+    let has_app_update = needs_app_update(force, &current_version, &latest_info.version);
 
     // ---- 检查 data 文件更新 ----
     let mut has_data_update = false;
@@ -83,7 +128,7 @@ pub async fn check_updates(
             match fetch_data_manifest(&file_base_url, remote_data_ver, channel).await {
                 Ok(manifest) => {
                     // 对比本地 data 文件哈希，找出需要更新的文件
-                    let needed = check_data_updates(base_path, &manifest).await?;
+                    let needed = check_data_updates(data_root, &manifest).await?;
                     if !needed.is_empty() {
                         has_data_update = true;
                         data_files_to_update = needed.iter().map(|f| f.path.clone()).collect();
@@ -97,14 +142,37 @@ pub async fn check_updates(
         }
     }
 
+    // ---- 检查模块库（dll）更新 ----
+    let mut has_modules_update = false;
+    let mut modules_files_to_update = vec![];
+    if force || has_app_update {
+        match crate::modules::check_modules_update(use_beta, force).await {
+            Ok(m) => {
+                has_modules_update = m.has_modules_update;
+                modules_files_to_update = m.modules_files_to_update;
+                // 服务器模块版本（复用 app 版本目录）
+            }
+            Err(e) => {
+                eprintln!("获取模块清单失败: {}", e);
+            }
+        }
+    }
+
     Ok(UpdateCheckResult {
-        current_app_version: local_info.version,
-        latest_app_version: Some(latest_info.version),
+        current_app_version: Some(current_version),
+        latest_app_version: Some(latest_info.version.clone()),
         has_app_update,
         current_data_version: local_info.data_version,
         latest_data_version: latest_info.data_version,
         has_data_update,
         data_files_to_update,
+        has_modules_update,
+        modules_version: if has_modules_update {
+            Some(latest_info.version)
+        } else {
+            None
+        },
+        modules_files_to_update,
     })
 }
 
@@ -117,15 +185,21 @@ pub async fn check_updates(
 /// - `base_path`: 应用根目录路径（用于检测本地是否需要更新）
 /// - `beta`: 是否使用 Beta 通道
 /// - `force`: 强制返回信息（即使本地已是最新）
+/// - `current_version`: 当前运行二进制版本（None 回退本 crate 版本）
 /// - 返回: Option<AppUpdateInfo>，如果无需更新或获取失败则返回 None
 pub async fn fetch_app_update_info(
     _base_path: &Path,
     beta: bool,
     force: bool,
+    current_version: Option<&str>,
 ) -> Result<Option<AppUpdateInfo>, Box<dyn std::error::Error + Send + Sync>> {
     let local_info = load_local_version_info()?;
     let use_beta = beta || local_info.channel == "beta";
-    let base_url = if use_beta { BETA_BASE_URL } else { UPDATE_BASE_URL };
+    let base_url = if use_beta {
+        BETA_BASE_URL
+    } else {
+        UPDATE_BASE_URL
+    };
     let _channel = if use_beta { "beta" } else { "stable" };
 
     let latest = fetch_latest_version_info(base_url).await?;
@@ -134,19 +208,23 @@ pub async fn fetch_app_update_info(
         None => return Ok(None),
     };
 
-    // 如果无需更新且未指定 force，跳过
-    if !force && local_info.version.as_deref() == Some(&latest_info.version) {
+    // 如果无需更新且未指定 force，跳过（以当前二进制版本为准）
+    let current_version = resolve_current_version(current_version);
+    if !needs_app_update(force, &current_version, &latest_info.version) {
         return Ok(None);
     }
 
     // 获取版本目录
     let version_dirs = if use_beta {
         // Beta 版: manifest 直接位于根目录
-        let manifest_url = format!("{}{}", base_url.trim_end_matches('/'), "/manifest.toml");
+        let manifest_url = join_url(base_url, &["manifest.toml"]);
         match download::download_and_parse_manifest(&manifest_url).await {
             Ok(manifest) => {
                 vec![VersionDirectory {
-                    dir_name: manifest.version.clone().unwrap_or_else(|| "beta".to_string()),
+                    dir_name: manifest
+                        .version
+                        .clone()
+                        .unwrap_or_else(|| "beta".to_string()),
                     manifest,
                 }]
             }
@@ -183,16 +261,11 @@ pub async fn fetch_app_update_info(
         env::consts::ARCH,
     )?;
 
-    // 计算下载 URL
+    // 计算下载 URL（统一走 join_url，避免漏分隔符拼成 ...JPCGv2.1.0 / ...JPCG_betaXXX）
     let download_url = if use_beta {
-        format!("{}{}", base_url.trim_end_matches('/'), target_binary.path)
+        join_url(base_url, &[&target_binary.path])
     } else {
-        format!(
-            "{}{}/{}",
-            base_url.trim_end_matches('/'),
-            target_dir.dir_name,
-            target_binary.path
-        )
+        join_url(base_url, &[&target_dir.dir_name, &target_binary.path])
     };
 
     Ok(Some(AppUpdateInfo {
@@ -210,12 +283,12 @@ pub async fn fetch_app_update_info(
 // ============================================================================
 
 /// 根据检查结果执行下载和安装
-/// - `base_path`: 应用根目录
+/// - `data_root`: 数据根目录（data 文件落盘与比对基准）
 /// - `beta`: 是否 Beta 通道
 /// - `check_result`: 检查结果（由 check_updates 返回）
 /// - `progress`: 进度回调接口（用于 GUI 或 CLI 显示）
 pub async fn download_updates(
-    base_path: &Path,
+    data_root: &Path,
     beta: bool,
     check_result: &UpdateCheckResult,
     progress: &dyn ProgressCallback,
@@ -229,15 +302,23 @@ pub async fn download_updates(
     };
 
     // 仅当有数据更新时执行下载
-    if let Some(ref data_ver) = check_result.latest_data_version {
-        if check_result.has_data_update {
-            // 重新获取 data_manifest（因为需要文件哈希进行验证）
-            let manifest = fetch_data_manifest(&file_base_url, data_ver, channel).await?;
-            let needed = check_data_updates(base_path, &manifest).await?;
-            if !needed.is_empty() {
-                // 下载并安装所有需要更新的 data 文件
-                download_and_install_data(&needed, base_path, data_ver, &file_base_url, channel, progress).await?;
-            }
+    if let Some(ref data_ver) = check_result.latest_data_version
+        && check_result.has_data_update
+    {
+        // 重新获取 data_manifest（因为需要文件哈希进行验证）
+        let manifest = fetch_data_manifest(&file_base_url, data_ver, channel).await?;
+        let needed = check_data_updates(data_root, &manifest).await?;
+        if !needed.is_empty() {
+            // 下载并安装所有需要更新的 data 文件
+            download_and_install_data(
+                &needed,
+                data_root,
+                data_ver,
+                &file_base_url,
+                channel,
+                progress,
+            )
+            .await?;
         }
     }
 
@@ -260,25 +341,33 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
     #[command(author, version, about)]
     struct Args {
         #[arg(long)]
-        force_check: bool,          // 强制检查（忽略本地版本记录）
+        force_check: bool, // 强制检查（忽略本地版本记录）
         #[arg(long)]
-        target_os: Option<String>,  // 指定目标操作系统
+        target_os: Option<String>, // 指定目标操作系统
         #[arg(long)]
-        target_arch: Option<String>,// 指定目标架构
+        target_arch: Option<String>, // 指定目标架构
         #[arg(short = 'b', long = "beta")]
-        beta: bool,                 // 使用 Beta 通道
+        beta: bool, // 使用 Beta 通道
     }
 
     let args = Args::parse();
+    // CLI 自身即更新器二进制，当前版本以本 crate 编译版本为准
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
     let app_dir = Path::new(CURRENT_DIR);
     let base_path = app_dir.canonicalize()?;
+    // CLI 场景：数据根为 <应用根>/data（保持既有行为）
+    let data_root = base_path.join("data");
 
     let detected_os = args.target_os.as_deref().unwrap_or(env::consts::OS);
     let detected_arch = args.target_arch.as_deref().unwrap_or(env::consts::ARCH);
 
     let local_info = load_local_version_info()?;
     let use_beta = args.beta || local_info.channel == "beta";
-    let base_url = if use_beta { BETA_BASE_URL } else { UPDATE_BASE_URL };
+    let base_url = if use_beta {
+        BETA_BASE_URL
+    } else {
+        UPDATE_BASE_URL
+    };
     let channel = if use_beta { "beta" } else { "stable" };
 
     let latest = fetch_latest_version_info(base_url).await?;
@@ -290,10 +379,13 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
         }
     };
 
-    println!("当前版本: {:?}, 最新版本: {}", local_info.version, latest_info.version);
+    println!(
+        "当前版本: {}, 最新版本: {}",
+        current_version, latest_info.version
+    );
 
     // ---- 第一阶段: 应用二进制更新 ----
-    if !args.force_check && local_info.version.as_deref() == Some(&latest_info.version) {
+    if !needs_app_update(args.force_check, &current_version, &latest_info.version) {
         println!("已是最新版本 ({}), 无需更新。", latest_info.version);
     } else {
         let version_dirs = fetch_all_version_directories(base_url).await?;
@@ -321,10 +413,10 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
             std::collections::HashMap::new();
 
         // 检查二进制是否需要更新（SHA256 对比）
-        if let Some(bin) = target_binary {
-            if check_binary_update_needed(&base_path, bin).await? {
-                all_updates_needed.insert(bin.path.clone(), bin.hash.clone());
-            }
+        if let Some(bin) = target_binary
+            && check_binary_update_needed(&base_path, bin).await?
+        {
+            all_updates_needed.insert(bin.path.clone(), bin.hash.clone());
         }
 
         // 检查其他附带文件是否需要更新
@@ -334,8 +426,7 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
         }
 
         if !all_updates_needed.is_empty() {
-            let version_url =
-                format!("{}{}/", base_url.trim_end_matches('/'), target_version_str);
+            let version_url = format!("{}/", join_url(base_url, &[target_version_str]));
             let file_base_url = if use_beta {
                 "https://nefinita-ai.com/files/JPCG_beta/".to_string()
             } else {
@@ -373,19 +464,35 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
             match fetch_data_manifest(&file_base_url, remote_data_ver, channel).await {
                 Ok(manifest) => {
-                    let needed = check_data_updates(&base_path, &manifest).await?;
+                    let needed = check_data_updates(&data_root, &manifest).await?;
                     if !needed.is_empty() {
-                        println!("\n检测到数据更新 (版本: {}), 共 {} 个文件需要更新。", remote_data_ver, needed.len());
+                        println!(
+                            "\n检测到数据更新 (版本: {}), 共 {} 个文件需要更新。",
+                            remote_data_ver,
+                            needed.len()
+                        );
                         // CLI 模式下使用简化的控制台进度回调
                         struct CliProgress;
                         impl ProgressCallback for CliProgress {
                             fn on_progress(&self, event: &UpdateProgressEvent) {
                                 if event.stage == "downloading" {
-                                    println!("  [{:.0}%] {}", event.progress * 100.0, event.message);
+                                    println!(
+                                        "  [{:.0}%] {}",
+                                        event.progress * 100.0,
+                                        event.message
+                                    );
                                 }
                             }
                         }
-                        download_and_install_data(&needed, &base_path, remote_data_ver, &file_base_url, channel, &CliProgress).await?;
+                        download_and_install_data(
+                            &needed,
+                            &data_root,
+                            remote_data_ver,
+                            &file_base_url,
+                            channel,
+                            &CliProgress,
+                        )
+                        .await?;
                     }
                 }
                 Err(e) => {
@@ -400,11 +507,68 @@ pub async fn all_updates() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{join_url, needs_app_update, resolve_current_version};
 
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn join_url_beta_root_binary() {
+        assert_eq!(
+            join_url(
+                "https://nefinita-ai.com/updates/JPCG_beta/",
+                &["jpcg-app-macos-aarch64"]
+            ),
+            "https://nefinita-ai.com/updates/JPCG_beta/jpcg-app-macos-aarch64"
+        );
+    }
+
+    #[test]
+    fn join_url_stable_version_dir() {
+        assert_eq!(
+            join_url(
+                "https://nefinita-ai.com/updates/JPCG/",
+                &["v2.1.0", "jpcg-app-macos-aarch64"]
+            ),
+            "https://nefinita-ai.com/updates/JPCG/v2.1.0/jpcg-app-macos-aarch64"
+        );
+    }
+
+    #[test]
+    fn join_url_tolerates_missing_trailing_or_leading_slash() {
+        assert_eq!(
+            join_url("https://x/updates/JPCG", &["/manifest.toml"]),
+            "https://x/updates/JPCG/manifest.toml"
+        );
+    }
+
+    #[test]
+    fn needs_app_update_three_states() {
+        // 本地（二进制）与服务器相同 → 无更新
+        assert!(!needs_app_update(false, "2.1.0-beta.3", "2.1.0-beta.3"));
+        // 不同 → 有更新
+        assert!(needs_app_update(false, "2.1.0-beta.2", "2.1.0-beta.3"));
+        // force → 总是有更新
+        assert!(needs_app_update(true, "2.1.0-beta.3", "2.1.0-beta.3"));
+    }
+
+    #[test]
+    fn needs_app_update_normalizes_v_prefix() {
+        // CARGO_PKG_VERSION 不带 v，服务器 update.toml 带 v → 必须视为同一版本
+        assert!(!needs_app_update(false, "2.1.0-beta.3", "v2.1.0-beta.3"));
+        assert!(!needs_app_update(false, "v2.1.0-beta.3", "2.1.0-beta.3"));
+        assert!(!needs_app_update(false, " v2.1.0-beta.3 ", "2.1.0-beta.3"));
+        // 真不同版本仍应判定为有更新
+        assert!(needs_app_update(false, "2.1.0-alpha.2", "v2.1.0-beta.3"));
+    }
+
+    #[test]
+    fn resolve_current_version_prefers_host_value_and_falls_back() {
+        assert_eq!(
+            resolve_current_version(Some(" 2.1.0-beta.3 ")),
+            "2.1.0-beta.3"
+        );
+        assert_eq!(resolve_current_version(None), env!("CARGO_PKG_VERSION"));
+        assert_eq!(
+            resolve_current_version(Some("  ")),
+            env!("CARGO_PKG_VERSION")
+        );
     }
 }

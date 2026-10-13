@@ -8,7 +8,7 @@ export function useTheme() {
     const stored = typeof localStorage !== "undefined"
       ? localStorage.getItem(STORAGE_KEYS.theme)
       : null;
-    return stored === "light" ? "light" : "dark";
+    return stored === "dark" ? "dark" : "light";
   });
 
   useEffect(() => {

@@ -1,10 +1,10 @@
 use axum::{
+    Router,
     body::Body,
     extract::{Multipart, Path, State},
-    http::{header, Response, StatusCode},
+    http::{Response, StatusCode, header},
     response::{Html, Json},
     routing::{get, post},
-    Router,
 };
 use serde::Serialize;
 use std::fs;
@@ -177,9 +177,8 @@ loadFiles();
 #[tokio::main]
 async fn main() {
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
-    let data_dir = PathBuf::from(
-        std::env::var("FORUM_DATA_DIR").unwrap_or_else(|_| "forum_data".to_string()),
-    );
+    let data_dir =
+        PathBuf::from(std::env::var("FORUM_DATA_DIR").unwrap_or_else(|_| "forum_data".to_string()));
     fs::create_dir_all(&data_dir).expect("无法创建数据目录");
 
     let data_dir_display = data_dir.display().to_string();
@@ -209,18 +208,15 @@ async fn index_handler() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
-async fn categories_handler(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<String>> {
+async fn categories_handler(State(state): State<Arc<AppState>>) -> Json<Vec<String>> {
     let mut cats = Vec::new();
     if let Ok(entries) = fs::read_dir(&state.data_dir) {
         for entry in entries.flatten() {
-            if entry.path().is_dir() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if !name.starts_with('.') {
-                        cats.push(name.to_string());
-                    }
-                }
+            if entry.path().is_dir()
+                && let Some(name) = entry.file_name().to_str()
+                && !name.starts_with('.')
+            {
+                cats.push(name.to_string());
             }
         }
     }
@@ -242,9 +238,11 @@ async fn list_files_handler(
         Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     };
 
-    while let Some(entry) = entries.next().transpose().map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    })? {
+    while let Some(entry) = entries
+        .next()
+        .transpose()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -303,7 +301,7 @@ async fn upload_handler(
 
         let name = field.name().unwrap_or("").to_string();
         if name == "category" {
-            if let Some(val) = field.text().await.ok() {
+            if let Ok(val) = field.text().await {
                 let val = val.trim().to_string();
                 if !val.is_empty() {
                     upload_category = val;
@@ -389,7 +387,10 @@ async fn download_handler(
     }
 
     let data = fs::read(&path).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("读取文件失败: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("读取文件失败: {}", e),
+        )
     })?;
 
     Response::builder()
@@ -420,7 +421,7 @@ fn unix_ts_to_ymd(secs: u64) -> (u64, u64, u64, u64, u64, u64) {
     let mut y = 1970u64;
     let mut d = days;
     loop {
-        let leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+        let leap = (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400);
         let yd = if leap { 366 } else { 365 };
         if d < yd {
             break;
@@ -428,7 +429,7 @@ fn unix_ts_to_ymd(secs: u64) -> (u64, u64, u64, u64, u64, u64) {
         d -= yd;
         y += 1;
     }
-    let leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    let leap = (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400);
     let mdays: [u64; 12] = if leap {
         [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     } else {

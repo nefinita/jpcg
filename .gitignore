@@ -6,3 +6,6 @@ examples/jpcg_app/dist/
 examples/jpcg_app/src-tauri/binaries/
 examples/jpcg_app/src-tauri/saved_config.toml
 **/.DS_Store
+data/raw-src/
+__pycache__/
+data.zip

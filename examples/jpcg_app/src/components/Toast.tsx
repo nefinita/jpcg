@@ -1,4 +1,5 @@
 import type { Toast as ToastType } from "../hooks/useToast";
+import { IconCheck, IconClose, IconAlert } from "./icons";
 import styles from "./Toast.module.css";
 
 interface Props {
@@ -6,11 +7,11 @@ interface Props {
   onRemove: (id: number) => void;
 }
 
-const ICONS: Record<string, string> = {
-  success: "✓",
-  error: "✕",
-  warning: "⚠",
-  info: "ℹ",
+const ICONS: Record<string, React.ReactNode> = {
+  success: <IconCheck size={15} />,
+  error: <IconClose size={15} />,
+  warning: <IconAlert size={15} />,
+  info: <IconAlert size={15} />,
 };
 
 export default function Toast({ toasts, onRemove }: Props) {
@@ -22,7 +23,7 @@ export default function Toast({ toasts, onRemove }: Props) {
           <span className={styles.icon}>{ICONS[t.type]}</span>
           <span>{t.message}</span>
           <button className={styles.close} onClick={() => onRemove(t.id)}>
-            ✕
+            <IconClose size={12} />
           </button>
         </div>
       ))}

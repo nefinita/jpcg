@@ -1,7 +1,8 @@
 .page {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  height: 100%;
+  min-height: 0;
   gap: var(--space-md);
 }
 
@@ -137,6 +138,7 @@
 
 .detailPanel {
   flex: 1;
+  min-height: 0;
   background: var(--glass-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -207,7 +209,7 @@
 .input:focus {
   outline: none;
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.15);
 }
 
 .input::-webkit-inner-spin-button {

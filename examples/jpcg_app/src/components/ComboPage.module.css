@@ -193,8 +193,86 @@
 
 .comboPool {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.poolToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.poolSearch {
+  flex: 1;
+  max-width: 320px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+}
+
+.poolSearch:focus {
+  outline: none;
+  border-color: var(--primary-500);
+}
+
+.poolGroup {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.poolGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  background: var(--glass-bg);
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.poolGroupHeader:hover {
+  background: var(--glass-highlight);
+}
+
+.poolGroupArrow {
+  width: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.poolGroupName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poolGroupCount {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  background: rgba(139, 92, 246, 0.12);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.poolGroupItems {
+  display: flex;
   flex-wrap: wrap;
   gap: var(--space-xs);
+  padding: var(--space-xs);
 }
 
 .skillChip {
@@ -214,7 +292,7 @@
 
 .favoriteChip {
   border-color: var(--accent-500);
-  background: linear-gradient(135deg, var(--bg-elevated), rgba(168, 85, 247, 0.1));
+  background: linear-gradient(135deg, var(--bg-elevated), rgba(14, 165, 233, 0.1));
 }
 
 .starIcon {
@@ -311,7 +389,7 @@
   display: flex;
   justify-content: space-around;
   padding: var(--space-md);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.1), rgba(14, 165, 233, 0.1));
   font-size: 0.85rem;
 }
 
@@ -357,4 +435,62 @@
 
 .comboDetailTable tr:hover {
   background: var(--glass-highlight);
+}
+
+.comboDotJumps {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.comboDotJumps span {
+  background: rgba(234, 179, 8, 0.08);
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.comboWuzhiTag {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+  margin-left: var(--space-xs);
+  font-family: var(--font-sans);
+}
+
+.comboZhenshiTag {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(239, 131, 84, 0.18);
+  color: #ef8354;
+  margin-left: var(--space-xs);
+  font-family: var(--font-sans);
+}
+
+.warnBanner {
+  margin-bottom: var(--space-sm);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.zhenshiHint {
+  margin-bottom: var(--space-sm);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #ef8354;
+  background: rgba(239, 131, 84, 0.1);
+  border: 1px solid rgba(239, 131, 84, 0.25);
 }

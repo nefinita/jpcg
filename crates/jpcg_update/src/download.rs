@@ -40,40 +40,40 @@ pub const DATA_MANIFEST_FILENAME: &str = "data_manifest.toml";
 /// 应用版本清单（对应服务器 manifest.toml 的顶层结构）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
-    pub version: Option<String>,                  // 版本号（如 "v1.1.251222"）
-    pub major_version: Option<u32>,               // 主版本号
-    pub binaries: Vec<BinaryEntry>,               // 各平台的二进制入口列表
-    pub files: Option<Vec<FileEntry>>,            // 附带文件列表（可选）
+    pub version: Option<String>,       // 版本号（如 "v1.1.251222"）
+    pub major_version: Option<u32>,    // 主版本号
+    pub binaries: Vec<BinaryEntry>,    // 各平台的二进制入口列表
+    pub files: Option<Vec<FileEntry>>, // 附带文件列表（可选）
     pub compressed_package: Option<CompressedPackageEntry>, // 压缩包入口（可选）
 }
 
 /// 二进制入口（对应 manifest.toml 中的 [[binaries]]）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BinaryEntry {
-    pub path: String,      // 二进制文件路径
-    pub os: String,        // 目标操作系统（如 "windows"、"linux"、"macos"）
-    pub arch: String,      // 目标架构（如 "x86_64"、"aarch64"）
-    pub hash: String,       // SHA256 哈希值
+    pub path: String, // 二进制文件路径
+    pub os: String,   // 目标操作系统（如 "windows"、"linux"、"macos"）
+    pub arch: String, // 目标架构（如 "x86_64"、"aarch64"）
+    pub hash: String, // SHA256 哈希值
     #[serde(rename = "hash_type")]
-    pub hash_type: String,  // 哈希类型（当前仅支持 "SHA256"）
+    pub hash_type: String, // 哈希类型（当前仅支持 "SHA256"）
 }
 
 /// 附带文件入口（对应 manifest.toml 中的 [[files]]）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
-    pub path: String,       // 相对路径
-    pub hash: String,       // SHA256 哈希值
+    pub path: String, // 相对路径
+    pub hash: String, // SHA256 哈希值
     #[serde(rename = "hash_type")]
-    pub hash_type: String,  // 哈希类型
+    pub hash_type: String, // 哈希类型
 }
 
 /// 压缩包入口（对应 manifest.toml 中的 [compressed_package]）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompressedPackageEntry {
-    pub path: String,       // 压缩包文件路径
-    pub hash: String,       // SHA256 哈希值
+    pub path: String, // 压缩包文件路径
+    pub hash: String, // SHA256 哈希值
     #[serde(rename = "hash_type")]
-    pub hash_type: String,  // 哈希类型
+    pub hash_type: String, // 哈希类型
 }
 
 /// 服务器 update.toml 信息结构
@@ -89,37 +89,37 @@ pub struct UpdateTomlInfo {
 /// 持久化在 local_update_info.toml，记录本地安装版本和更新渠道
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LocalVersionInfo {
-    pub version: Option<String>,                 // 本地安装的应用版本
-    pub major_version: Option<u32>,              // 本地安装的主版本号
-    pub channel: String,                         // 更新渠道（"stable" / "beta"）
-    pub last_checked_version: Option<String>,    // 上次检查到的服务器版本
-    pub last_checked_major: Option<u32>,         // 上次检查到的服务器主版本
-    pub data_version: Option<String>,            // 本地数据文件版本
+    pub version: Option<String>,              // 本地安装的应用版本
+    pub major_version: Option<u32>,           // 本地安装的主版本号
+    pub channel: String,                      // 更新渠道（"stable" / "beta"）
+    pub last_checked_version: Option<String>, // 上次检查到的服务器版本
+    pub last_checked_major: Option<u32>,      // 上次检查到的服务器主版本
+    pub data_version: Option<String>,         // 本地数据文件版本
 }
 
 /// 数据文件的清单入口
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataFileEntry {
-    pub path: String,       // 相对于 data/ 目录的路径
-    pub hash: String,       // SHA256 哈希值
+    pub path: String, // 相对于 data/ 目录的路径
+    pub hash: String, // SHA256 哈希值
     #[serde(rename = "hash_type")]
-    pub hash_type: String,  // 哈希类型
+    pub hash_type: String, // 哈希类型
 }
 
 /// 数据文件清单（对应服务器 data_manifest.toml）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataManifest {
-    pub data_version: String,           // 数据版本号
-    pub files: Vec<DataFileEntry>,      // 数据文件列表
+    pub data_version: String,      // 数据版本号
+    pub files: Vec<DataFileEntry>, // 数据文件列表
 }
 
 /// 更新进度事件（用于 GUI 进度回调）
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateProgressEvent {
-    pub stage: String,          // 阶段标识: "checking" / "downloading" / "verifying" / "installing" / "done" / "error"
-    pub message: String,        // 可读的描述信息
-    pub progress: f64,          // 进度值 [0.0, 1.0]
-    pub file: Option<String>,   // 当前处理的文件名（若有）
+    pub stage: String, // 阶段标识: "checking" / "downloading" / "verifying" / "installing" / "done" / "error"
+    pub message: String, // 可读的描述信息
+    pub progress: f64, // 进度值 [0.0, 1.0]
+    pub file: Option<String>, // 当前处理的文件名（若有）
 }
 
 impl UpdateProgressEvent {
@@ -141,24 +141,27 @@ pub trait ProgressCallback: Send + Sync {
 }
 
 /// 更新检查结果
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateCheckResult {
-    pub current_app_version: Option<String>,    // 本地应用版本
-    pub latest_app_version: Option<String>,     // 服务器最新应用版本
-    pub has_app_update: bool,                    // 是否有应用更新
-    pub current_data_version: Option<String>,   // 本地数据版本
-    pub latest_data_version: Option<String>,    // 服务器最新数据版本
-    pub has_data_update: bool,                   // 是否有数据更新
-    pub data_files_to_update: Vec<String>,       // 需要更新的数据文件列表
+    pub current_app_version: Option<String>,  // 本地应用版本
+    pub latest_app_version: Option<String>,   // 服务器最新应用版本
+    pub has_app_update: bool,                 // 是否有应用更新
+    pub current_data_version: Option<String>, // 本地数据版本
+    pub latest_data_version: Option<String>,  // 服务器最新数据版本
+    pub has_data_update: bool,                // 是否有数据更新
+    pub data_files_to_update: Vec<String>,    // 需要更新的数据文件列表
+    pub has_modules_update: bool,             // 是否有模块库（dll）更新
+    pub modules_version: Option<String>,      // 服务器模块版本
+    pub modules_files_to_update: Vec<crate::modules::ModulesFileEntry>, // 需要更新的模块文件列表
 }
 
 /// 应用更新信息（由 fetch_app_update_info 返回）
 #[derive(Debug, Clone, Serialize)]
 pub struct AppUpdateInfo {
-    pub download_url: String,         // 二进制文件下载 URL
-    pub expected_hash: String,        // 期望的 SHA256 哈希
-    pub binary_path: String,          // manifest 中的 relative path
-    pub version: String,              // 目标版本号（如 "v2.1.0"）
+    pub download_url: String,  // 二进制文件下载 URL
+    pub expected_hash: String, // 期望的 SHA256 哈希
+    pub binary_path: String,   // manifest 中的 relative path
+    pub version: String,       // 目标版本号（如 "v2.1.0"）
 }
 
 /// 版本目录信息
@@ -166,7 +169,7 @@ pub struct AppUpdateInfo {
 #[derive(Debug)]
 pub struct VersionDirectory {
     pub dir_name: String,   // 目录名（如 "v1.1.251222"）
-    pub manifest: Manifest,  // 该版本的清单
+    pub manifest: Manifest, // 该版本的清单
 }
 
 // ============================================================================
@@ -174,12 +177,20 @@ pub struct VersionDirectory {
 // ============================================================================
 
 /// 从服务器获取最新版本信息（update.toml）
+/// 带全局超时的 HTTP 客户端（避免更新流程无限等待）
+pub fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 pub async fn fetch_latest_version_info(
     base_url: &str,
 ) -> Result<Option<UpdateTomlInfo>, Box<dyn std::error::Error + Send + Sync>> {
     let update_info_url = format!("{}/{}", base_url.trim_end_matches('/'), "update.toml");
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let response = client.get(&update_info_url).send().await?;
 
     // 非 2xx 状态码视为无可用的版本信息（不视为错误）
@@ -201,15 +212,14 @@ pub async fn fetch_all_version_directories(
     let body = reqwest::get(base_url).await?.text().await?;
     // 匹配 <a href="..."> 中的链接文本
     let re = Regex::new(r#"(?i)<a\s+[^>]*href\s*=\s*["']([^"'/\s>]+)[^>]*>"#)?;
+    let version_re = Regex::new(r"^v\d+\.\d+\.\d+$")?;
     let mut version_dirs = Vec::new();
 
     for cap in re.captures_iter(&body) {
         if let Some(version_match) = cap.get(1) {
             let dir_name = version_match.as_str();
             // 过滤出版本号格式: v{major}.{minor}.{patch}
-            if dir_name.starts_with('v')
-                && Regex::new(r"^v\d+\.\d+\.\d+$").unwrap().is_match(dir_name)
-            {
+            if dir_name.starts_with('v') && version_re.is_match(dir_name) {
                 let manifest_url = format!(
                     "{}/{}/{}",
                     base_url.trim_end_matches('/'),
@@ -277,7 +287,8 @@ pub async fn check_binary_update_needed(
     target_binary_entry: &BinaryEntry,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     // 确定本地二进制文件的最终名称（考虑不同平台的扩展名差异）
-    let final_binary_name = determine_final_binary_name(&target_binary_entry.path, env::consts::OS)?;
+    let final_binary_name =
+        determine_final_binary_name(&target_binary_entry.path, env::consts::OS)?;
     let local_binary_path = base_path.join(final_binary_name);
 
     // 本地文件不存在，需要下载
@@ -322,14 +333,13 @@ pub async fn determine_other_updates_by_hash(
 
 /// 检查本地数据文件是否需要更新（不存在或哈希不匹配）
 pub async fn check_data_updates(
-    base_path: &Path,
+    data_root: &Path,
     manifest: &DataManifest,
 ) -> Result<Vec<DataFileEntry>, Box<dyn std::error::Error + Send + Sync>> {
-    let data_dir = base_path.join("data");
     let mut needed = Vec::new();
 
     for file_entry in &manifest.files {
-        let local_path = data_dir.join(&file_entry.path);
+        let local_path = data_root.join(&file_entry.path);
 
         if !local_path.exists() {
             needed.push(file_entry.clone());
@@ -354,7 +364,7 @@ pub async fn download_file(
     url: &str,
     file_name: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut response = client
         .get(url)
         .header(
@@ -415,7 +425,7 @@ pub async fn download_file_with_progress(
     file_name: &str,
     progress: &dyn ProgressCallback,
 ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut response = client
         .get(url)
         .header(
@@ -493,15 +503,20 @@ pub async fn replace_file_or_prompt(
 
     // 确保目标父目录存在
     if let Some(parent) = to.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| {
-            format!("创建目录 '{}' 失败: {}", parent.display(), e)
-        })?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("创建目录 '{}' 失败: {}", parent.display(), e))?;
     }
 
     // 复制文件
-    tokio::fs::copy(from, to)
-        .await
-        .map_err(|e| format!("复制文件 '{}' 到 '{}' 失败: {}", from.display(), to.display(), e))?;
+    tokio::fs::copy(from, to).await.map_err(|e| {
+        format!(
+            "复制文件 '{}' 到 '{}' 失败: {}",
+            from.display(),
+            to.display(),
+            e
+        )
+    })?;
 
     #[cfg(debug_assertions)]
     println!("文件已复制/替换: {}", to.display());
@@ -532,7 +547,7 @@ pub async fn calculate_file_sha256(
 pub async fn download_and_parse_manifest(
     manifest_url: &str,
 ) -> Result<Manifest, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let response = client.get(manifest_url).send().await?;
     if !response.status().is_success() {
         return Err(format!("下载清单失败，HTTP 状态码: {}", response.status()).into());
@@ -596,12 +611,10 @@ pub async fn fetch_data_manifest(
         )
     };
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let response = client.get(&manifest_url).send().await?;
     if !response.status().is_success() {
-        return Err(
-            format!("获取数据清单失败，HTTP 状态码: {}", response.status()).into(),
-        );
+        return Err(format!("获取数据清单失败，HTTP 状态码: {}", response.status()).into());
     }
 
     let toml_text = response.text().await?;
@@ -618,13 +631,12 @@ pub async fn fetch_data_manifest(
 /// 全部更新完成后更新本地 data_version。
 pub async fn download_and_install_data(
     files_to_update: &[DataFileEntry],
-    base_path: &Path,
+    data_root: &Path,
     data_version: &str,
     file_base_url: &str,
     channel: &str,
     progress: &dyn ProgressCallback,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let data_dir = base_path.join("data");
     let total = files_to_update.len();
 
     progress.on_progress(&UpdateProgressEvent::new(
@@ -661,8 +673,7 @@ pub async fn download_and_install_data(
         ));
 
         // 下载到临时文件
-        let temp_path =
-            download_file_with_progress(&file_url, &file_entry.path, progress).await?;
+        let temp_path = download_file_with_progress(&file_url, &file_entry.path, progress).await?;
 
         // 验证哈希
         let downloaded_hash = calculate_file_sha256(&temp_path).await?;
@@ -671,7 +682,7 @@ pub async fn download_and_install_data(
         }
 
         // 安装到目标路径
-        let target_path = data_dir.join(&file_entry.path);
+        let target_path = data_root.join(&file_entry.path);
         if let Some(parent) = target_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
@@ -688,12 +699,7 @@ pub async fn download_and_install_data(
     }
 
     // 全部完成后更新本地 data_version
-    progress.on_progress(&UpdateProgressEvent::new(
-        "done",
-        "数据更新完成",
-        1.0,
-        None,
-    ));
+    progress.on_progress(&UpdateProgressEvent::new("done", "数据更新完成", 1.0, None));
 
     let mut local_info = load_local_version_info()?;
     local_info.data_version = Some(data_version.to_string());
@@ -724,7 +730,10 @@ pub fn determine_final_binary_name(
         _ => {
             // Linux, macOS
             if server_path.ends_with(".exe") {
-                server_path.strip_suffix(".exe").unwrap_or(server_path).to_string()
+                server_path
+                    .strip_suffix(".exe")
+                    .unwrap_or(server_path)
+                    .to_string()
             } else {
                 server_path.to_string()
             }
@@ -739,8 +748,8 @@ pub fn determine_final_binary_name(
 // ============================================================================
 
 /// 从 local_update_info.toml 加载本地版本信息
-pub fn load_local_version_info(
-) -> Result<LocalVersionInfo, Box<dyn std::error::Error + Send + Sync>> {
+pub fn load_local_version_info()
+-> Result<LocalVersionInfo, Box<dyn std::error::Error + Send + Sync>> {
     let path = Path::new(LOCAL_VERSION_FILE);
     if path.exists() {
         let contents = fs::read_to_string(path)?;
@@ -787,6 +796,7 @@ pub fn update_local_channel_only(
 /// 2. 询问用户是否继续
 /// 3. 逐文件下载、验证哈希、替换
 /// 4. 对不支持 OS/Arch 的场景尝试压缩包解压
+#[allow(clippy::too_many_arguments)]
 pub async fn prompt_and_perform_update(
     all_updates_needed: HashMap<String, String>,
     base_path: &Path,
@@ -807,14 +817,18 @@ pub async fn prompt_and_perform_update(
             "\n检测到更新 (目标版本: {}, 渠道: {}, OS/Arch: {}):",
             target_version_str,
             channel,
-            if os_arch_supported { "支持" } else { "不支持" }
-        );
-        if let Some(bin) = target_binary {
-            if all_updates_needed.contains_key(&bin.path) {
-                println!(" - 应用程序: {}", bin.path);
+            if os_arch_supported {
+                "支持"
+            } else {
+                "不支持"
             }
+        );
+        if let Some(bin) = target_binary
+            && all_updates_needed.contains_key(&bin.path)
+        {
+            println!(" - 应用程序: {}", bin.path);
         }
-        for (rel_path, _) in &all_updates_needed {
+        for rel_path in all_updates_needed.keys() {
             if let Some(bin) = target_binary {
                 if rel_path != &bin.path {
                     println!(" - 其他文件: {}", rel_path);
@@ -846,7 +860,12 @@ pub async fn prompt_and_perform_update(
             let file_url = if channel == "beta" {
                 format!("{}/{}", file_base_url.trim_end_matches('/'), rel_path)
             } else if let Some(ver) = version_part {
-                format!("{}/{}/{}", file_base_url.trim_end_matches('/'), ver, rel_path)
+                format!(
+                    "{}/{}/{}",
+                    file_base_url.trim_end_matches('/'),
+                    ver,
+                    rel_path
+                )
             } else {
                 format!(
                     "{}/{}/{}",
@@ -875,15 +894,14 @@ pub async fn prompt_and_perform_update(
         for (rel_path, temp_path) in downloaded_files {
             let target_path = base_path.join(&rel_path);
             if let Some(parent) = target_path.parent() {
-                tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                    format!("创建目录 '{}' 失败: {}", parent.display(), e)
-                })?;
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| format!("创建目录 '{}' 失败: {}", parent.display(), e))?;
             }
             if let Some(bin) = target_binary {
                 if rel_path == bin.path {
                     // 特殊处理二进制文件名的平台适配
-                    let final_binary_name =
-                        determine_final_binary_name(&bin.path, detected_os)?;
+                    let final_binary_name = determine_final_binary_name(&bin.path, detected_os)?;
                     let final_target_path = base_path.join(&final_binary_name);
                     replace_file_or_prompt(temp_path.as_path(), final_target_path.as_path())
                         .await?;
@@ -900,7 +918,11 @@ pub async fn prompt_and_perform_update(
             "\n检测到更新 (目标版本: {}, 渠道: {}, OS/Arch: {}):",
             target_version_str,
             channel,
-            if os_arch_supported { "支持" } else { "不支持" }
+            if os_arch_supported {
+                "支持"
+            } else {
+                "不支持"
+            }
         );
         println!(
             " - 无法为当前系统 ({} {}) 找到专用的二进制文件。",
@@ -930,7 +952,12 @@ pub async fn prompt_and_perform_update(
             let file_url = if channel == "beta" {
                 format!("{}/{}", file_base_url.trim_end_matches('/'), pkg.path)
             } else if let Some(ver) = version_part {
-                format!("{}/{}/{}", file_base_url.trim_end_matches('/'), ver, pkg.path)
+                format!(
+                    "{}/{}/{}",
+                    file_base_url.trim_end_matches('/'),
+                    ver,
+                    pkg.path
+                )
             } else {
                 format!(
                     "{}/{}/{}",
@@ -959,16 +986,14 @@ pub async fn prompt_and_perform_update(
         }
     }
 
-    // 更新本地版本信息
+    // 更新本地版本信息（读旧值合并，保留 data_version，避免被覆盖丢失）
     if os_arch_supported {
-        save_local_version_info(&LocalVersionInfo {
-            version: Some(target_version_str.to_string()),
-            major_version: None,
-            channel: channel.to_string(),
-            last_checked_version: Some(target_version_str.to_string()),
-            last_checked_major: manifest.major_version,
-            data_version: None, // data 版本由独立流程维护
-        })?;
+        let mut local_info = load_local_version_info()?;
+        local_info.version = Some(target_version_str.to_string());
+        local_info.channel = channel.to_string();
+        local_info.last_checked_version = Some(target_version_str.to_string());
+        local_info.last_checked_major = manifest.major_version;
+        save_local_version_info(&local_info)?;
     }
 
     Ok(())

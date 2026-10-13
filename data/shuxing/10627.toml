@@ -1,0 +1,264 @@
+[xinfa]
+xinfa_name = "无方"
+xinfa_nom = "根骨"
+atk_up = 1
+pofang_up = 1
+huixin_up = 0
+
+[version]
+level = 130
+season = 3
+modified = 20260814
+
+[[skill]]
+skill_name = "裁叶饮刃"           #名字
+skill_id = 10627            #技能ID（数据源池内 id）
+sub_id = 27451              #子ID
+atk_xishu = 0.1        #伤害系数
+
+[[skill]]
+skill_name = "惊鸿掠水"           #名字
+skill_id = 27536            #技能ID（数据源池内 id）
+sub_id = 27539              #子ID
+atk_xishu = 0.5208333        #伤害系数
+
+[[skill]]
+skill_name = "商陆缀寒"           #名字
+skill_id = 27551            #技能ID（数据源池内 id）
+sub_id = 27552              #子ID
+atk_xishu = 1.3177084        #伤害系数
+
+[[skill]]
+skill_name = "钩吻断肠"           #名字
+skill_id = 27554            #技能ID（数据源池内 id）
+sub_id = 27555              #子ID
+atk_xishu = 0.625        #伤害系数
+
+[[skill]]
+skill_name = "川乌射罔"           #名字
+skill_id = 27556            #技能ID（数据源池内 id）
+sub_id = 27557              #子ID
+atk_xishu = 1.1875        #伤害系数
+
+[[skill]]
+skill_name = "破"           #名字
+skill_id = 27556            #技能ID（数据源池内 id）
+sub_id = 32841              #子ID
+atk_xishu = 8.534        #伤害系数
+
+[[skill]]
+skill_name = "沾衣未妨"           #名字
+skill_id = 27578            #技能ID（数据源池内 id）
+sub_id = 27579              #子ID
+atk_xishu = 0.625        #伤害系数
+
+[[skill]]
+skill_name = "且待时休"           #名字
+skill_id = 27582            #技能ID（数据源池内 id）
+sub_id = 27584              #子ID
+atk_xishu = 1.46875        #伤害系数
+
+[[skill]]
+skill_name = "含锋破月"           #名字
+skill_id = 27635            #技能ID（数据源池内 id）
+sub_id = 29505              #子ID
+atk_xishu = 2.6041667        #伤害系数
+
+[[skill]]
+skill_name = "飞叶满襟"           #名字
+skill_id = 27637            #技能ID（数据源池内 id）
+sub_id = 29506              #子ID
+atk_xishu = 3.1666667        #伤害系数
+
+[[skill]]
+skill_name = "苍棘缚地"           #名字
+skill_id = 27652            #技能ID（数据源池内 id）
+sub_id = 27657              #子ID
+atk_xishu = 1.546875        #伤害系数
+
+[[skill]]
+skill_name = "绿野蔓生"           #名字
+skill_id = 27897            #技能ID（数据源池内 id）
+sub_id = 28430              #子ID
+atk_xishu = 0.36458334        #伤害系数
+
+[[skill]]
+skill_name = "银光照雪"           #名字
+skill_id = 28345            #技能ID（数据源池内 id）
+sub_id = 28346              #子ID
+atk_xishu = 0.6875        #伤害系数
+
+[[skill]]
+skill_name = "触融"           #名字
+skill_id = 28402            #技能ID（数据源池内 id）
+sub_id = 44992              #子ID
+atk_xishu = 7.8125        #伤害系数
+
+[[skill]]
+skill_name = "且待时休"           #名字
+skill_id = 28406            #技能ID（数据源池内 id）
+sub_id = 28409              #子ID
+atk_xishu = 1.46875        #伤害系数
+
+[[skill]]
+skill_name = "荆障"           #名字
+skill_id = 28415            #技能ID（数据源池内 id）
+sub_id = 36068              #子ID
+atk_xishu = 1.3020834        #伤害系数
+
+[[skill]]
+skill_name = "疾根"           #名字
+skill_id = 28432            #技能ID（数据源池内 id）
+sub_id = 29674              #子ID
+atk_xishu = 0.9322917        #伤害系数
+
+[[skill]]
+skill_name = "渐苞"           #名字
+skill_id = 28439            #技能ID（数据源池内 id）
+sub_id = 29720              #子ID
+atk_xishu = 0.35416666        #伤害系数
+
+[[skill]]
+skill_name = "荡襟·额外"           #名字
+skill_id = 28461            #技能ID（数据源池内 id）
+sub_id = 42444              #子ID
+atk_xishu = 1.3802084        #伤害系数
+
+[[skill]]
+skill_name = "荡襟·基础"           #名字
+skill_id = 28461            #技能ID（数据源池内 id）
+sub_id = 42444              #子ID
+atk_xishu = 6.375        #伤害系数
+
+[[skill]]
+skill_name = "青圃着尘(lv1)"           #名字
+skill_id = 28533            #技能ID（数据源池内 id）
+sub_id = 29441              #子ID
+atk_xishu = 3.9166667        #伤害系数
+
+[[skill]]
+skill_name = "青圃着尘·>10尺"           #名字
+skill_id = 28533            #技能ID（数据源池内 id）
+sub_id = 29441              #子ID
+atk_xishu = 3.9166667        #伤害系数
+
+[[skill]]
+skill_name = "无方中和"           #名字
+skill_id = 29670            #技能ID（数据源池内 id）
+sub_id = 28081              #子ID
+atk_xishu = 2.0677083        #伤害系数
+
+[[skill]]
+skill_name = "破"           #名字
+skill_id = 29670            #技能ID（数据源池内 id）
+sub_id = 32841              #子ID
+atk_xishu = 8.534        #伤害系数
+
+[[skill]]
+skill_name = "折枝拂露"           #名字
+skill_id = 30734            #技能ID（数据源池内 id）
+sub_id = 30735              #子ID
+atk_xishu = 1.7552084        #伤害系数
+
+[[skill]]
+skill_name = "折枝留春"           #名字
+skill_id = 30734            #技能ID（数据源池内 id）
+sub_id = 32922              #子ID
+atk_xishu = 10.15625        #伤害系数
+
+[[skill]]
+skill_name = "沉绵"           #名字
+skill_id = 38633            #技能ID（数据源池内 id）
+sub_id = 38638              #子ID
+atk_xishu = 1.40625        #伤害系数
+
+[[skill]]
+skill_name = "息芷·1目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 3.4166667        #伤害系数
+
+[[skill]]
+skill_name = "息芷·2目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 4.2708335        #伤害系数
+
+[[skill]]
+skill_name = "息芷·3目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 5.125        #伤害系数
+
+[[skill]]
+skill_name = "息芷·4目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 5.9791665        #伤害系数
+
+[[skill]]
+skill_name = "息芷·5目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 6.8333335        #伤害系数
+
+[[skill]]
+skill_name = "息芷·6目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 7.6875        #伤害系数
+
+[[skill]]
+skill_name = "息芷·7目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 8.541667        #伤害系数
+
+[[skill]]
+skill_name = "息芷·8目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 9.395833        #伤害系数
+
+[[skill]]
+skill_name = "息芷·9目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 10.25        #伤害系数
+
+[[skill]]
+skill_name = "息芷·10目标"           #名字
+skill_id = 38642            #技能ID（数据源池内 id）
+sub_id = 38641              #子ID
+atk_xishu = 11.104167        #伤害系数
+
+[[skill]]
+skill_name = "紫伏"           #名字
+skill_id = 38965            #技能ID（数据源池内 id）
+sub_id = 28434              #子ID
+atk_xishu = 1.2395834        #伤害系数
+
+[[skill]]
+skill_name = "六微"           #名字
+skill_id = 40194            #技能ID（数据源池内 id）
+sub_id = 40208              #子ID
+atk_xishu = 2.6197917        #伤害系数
+
+[[skill]]
+skill_name = "逆乱（dot）"           #名字
+skill_id = 27554            #技能ID（数据源池内 id）
+sub_id = 20052              #子ID
+atk_xishu = 0.15711805        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 2          #每跳间隔（秒，16帧=1秒）
+dot_duration = 18          #持续时长（秒，总跳数×间隔）
+
+[[skill]]
+skill_name = "千枝花·子株（dot）"           #名字
+skill_id = 44384            #技能ID（数据源池内 id）
+sub_id = 33061              #子ID
+atk_xishu = 3.3333333        #伤害系数
+dot_flag = 1                #dot伤害标签
+dot_interval = 1          #每跳间隔（秒，16帧=1秒）
+dot_duration = 10          #持续时长（秒，总跳数×间隔）
+
