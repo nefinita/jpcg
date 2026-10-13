@@ -33,7 +33,7 @@ jpcg_const = { workspace = true }
 jpcg_core = { workspace = true, optional = true }
 jpcg_combo = { workspace = true, optional = true }
 jpcg_update = { workspace = true }
-libloading = { version = "0.8", optional = true }
+libloading = { version = "0.9", optional = true }
 
 [features]
 default = ["static"]
