@@ -39,7 +39,7 @@ jpcg_update = { path = "crates/jpcg_update" }
 jpcg_api = { path = "crates/jpcg_api" }
 jpcg_const = { path = "crates/jpcg_const" }
 jpcg_combo = { path = "crates/jpcg_combo" }
-rand = "0.9.0"
+rand = "0.10.2"
 
 [workspace.lints.clippy]
 
