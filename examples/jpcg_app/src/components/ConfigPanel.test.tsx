@@ -5,6 +5,7 @@ import ConfigPanel from "./ConfigPanel";
 import * as api from "../api/commands";
 import { DEFAULT_BUFF, DEFAULT_COEFFICIENT, STORAGE_KEYS } from "../utils/constants";
 import type { CalculateRequest, FormData, ValueSetDTO } from "../types";
+import { toCalculateRequest } from "../utils/normalize";
 
 vi.mock("../api/commands");
 
@@ -54,10 +55,11 @@ async function select(id: string) {
     selection().dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
-function coefficientInput(name = "会心系数") {
+function numberInput(name: string) {
   const label = Array.from(container.querySelectorAll("label")).find((el) => el.textContent === name)!;
   return label.parentElement!.querySelector("input")!;
 }
+function coefficientInput(name = "会心系数") { return numberInput(name); }
 async function editCoefficient(value: string) {
   const input = coefficientInput();
   await act(async () => {
@@ -367,4 +369,42 @@ describe("ConfigPanel 当前数值集", () => {
     expect(await request()).toMatchObject({ value_set: experience.id, coefficient: experience.coefficient });
   });
 
+});
+
+
+describe("ConfigPanel 加载目标血量", () => {
+  it.each([
+    { max_hp: 100_000, current_hp: 25_000 },
+    { max_hp: 100_000, current_hp: 0 },
+    { max_hp: 0, current_hp: 0 },
+  ])("保留 max_hp=$max_hp、current_hp=$current_hp 的显示、计算和再次保存", async (hp) => {
+    const config = saved();
+    config.hostile = { ...config.hostile, target_hp: 50_000, ...hp };
+    vi.mocked(api.loadConfig).mockResolvedValue(config);
+    await mount();
+    await click("加载");
+
+    expect(numberInput("目标最大血量").value).toBe(String(hp.max_hp));
+    expect(numberInput("目标当前血量").value).toBe(String(hp.current_hp));
+    expect(toCalculateRequest(await request()).hostile).toEqual(config.hostile);
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({
+      hostile: config.hostile,
+    }));
+  });
+
+  it("旧存档缺少 max_hp/current_hp 时显式恢复为 0，保留 target_hp 回退", async () => {
+    const config = saved();
+    const { max_hp: _max, current_hp: _current, ...legacyHostile } = config.hostile;
+    vi.mocked(api.loadConfig).mockResolvedValue({ ...config, hostile: legacyHostile } as CalculateRequest);
+    await mount();
+    await click("加载");
+
+    expect(numberInput("目标最大血量").value).toBe("0");
+    expect(numberInput("目标当前血量").value).toBe("0");
+    const expected = { ...legacyHostile, max_hp: 0, current_hp: 0 };
+    expect(toCalculateRequest(await request()).hostile).toEqual(expected);
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ hostile: expected }));
+  });
 });
