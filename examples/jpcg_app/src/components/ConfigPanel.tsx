@@ -276,6 +276,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           huajin_dengji: cfg.hostile.huajin_dengji,
           jianshang_bili: cfg.hostile.jianshang_bili,
           target_hp: cfg.hostile.target_hp,
+          max_hp: cfg.hostile.max_hp ?? 0,
+          current_hp: cfg.hostile.current_hp ?? 0,
         },
         xinfa_config: cfg.xinfa_config,
         buff: cfg.buff ? { ...cfg.buff } : { ...DEFAULT_BUFF },
