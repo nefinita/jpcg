@@ -154,7 +154,7 @@
 .controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: flex-end;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
 }
@@ -168,6 +168,22 @@
   color: var(--text-primary);
   font: inherit;
 }
-.controls button:disabled { opacity: 0.5; }
+.controls input { min-width: 170px; }
+.controls select { min-width: 215px; }
+.controls button { cursor: pointer; }
+.controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+.controls input:focus-visible,
+.controls select:focus-visible,
+.controls button:focus-visible {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.15);
+}
 .hint { flex-basis: 100%; font-size: 0.75rem; color: var(--text-muted); }
+.table td.emptyRow {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  white-space: normal;
+}
 .tableScroll { overflow-x: auto; }

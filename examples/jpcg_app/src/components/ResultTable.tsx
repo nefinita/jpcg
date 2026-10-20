@@ -79,14 +79,14 @@ export default function ResultTable({ results, calculating }: Props) {
           排序
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="original">原始顺序</option>
-            <option value="q-desc">技能期望 Q：从高到低</option>
-            <option value="q-asc">技能期望 Q：从低到高</option>
+            <option value="q-desc">技能期望 Q（合计）：从高到低</option>
+            <option value="q-asc">技能期望 Q（合计）：从低到高</option>
             <option value="name">技能名称</option>
           </select>
         </label>
         <button type="button" onClick={() => { setQuery(""); setSort("original"); }}
           disabled={query === "" && sort === "original"}>重置筛选与排序</button>
-        <span className={styles.hint}>按技能 Q 值排序，DOT 各跳保持连续；下方统计仍为全部技能。</span>
+        <span className={styles.hint}>按「技能合计 Q」排序（DOT 行显示单跳 Q，各跳保持连续）；下方统计仍为全部技能。</span>
       </div>
       <div className={styles.tableScroll}>
       <table className={styles.table}>
@@ -102,7 +102,9 @@ export default function ResultTable({ results, calculating }: Props) {
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && <tr><td colSpan={7}>没有匹配的技能，请修改搜索或重置筛选。</td></tr>}
+          {rows.length === 0 && (
+            <tr><td className={styles.emptyRow} colSpan={7}>没有匹配的技能，请修改搜索或重置筛选。</td></tr>
+          )}
           {rows.map((row, i) => {
             const jumps = row.dot_jumps ?? [];
             const isDotRow = row.dotIndex !== null;
@@ -111,7 +113,7 @@ export default function ResultTable({ results, calculating }: Props) {
             const isFixed = row.has_critical_strike || (row.zhenshishanghai ?? 0) > 0;
             return (
               <tr
-                key={i}
+                key={`${row.skill_name}-${row.dotIndex ?? "row"}-${i}`}
                 className={clsx(isBest && styles.highlightRow)}
               >
                 <td>
