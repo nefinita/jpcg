@@ -9,3 +9,7 @@ examples/jpcg_app/src-tauri/saved_config.toml
 data/raw-src/
 __pycache__/
 data.zip
+
+# 工作区内本地缓存（npm 缓存等）与临时工作目录（HOME 只读环境必需）
+.cache/
+.scratch/
