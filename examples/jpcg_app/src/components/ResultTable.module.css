@@ -150,3 +150,24 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+}
+.controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+.controls input, .controls select, .controls button {
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font: inherit;
+}
+.controls button:disabled { opacity: 0.5; }
+.hint { flex-basis: 100%; font-size: 0.75rem; color: var(--text-muted); }
+.tableScroll { overflow-x: auto; }

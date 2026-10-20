@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SkillResultDTO } from "../types";
 import { formatNumber } from "../utils/format";
 import clsx from "../utils/clsx";
@@ -9,6 +10,9 @@ interface Props {
 }
 
 export default function ResultTable({ results, calculating }: Props) {
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("original");
+
   if (calculating) {
     return (
       <div className={styles.card}>
@@ -43,8 +47,15 @@ export default function ResultTable({ results, calculating }: Props) {
   const critSkills = results.filter((r) => r.h > r.n);
   const critRatio = results.length > 0 ? critSkills.length / results.length : 0;
 
+  // 只改变展示顺序，不修改计算响应；同值维持原顺序，DOT 跳序始终成组保留。
+  const keyword = query.trim().toLocaleLowerCase();
+  const visibleSkills = results.filter((r) => r.skill_name.toLocaleLowerCase().includes(keyword));
+  if (sort === "q-desc") visibleSkills.sort((a, b) => b.q - a.q);
+  if (sort === "q-asc") visibleSkills.sort((a, b) => a.q - b.q);
+  if (sort === "name") visibleSkills.sort((a, b) => a.skill_name.localeCompare(b.skill_name, "zh-CN"));
+
   // DOT 技能展开为每跳一行（dotIndex = 跳序 0..n-1）；非 DOT 技能保持原行
-  const rows = results.flatMap((r) => {
+  const rows = visibleSkills.flatMap((r) => {
     const jumps = r.dot_jumps ?? [];
     if (jumps.length === 0) return [{ ...r, dotIndex: null as number | null }];
     return jumps.map((_, k) => ({ ...r, dotIndex: k }));
@@ -54,10 +65,30 @@ export default function ResultTable({ results, calculating }: Props) {
     <div className={styles.card}>
       <div className={styles.header}>
         <span>计算结果</span>
-        <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
-          {results.length} 个技能
+        <span role="status" aria-atomic="true" style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
+          {visibleSkills.length} / {results.length} 个技能
         </span>
       </div>
+      <div className={styles.controls}>
+        <label>
+          搜索技能
+          <input type="search" value={query} placeholder="输入技能名称"
+            onChange={(event) => setQuery(event.target.value)} />
+        </label>
+        <label>
+          排序
+          <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="original">原始顺序</option>
+            <option value="q-desc">技能期望 Q：从高到低</option>
+            <option value="q-asc">技能期望 Q：从低到高</option>
+            <option value="name">技能名称</option>
+          </select>
+        </label>
+        <button type="button" onClick={() => { setQuery(""); setSort("original"); }}
+          disabled={query === "" && sort === "original"}>重置筛选与排序</button>
+        <span className={styles.hint}>按技能 Q 值排序，DOT 各跳保持连续；下方统计仍为全部技能。</span>
+      </div>
+      <div className={styles.tableScroll}>
       <table className={styles.table}>
         <thead>
           <tr>
@@ -71,6 +102,7 @@ export default function ResultTable({ results, calculating }: Props) {
           </tr>
         </thead>
         <tbody>
+          {rows.length === 0 && <tr><td colSpan={7}>没有匹配的技能，请修改搜索或重置筛选。</td></tr>}
           {rows.map((row, i) => {
             const jumps = row.dot_jumps ?? [];
             const isDotRow = row.dotIndex !== null;
@@ -114,6 +146,7 @@ export default function ResultTable({ results, calculating }: Props) {
           })}
         </tbody>
       </table>
+      </div>
       <div className={styles.stats}>
         <div className={styles.statItem}>
           <span className={styles.statLabel}>最大期望</span>
