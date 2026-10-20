@@ -408,3 +408,97 @@ describe("ConfigPanel 加载目标血量", () => {
     expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ hostile: expected }));
   });
 });
+
+describe("ConfigPanel 心法配置请求顺序", () => {
+  const config = (profession: string, atk_up: number) => ({
+    profession, xinfa_name: profession, xinfa_nom: "lidao", atk_up, pofang_up: 2, huixin_up: 3,
+  });
+  async function chooseXinfa(id: string) {
+    await act(async () => {
+      const input = container.querySelector("select")!;
+      input.value = id;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+  async function expectConfig(profession: string, expected: ReturnType<typeof config>) {
+    expect(container.querySelector("select")!.value).toBe(profession);
+    const form = await request();
+    expect(form.xinfa).toBe(profession);
+    expect(form.xinfa_config).toEqual(expected);
+    expect(toCalculateRequest(form).xinfa_config).toEqual(expected);
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ xinfa_config: expected }));
+  }
+
+  it("后选心法先返回时，迟到的旧响应不能改写计算与保存参数", async () => {
+    await mount();
+    const first = deferred<ReturnType<typeof config>>();
+    const latest = config("mowen", 22);
+    vi.mocked(api.loadProfessionConfig).mockImplementation(async (id) => id === "yinlong" ? first.promise : latest);
+    await chooseXinfa("yinlong");
+    await chooseXinfa("mowen");
+    await act(async () => first.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", latest);
+  });
+
+  it("切走再切回同一心法，第一次请求仍不能覆盖最新请求", async () => {
+    await mount();
+    const first = deferred<ReturnType<typeof config>>();
+    const latest = config("yinlong", 33);
+    vi.mocked(api.loadProfessionConfig)
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(config("mowen", 22))
+      .mockResolvedValueOnce(latest);
+    await chooseXinfa("yinlong");
+    await chooseXinfa("mowen");
+    await chooseXinfa("yinlong");
+    await act(async () => first.resolve(config("yinlong", 11)));
+    await expectConfig("yinlong", latest);
+  });
+
+  it("加载存档使之前尚未返回的心法配置请求失效", async () => {
+    await mount();
+    const pending = deferred<ReturnType<typeof config>>();
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    await chooseXinfa("yinlong");
+    await click("加载");
+    await act(async () => pending.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", saved().xinfa_config);
+  });
+
+  it("清空使之前尚未返回的心法配置请求失效", async () => {
+    await mount();
+    const pending = deferred<ReturnType<typeof config>>();
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    await chooseXinfa("yinlong");
+    await click("清空");
+    await act(async () => pending.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", saved().xinfa_config);
+  });
+
+  it("加载完成替换表单后，加载期间发出的心法请求也已过期", async () => {
+    await mount();
+    const load = deferred<CalculateRequest | null>();
+    const pending = deferred<ReturnType<typeof config>>();
+    vi.mocked(api.loadConfig).mockReturnValue(load.promise);
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    await click("加载");
+    await chooseXinfa("yinlong");
+    await act(async () => load.resolve(saved()));
+    await act(async () => pending.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", saved().xinfa_config);
+  });
+
+  it("没有存档时，不取消仍对应当前心法的配置请求", async () => {
+    await mount();
+    const pending = deferred<ReturnType<typeof config>>();
+    const latest = config("yinlong", 11);
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    vi.mocked(api.loadConfig).mockResolvedValue(null);
+    await chooseXinfa("yinlong");
+    await click("加载");
+    await act(async () => pending.resolve(latest));
+    await expectConfig("yinlong", latest);
+  });
+
+});

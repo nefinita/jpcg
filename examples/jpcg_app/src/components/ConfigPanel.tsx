@@ -63,6 +63,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   // 当前选择是唯一来源；storage 仅用于启动恢复，异步结果必须匹配操作版本。
   const selectedValueSetRef = useRef<string | null>(null);
+  // 切换、加载或清空后，迟到的心法配置不得覆盖当前表单。
+  const xinfaRevisionRef = useRef(0);
   const valueSetRevisionRef = useRef(0);
   const valueSetResolveRef = useRef(0);
 
@@ -139,6 +141,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
 
   const handleXinfaChange = useCallback((value: string) => {
+    const revision = ++xinfaRevisionRef.current;
     const entry = professionOptions.find((x) => x.value === value);
     localStorage.setItem(STORAGE_KEYS.lastXinfa, value);
     setForm((prev): FormData => ({
@@ -148,7 +151,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     }));
     onXinfaChange?.(value);
     api.loadProfessionConfig(value).then((cfg) => {
-      if (cfg) {
+      if (cfg && revision === xinfaRevisionRef.current) {
         setForm((prev): FormData => ({
           ...prev,
           xinfa_config: {
@@ -254,6 +257,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         addToast("没有已保存的配置", "warning");
         return;
       }
+      ++xinfaRevisionRef.current;
       const requestedId = cfg.value_set ?? null;
       persistValueSet(requestedId);
       setAppliedValueSet(null);
@@ -297,6 +301,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, [addToast, persistValueSet, resolveCurrentValueSet]);
 
   const handleClear = useCallback(() => {
+    ++xinfaRevisionRef.current;
     const requestedId = selectedValueSetRef.current;
     setForm({ ...defaultForm(), value_set: requestedId });
     // 重新解析当前选择，不读取可能与当前表单不同的持久化偏好。
@@ -473,6 +478,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   useEffect(() => {
     handleXinfaChange(form.xinfa);
+    return () => { ++xinfaRevisionRef.current; };
   }, []);
 
   const playerStats = React.useMemo(() => {
