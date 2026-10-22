@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { SkillEditorDataDTO, SkillEditorItemDTO, XinfaSummaryDTO } from "../types";
 import * as api from "../api/commands";
 import styles from "./SkillEditorPage.module.css";
@@ -46,6 +46,7 @@ export default function SkillEditorPage({ addToast }: Props) {
   const [data, setData] = useState<SkillEditorDataDTO | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const loadRevision = useRef(0);
   const [saving, setSaving] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newForm, setNewForm] = useState({
@@ -69,24 +70,27 @@ export default function SkillEditorPage({ addToast }: Props) {
   }, [professionOptions.length]);
 
   const loadData = useCallback(async (prof: string) => {
+    const revision = ++loadRevision.current;
     setLoading(true);
     try {
       const result = await api.loadSkillData(prof);
+      if (revision !== loadRevision.current) return;
       setData(result);
       setSelectedIndex(null);
     } catch (err) {
-      addToast?.(String(err), "error");
+      if (revision === loadRevision.current) addToast?.(String(err), "error");
     } finally {
-      setLoading(false);
+      if (revision === loadRevision.current) setLoading(false);
     }
   }, [addToast]);
 
   useEffect(() => {
     loadData(profession);
+    return () => { ++loadRevision.current; };
   }, [profession, loadData]);
 
   const handleSave = useCallback(async () => {
-    if (!data) return;
+    if (!data || loading) return;
     setSaving(true);
     try {
       // 空输入归一为 0，防止空串打穿 core 的 u32/f32 反序列化
@@ -129,7 +133,7 @@ export default function SkillEditorPage({ addToast }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [profession, data, addToast]);
+  }, [profession, data, loading, addToast]);
 
   const handleAdd = useCallback(() => {
     if (!data) return;
@@ -228,7 +232,12 @@ export default function SkillEditorPage({ addToast }: Props) {
           <select
             className={styles.select}
             value={profession}
-            onChange={(e) => setProfession(e.target.value)}
+            onChange={(e) => {
+              ++loadRevision.current;
+              setData(null);
+              setSelectedIndex(null);
+              setProfession(e.target.value);
+            }}
           >
             {professionOptions.map((x) => (
               <option key={x.value} value={x.value}>{x.label}（{x.nom}）</option>
@@ -241,7 +250,7 @@ export default function SkillEditorPage({ addToast }: Props) {
           )}
         </div>
         <button className={styles.btn} onClick={() => setShowNewDialog(true)}>新建</button>
-        <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handleSave} disabled={saving || !data}>
+        <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handleSave} disabled={saving || loading || !data}>
           {saving ? "保存中..." : "保存"}
         </button>
       </div>
