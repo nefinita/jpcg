@@ -2,8 +2,8 @@
 
 > **精确计算每一发伤害，科学规划连招，轻松掌握击杀线。**
 >
-> **版本**: v2.1.0-beta.1 | **更新日期**: 2026年9月
-> **适用平台**: Windows / macOS / Linux (Android 适配中)
+> **版本**: v2.1.0 | **更新日期**: 2026年10月
+> **适用平台**: Windows / macOS / Linux
 
 ---
 
@@ -27,6 +27,11 @@ JPCG 是一款专为剑网3 PVP 玩家打造的桌面端伤害计算工具。从
 | **目标设定** | 外功防御、内功防御、御劲等级、化劲等级、减伤比例、目标血量、目标最大/当前血量 | 模拟竞技场目标（最大/当前血量驱动追加真伤与击杀线） |
 | **阵眼增益** | 基础攻击% / 会心% / 会效% / 破防% / 无视防御% / 伤害提升% | 6 项增益自由调节 |
 | **系数设置** | 破防系数 / 会心系数 / 会效系数 / 化劲系数 / 防御系数 / PVP 全局减伤 | 默认填充公式常量，支持深度调参 |
+
+- **数值集（值集）切换**：默认换算常数抽成 `data/values/` 值集（内置「体验服·苍生铸世一测」「正式服·130级」），
+  界面下拉选择后按值集自动 seed 系数；手动改过的系数不会被覆盖，选择随配置持久化
+- **数据热更新**：值集随数据通道（`data_manifest.toml`）下发，更新后界面自动刷新；
+  core / combo 动态库按快照 mtime 校验，无需重启即可生效
 
 **伤害公式链路**：
 
@@ -107,26 +112,37 @@ kill_prob = kills / 50_000
 
 ---
 
-## 📦 本次更新 (v2.1.0-beta.1)
+## 📦 本次更新 (v2.1.0)
 
-- **PVP 数值更准**：修复了目标带御劲时“会心伤害减免”的计算偏差，
-  面对高御劲对手，期望伤害更贴近游戏实测
-- **公测全平台就绪**：修复 Windows 构建问题，Windows / macOS / Linux
-  三端 Beta 同步发布，想尝鲜都能更
-- **更新体验升级**：新版本发布后自动同步更新源，检查更新更及时稳定；
-  增量更新只拉本机所需的组件，更快也更省流量
-- **赛季数值体系升级**：赛季换算常数统一管理，数值校准更一致，
-  换赛季后调参更省心
+> v2.1.0 于 2026-10-13 发布：三平台产物、通道更新包（tgz + sha256）与模块 dll 同步上线。
+
+- **数值体系升级：数值集外置** —— 换算常数抽成 `data/values/` 值集，界面可切换
+  「体验服·苍生铸世一测 / 正式服·130级」；系数按值集自动 seed，手动改过的系数不被覆盖；
+  值集随数据通道下发，数据热更新后前端自动刷新，core / combo 动态库按快照 mtime 自动热加载
+- **更新链路全自动** —— 打 tag 后 release.yml 产出三平台产物，package job 经 deploy-gen
+  生成服务器通道布局并打包 `jpcg-<channel>-<tag>.tgz`（含 `.sha256`）随 GitHub Release 发布；
+  客户端修复更新检查/执行无界等待（统一 60s 超时）、应用更新判定改用二进制版本、
+  Tauri v2 下 `window.confirm` 失效导致的更新确认问题
+- **macOS 全面切 Apple Silicon** —— 修正产物架构错标（原误标 x86_64/darwin），
+  统一产出原生 aarch64 二进制与 `macos` 清单字段
+- **数据读写一致性修复** —— 统一数据根（更新落盘位置 = 运行期读取位置）；
+  保存配置不再重置 buff/系数；数据更新后值集快照与系数保持一致
+- **发布工程质量** —— release.sh 支持独立版本（jpcg_const / jpcg_updater）且 prep 分支
+  不再与 `release` 冲突；release.yml 的 Windows runner 缺口 `shell: bash` 已补；
+  Release 产物改用 `tauri build` 嵌入前端，修复裸 cargo 产物白屏
 
 ---
 
-## 📦 版本记录 (v2.1.0-alpha.2)
+## 📦 往期版本记录（v2.1.0-beta.1，2026-09-04）
+
+> 以下为 v2.1.0 开发期至首个公测（v2.1.0-beta.1，2026-09-04）引入的能力，
+> 现已随 v2.1.0 稳定版发布；完整记录见 CHANGELOG `[2.1.0-beta.1]` 段。
 
 ```diff
 + 🎯 全新连招引擎 jpcg_combo —— 蒙特卡洛击杀率 + hp 步进追加真伤
 + 🐛 修复排轴器 dot 只算单跳 / 追加真伤语义两处 bug
 + ❤️ 目标最大/当前血量输入 —— 驱动追加真伤斩杀结算
-+ ✏️ 技能编辑器 / 论坛 / 击杀曲线 / 预设管理与数据版本管理（alpha.1 起已包含）
++ ✏️ 技能编辑器 / 论坛 / 击杀曲线 / 预设管理与数据版本管理
 ```
 
 ### 连招引擎全面重建（jpcg_combo）
@@ -164,8 +180,8 @@ kill_prob = kills / 50_000
 ```rust
 // 2026 后续开发路线
 pub enum Roadmap {
-    /// 正式稳定版本发布
-    StableRelease,
+    /// 正式稳定版本发布 — 已完成（v2.1.0，2026-10-13）
+    StableReleaseDone,
     /// 属性微分分析 (AutoDiff) — 已实现（compute_derivatives + 边际收益展示）
     AttributeAutoDiffDone,
     /// 智能配装器 — 基于约束搜索的最优方案推荐
@@ -178,11 +194,11 @@ pub enum Roadmap {
 }
 ```
 
-- **正式稳定版本发布**
+- ~~**正式稳定版本发布**~~（已完成：v2.1.0，2026-10-13）
 - **更多心法数据持续更新**，覆盖全部门派
 - **智能配装器**：基于约束条件搜索最优配装方案
 - **论坛系统**：用户账号、评论互动、配置评分
-- **Windows / macOS 安装包**
+- **安装包**：Windows（.msi）/ macOS（.dmg）安装包
 
 ---
 
@@ -190,6 +206,26 @@ pub enum Roadmap {
 
 > 源码编译需要 Rust ≥ 1.85（rustup 默认 toolchain）与 Node.js ≥ 18。
 > Windows / macOS / Linux 三平台均可构建。
+
+### 一键构建（推荐）
+
+```sh
+make setup        # 安装前端依赖（npm ci；npm 缓存默认工作区 .cache/npm）
+make frontend     # 前端构建（tsc + vite build → dist/，Tauri 嵌入前置）
+make updater      # 编译 jpcg_updater 并复制为 Tauri externalBin（host-triple 后缀）
+make all          # setup → frontend → updater → modules-dir（dynamic app + 4 模块 dll）→ build-static
+                  # 结束后：jpcg_app = static；jpcg_app-dynamic = dynamic 变体
+make check-all    # fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端测试/构建
+
+# release 产物：make all BUILD=release
+```
+
+> 顺序要点：前端 `dist/` 与 updater sidecar（externalBin）都在**编译 app 阶段**被 tauri-build 校验/嵌入，
+> 故两者必须先于任何 app 编译（`make all` 与 `build-static`/`build-dynamic`/`clippy`/`test` 均已通过
+> `APP_BUILD_DEPS` 排好序，`make build-*` 单独跑也不会缺文件；`scripts/check-make-order.sh` 在 CI 中守卫该顺序）；
+> static/dynamic 编译产物同名 `target/<build>/jpcg_app`，`modules-dir` 会先把 dynamic 产物另存为
+> `jpcg_app-dynamic`，最后 `build-static` 落地默认 `jpcg_app`（static），两种产物同时保留。
+> npm 缓存默认写工作区 `.cache/npm`，可用 `NPM_CACHE=/path` 覆盖。
 
 ### 快速开始
 
@@ -224,15 +260,17 @@ npm run build
 | **static**（默认） | `cargo build-app-static` / `make build-static` | 编译期静态链接引擎，调试最直接 |
 | **dynamic** | `cargo build-app-dynamic` / `make build-dynamic` | 运行时 dlopen `libjpcg_core`，更新只需替换 dll |
 | **模块 dll** | `cargo build-modules` / `make build-modules` | 构建四个 cdylib：core / combo / update / const |
-| **模块目录** | `make modules-dir` | 把 dll 复制到应用同目录（dynamic 模式运行必需） |
+| **模块目录** | `make modules-dir` | 构建 dynamic app + 4 个模块 dll，复制到 `target/<build>/modules/`（ffi_bridge 动态加载首选目录，优先于 exe 同目录），并把 dynamic app 另存为 `jpcg_app-dynamic` |
 
 ### 打包发布
 
 ```sh
 # 1. 先编译 updater 并复制到 Tauri binaries（必需，否则 build 失败）
-cargo build -p jpcg_updater
-cp target/debug/jpcg_updater \
-  examples/jpcg_app/src-tauri/binaries/jpcg_updater-$(rustc -vV | grep host | cut -d' ' -f2)
+make updater
+#  等价手工命令：
+#  cargo build -p jpcg_updater
+#  cp target/debug/jpcg_updater \
+#    examples/jpcg_app/src-tauri/binaries/jpcg_updater-$(rustc -vV | grep host | cut -d' ' -f2)
 
 # 2. Tauri 打包安装包
 cd examples/jpcg_app
@@ -260,7 +298,7 @@ GitHub Release webhook
 ### 完整校验
 
 ```sh
-make check-all      # static + dynamic + 模块 dll + 全量测试 全绿检查
+make check-all      # fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端测试/构建 全绿检查
 ```
 
 ### 常用开发命令
@@ -284,9 +322,11 @@ crates/jpcg_core/     核心计算引擎 + host JSON 层 + FFI（句柄 + JSON �
 crates/jpcg_combo/    连招引擎（依赖 core；cdylib+rlib 双产物）
 crates/jpcg_update/   App / 数据 / 模块(dll) 自动更新（nefinita-ai.com）
 crates/jpcg_updater/  独立更新器（替换主程序并重启）
-crates/jpcg_const/    药品/食物常量 + 等级常数（编译期由 preset TOML 固化）
+crates/jpcg_const/    药品/食物/等级常量（独立版本 130.3.{日期}，编译期由 preset TOML 固化）
 examples/jpcg_app/    Tauri v2 桌面应用（React 19 + TypeScript + Vite）
-server_tools/         manifest/deploy-gen 生成器 / 配置分享论坛 / 数据转换器
+data/shuxing/         各心法技能/属性数据（TOML，[version] 等级.赛季.修改日期）
+data/values/          数值集清单 index.toml + 各值集快照（换算常数，运行期可选）
+server_tools/         manifest-gen（清单）/ deploy-gen（发布通道布局）/ forum（论坛）/ json-to-toml（技能数据转换）
 ```
 
 ---

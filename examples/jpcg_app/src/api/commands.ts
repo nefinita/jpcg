@@ -477,10 +477,11 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       };
     case "get_module_versions":
       return {
-        core: "2.1.0-alpha.1",
-        update: "2.1.0-alpha.1",
+        core: "2.1.0",
+        update: "2.1.0",
         const: "130.3.20260602",
-        app: "2.1.0-alpha.1",
+        combo: "2.1.0",
+        app: "2.1.0",
       };
     case "perform_app_update":
       return "重启中...（模拟）";
