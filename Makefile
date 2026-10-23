@@ -3,8 +3,8 @@
 #
 # 一键流程（干净检出后一条命令）：
 #   make all
-#     = setup → frontend → modules-dir（动态 app + 4 个模块库，动态 app 另存为
-#       jpcg_app-dynamic）→ updater（复制到 Tauri externalBin 位置）
+#     = setup → frontend → updater（复制到 Tauri externalBin 位置）
+#       → modules-dir（动态 app + 4 个模块库，动态 app 另存为 jpcg_app-dynamic）
 #       → build-static（最后落地：jpcg_app 为默认 static 变体）
 #
 # 目标一览：
@@ -29,6 +29,11 @@
 #   前端 dist 在编译期嵌入 app（tauri frontendDist），因此 build-static /
 #   build-dynamic 依赖 frontend，frontend / frontend-test 依赖 setup 安装的
 #   node_modules。默认 goal 仍是 build-static（保持既有 `make` 行为）。
+#   Tauri 的 build script（tauri-build）在**每次**编译 app 时都会校验
+#   frontendDist 并复制 externalBin sidecar，缺一即构建失败（不是只在
+#   `tauri build`/打包阶段才需要）。因此所有会编译 app 的目标（build-static /
+#   build-dynamic / clippy / test）都挂 $(APP_BUILD_DEPS) = frontend + updater
+#   作为前置，干净检出后单跑其中任一目标都不会缺 updater sidecar。
 #   static/dynamic 编译输出同名 target/$(BUILD)/jpcg_app，后构建者覆盖前者，
 #   因此：modules-dir 在构建 dynamic 后先把它另存为 jpcg_app-dynamic，`all`
 #   再把 build-static 放到最后，一键结束后 jpcg_app=默认 static、
@@ -89,6 +94,11 @@ FRONTEND_ABS := $(abspath $(FRONTEND_DIR))
 SETUP_STAMP := $(FRONTEND_ABS)/node_modules/.jpcg-setup-stamp
 NPM_ENV := npm_config_cache="$(NPM_CACHE)"
 
+# 编译 app 必需的资源前置：前端 dist（tauri frontendDist）+ updater sidecar
+# （tauri externalBin）。tauri-build 在 cargo build 阶段即会校验/复制两者，
+# 因此凡是会编译 app 的目标都必须先备齐，见下方「依赖顺序（重要）」注释。
+APP_BUILD_DEPS := frontend updater
+
 .DEFAULT_GOAL := build-static
 
 .PHONY: all setup frontend frontend-test build-static build-dynamic build-modules \
@@ -104,7 +114,7 @@ NPM_ENV := npm_config_cache="$(NPM_CACHE)"
 
 ## 一键：依赖安装 → 前端构建 → 动态 app + 4 个模块库（另存 dynamic 变体）→ updater
 ##       → 静态 app（最后落地，jpcg_app = 默认 static）
-all: setup frontend modules-dir updater build-static
+all: setup frontend updater modules-dir build-static
 	@echo "==> make all 完成"
 	@echo "    app(static):  $(APP_BIN)"
 	@echo "    app(dynamic): $(APP_DYN)"
@@ -145,13 +155,13 @@ frontend-test: setup
 # Rust 构建
 # ----------------------------------------------------------------------------
 
-## 静态模式 app（默认；编译期链接 jpcg_core，需先构建前端 dist）
-build-static: frontend
+## 静态模式 app（默认；编译期链接 jpcg_core；先备齐前端 dist + updater sidecar）
+build-static: $(APP_BUILD_DEPS)
 	@echo "==> cargo build -p jpcg_app（static）"
 	$(CARGO) build -p jpcg_app $(CARGO_BUILD_FLAGS)
 
-## 动态模式 app（dlopen libjpcg_core；需先构建前端 dist）
-build-dynamic: frontend
+## 动态模式 app（dlopen libjpcg_core；先备齐前端 dist + updater sidecar）
+build-dynamic: $(APP_BUILD_DEPS)
 	@echo "==> cargo build -p jpcg_app（dynamic）"
 	$(CARGO) build -p jpcg_app --no-default-features --features dynamic $(CARGO_BUILD_FLAGS)
 
@@ -198,7 +208,7 @@ updater:
 # ----------------------------------------------------------------------------
 
 ## 全量测试（含 dynamic 端到端冒烟；dll 由 build-modules 生成，缺失时该用例自动跳过）
-test:
+test: build-modules $(APP_BUILD_DEPS)
 	$(CARGO) test --workspace $(CARGO_BUILD_FLAGS)
 	$(CARGO) test -p jpcg_app --lib --no-default-features --features dynamic $(CARGO_BUILD_FLAGS)
 
@@ -207,7 +217,7 @@ fmt-check:
 	$(CARGO) fmt --all -- --check
 
 ## clippy（与 CI 一致：仅要求不产生编译错误，既有警告不计入门禁）
-clippy:
+clippy: $(APP_BUILD_DEPS)
 	$(CARGO) clippy --workspace --all-targets $(CARGO_BUILD_FLAGS)
 
 ## 全绿检查：fmt + clippy + 构建 + 全量测试 + 前端 test/build（失败即停；
@@ -222,7 +232,7 @@ check-all: fmt-check clippy build-modules test frontend-test frontend build-dyna
 ## 列出可用目标
 help:
 	@echo "JPCG Makefile 目标（BUILD=$(BUILD)，缓存=$(NPM_CACHE)）："
-	@echo "  make all            一键：setup + frontend + modules-dir + updater + build-static"
+	@echo "  make all            一键：setup + frontend + updater + modules-dir + build-static"
 	@echo "                      （结束：$(APP_BIN)=static，$(APP_DYN)=dynamic）"
 	@echo "  make setup          npm ci（缓存写入工作区，规避只读 HOME）"
 	@echo "  make frontend       npm run build（dist，编译期嵌入 app）"

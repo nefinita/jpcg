@@ -27,7 +27,7 @@ make setup                           # npm ci 安装前端依赖（已是最新�
 make frontend                        # 前端构建（tsc + vite → dist/，app 构建前置）
 make frontend-test                   # 前端测试（vitest）
 make updater                         # 编译 jpcg_updater → binaries/jpcg_updater-<host-triple>
-make all                             # setup → frontend → modules-dir → updater → build-static
+make all                             # setup → frontend → updater → modules-dir → build-static
                                      # 结束：jpcg_app=static、jpcg_app-dynamic=dynamic、modules/ 含 4 库
 make check-all                       # fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端 test/build
 make help                            # 列出所有目标

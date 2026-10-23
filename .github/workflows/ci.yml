@@ -28,6 +28,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Makefile 依赖顺序守卫（dry-run，不产生构建产物）：编译 app 前必须先准备
+      # 前端 dist 与 updater sidecar（tauri-build 在 cargo 构建阶段即校验两者）。
+      - name: Makefile 依赖顺序守卫
+        if: runner.os == 'Linux'
+        run: bash scripts/check-make-order.sh
+
       # Tauri v2 Linux 系统依赖（构建 jpcg_app 需要）
       - name: 安装 Tauri Linux 依赖
         if: runner.os == 'Linux'

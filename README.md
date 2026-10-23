@@ -213,14 +213,16 @@ pub enum Roadmap {
 make setup        # 安装前端依赖（npm ci；npm 缓存默认工作区 .cache/npm）
 make frontend     # 前端构建（tsc + vite build → dist/，Tauri 嵌入前置）
 make updater      # 编译 jpcg_updater 并复制为 Tauri externalBin（host-triple 后缀）
-make all          # setup → frontend → modules-dir（dynamic app + 4 模块 dll）→ updater → build-static
+make all          # setup → frontend → updater → modules-dir（dynamic app + 4 模块 dll）→ build-static
                   # 结束后：jpcg_app = static；jpcg_app-dynamic = dynamic 变体
 make check-all    # fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端测试/构建
 
 # release 产物：make all BUILD=release
 ```
 
-> 顺序要点：前端 `dist/` 在编译期嵌入 app，故 `frontend` 必须最先（`make all` 已排好序）；
+> 顺序要点：前端 `dist/` 与 updater sidecar（externalBin）都在**编译 app 阶段**被 tauri-build 校验/嵌入，
+> 故两者必须先于任何 app 编译（`make all` 与 `build-static`/`build-dynamic`/`clippy`/`test` 均已通过
+> `APP_BUILD_DEPS` 排好序，`make build-*` 单独跑也不会缺文件；`scripts/check-make-order.sh` 在 CI 中守卫该顺序）；
 > static/dynamic 编译产物同名 `target/<build>/jpcg_app`，`modules-dir` 会先把 dynamic 产物另存为
 > `jpcg_app-dynamic`，最后 `build-static` 落地默认 `jpcg_app`（static），两种产物同时保留。
 > npm 缓存默认写工作区 `.cache/npm`，可用 `NPM_CACHE=/path` 覆盖。
