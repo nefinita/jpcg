@@ -7,9 +7,10 @@ import styles from "./ResultTable.module.css";
 interface Props {
   results: SkillResultDTO[] | null;
   calculating: boolean;
+  baseline?: SkillResultDTO[];
 }
 
-export default function ResultTable({ results, calculating }: Props) {
+export default function ResultTable({ results, calculating, baseline }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("original");
 
@@ -49,7 +50,20 @@ export default function ResultTable({ results, calculating }: Props) {
 
   // 只改变展示顺序，不修改计算响应；同值维持原顺序，DOT 跳序始终成组保留。
   const keyword = query.trim().toLocaleLowerCase();
-  const visibleSkills = results.filter((r) => r.skill_name.toLocaleLowerCase().includes(keyword));
+  // 旧结果 DTO 无技能 id：按名称与原始出现序匹配，排序不影响基准对应。
+  const occurrences = new Map<string, number>();
+  const identified = results.map((r) => {
+    const occurrence = occurrences.get(r.skill_name) ?? 0;
+    occurrences.set(r.skill_name, occurrence + 1);
+    return { ...r, occurrence };
+  });
+  const baselineByName = new Map<string, SkillResultDTO[]>();
+  for (const skill of baseline ?? []) {
+    const group = baselineByName.get(skill.skill_name) ?? [];
+    group.push(skill);
+    baselineByName.set(skill.skill_name, group);
+  }
+  const visibleSkills = identified.filter((r) => r.skill_name.toLocaleLowerCase().includes(keyword));
   if (sort === "q-desc") visibleSkills.sort((a, b) => b.q - a.q);
   if (sort === "q-asc") visibleSkills.sort((a, b) => a.q - b.q);
   if (sort === "name") visibleSkills.sort((a, b) => a.skill_name.localeCompare(b.skill_name, "zh-CN"));
@@ -99,16 +113,20 @@ export default function ResultTable({ results, calculating }: Props) {
             <th title="普通命中">N</th>
             <th title="会心伤害">H</th>
             <th title="期望伤害">Q</th>
+            {baseline && <th>ΔQ / Δ%</th>}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
-            <tr><td className={styles.emptyRow} colSpan={7}>没有匹配的技能，请修改搜索或重置筛选。</td></tr>
+            <tr><td className={styles.emptyRow} colSpan={baseline ? 8 : 7}>没有匹配的技能，请修改搜索或重置筛选。</td></tr>
           )}
           {rows.map((row, i) => {
             const jumps = row.dot_jumps ?? [];
             const isDotRow = row.dotIndex !== null;
             const q = isDotRow ? jumps[row.dotIndex!] : row.q;
+            const base = baselineByName.get(row.skill_name)?.[row.occurrence];
+            const baseQ = base && (isDotRow ? base.dot_jumps?.[row.dotIndex!] : base.q);
+            const difference = baseQ === undefined ? null : q - baseQ;
             const isBest = !isDotRow && row.q === maxQ;
             const isFixed = row.has_critical_strike || (row.zhenshishanghai ?? 0) > 0;
             return (
@@ -143,6 +161,9 @@ export default function ResultTable({ results, calculating }: Props) {
                   </>
                 )}
                 <td className={styles.colNum}>{formatNumber(q)}</td>
+                {baseline && <td className={clsx(styles.colNum, difference !== null && difference > 0 && styles.positive, difference !== null && difference < 0 && styles.negative)}>
+                  {difference === null ? "—" : `${difference >= 0 ? "+" : ""}${formatNumber(difference)} / ${baseQ === 0 ? "—" : `${difference >= 0 ? "+" : ""}${(difference / baseQ! * 100).toFixed(1)}%`}`}
+                </td>}
               </tr>
             );
           })}
