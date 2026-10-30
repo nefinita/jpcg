@@ -1,0 +1,47 @@
+# 合成测试样例：全部装备/套装点数均人为构造，不是游戏数据。
+[version]
+schema = 1
+season = 3
+revision = "synthetic-v1"
+value_set = "live-130"
+sample = true
+provenance = "Issue #90 synthetic fixtures; no game gear values supplied"
+
+[[sets]]
+id = "sample-mingjian"
+source = "mingjian"
+kind = "armor"
+[[sets.tiers]]
+tier = "base"
+bonus2 = { gongji = 11 }
+cooldown4 = [{ skill_id = 14064, seconds = 1.0 }]
+[[sets.tiers]]
+tier = "upgraded"
+bonus2 = { gongji = 22 }
+cooldown4 = [{ skill_id = 14064, seconds = 2.0 }]
+
+[[sets]]
+id = "sample-weiwang"
+source = "weiwang"
+kind = "armor"
+[[sets.tiers]]
+tier = "base"
+bonus2 = { gongji = 13 }
+cooldown4 = [{ skill_id = 14064, seconds = 1.0 }]
+[[sets.tiers]]
+tier = "upgraded"
+bonus2 = { gongji = 26 }
+cooldown4 = [{ skill_id = 14064, seconds = 2.0 }]
+
+[[sets]]
+id = "sample-accessory"
+source = "weiwang"
+kind = "accessory"
+[[sets.tiers]]
+tier = "base"
+bonus2 = { huajin = 7 }
+bonus3 = { yujin = 9 }
+[[sets.tiers]]
+tier = "upgraded"
+bonus2 = { huajin = 14 }
+bonus3 = { yujin = 18 }
