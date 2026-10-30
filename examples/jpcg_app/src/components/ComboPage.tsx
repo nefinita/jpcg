@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
-  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData,
+  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData, TimelineResultDTO,
 } from "../types";
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
@@ -10,6 +10,7 @@ import { IconGear, IconClose, IconSave, IconTrash, IconStar } from "./icons";
 import { usePersistentState, readPreference, writePreference } from "../hooks/usePersistentState";
 import { STORAGE_KEYS } from "../utils/constants";
 import { comboDraftSchema, defaultComboDraft, type ComboDraft } from "../state/cockpit";
+import { formatTimelineEvent } from "./timelineFormat";
 import styles from "./ComboPage.module.css";
 
 interface Props {
@@ -35,6 +36,7 @@ export default function ComboPage({ xinfaName, formData }: Props) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [presets, setPresets] = useState<string[]>([]);
   const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
+  const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
   const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
@@ -136,6 +138,41 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     }
   }, [sequence, formData]);
 
+  // #92 时间轴预览：读门派 combat overlay → DTO 请求 → 时序引擎（窗口伤害 / DPS / 事件）
+  const handleTimeline = useCallback(async () => {
+    if (sequence.length === 0 || !formData) return;
+    setComputing(true);
+    try {
+      const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
+      const req = toCalculateRequest(formData);
+      const result = await api.calculateTimeline({
+        skills: bundle.skills,
+        forms: bundle.combat.form,
+        timed_buffs: bundle.combat.buff,
+        actions: sequence.map((s) => ({
+          kind: "cast" as const,
+          skill_id: s.skill.skill_id,
+          sub_id: s.skill.sub_id ?? 0,
+          // 同一 (skill_id, sub_id) 可能对应多个变体（入月·N 层），必须带名字消歧
+          skill_name: s.skill.skill_name,
+        })),
+        window: 300,
+        player: req.player,
+        hostile: req.hostile,
+        xinfa: req.xinfa_config,
+        buff: req.buff,
+        coeff: req.coefficient,
+        value_set: req.value_set ?? null,
+        combat: bundle.combat,
+      });
+      setTimelineResult(result);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setComputing(false);
+    }
+  }, [sequence, formData]);
+
   const handleSavePreset = useCallback(async () => {
     if (!presetName.trim()) return;
     try {
@@ -228,6 +265,10 @@ export default function ComboPage({ xinfaName, formData }: Props) {
                 title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
                 {computing ? "计算中..." : "计算连招"}
               </button>
+              <button className={styles.btn} onClick={handleTimeline} disabled={computing || noForm}
+                title="按当前序列跑时间轴（GCD / 读条 / CD / 形态 / buff / dot）">
+                {computing ? "计算中..." : "时间轴预览"}
+              </button>
               <button className={styles.btn} onClick={clearSequence}>清空</button>
             </>
           )}
@@ -299,6 +340,26 @@ export default function ComboPage({ xinfaName, formData }: Props) {
       {/* Combo result */}
       {comboResult && (
         <ComboResultDisplay result={comboResult} />
+      )}
+
+      {/* #92 时间轴预览（实验） */}
+      {timelineResult && (
+        <section className={styles.section}>
+          <div className={styles.sectionTitle}>时间轴（实验）</div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
+            <span>窗口伤害 {Math.round(timelineResult.total_damage).toLocaleString()}</span>
+            <span>窗口 DPS {timelineResult.window_dps.toFixed(0)}</span>
+            <span>未执行动作 {timelineResult.skipped_actions}</span>
+            <span>事件 {timelineResult.events.length}</span>
+          </div>
+          <div style={{ maxHeight: 200, overflowY: "auto", fontSize: 12, fontFamily: "monospace" }}>
+            {timelineResult.events.slice(0, 200).map((e, i) => (
+              <div key={i}>
+                {e.time.toFixed(2)}s  {formatTimelineEvent(e)}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Preset management */}

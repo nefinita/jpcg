@@ -1,0 +1,889 @@
+# 合成测试样例：全部装备/套装点数均人为构造，不是游戏数据。
+[version]
+schema = 1
+season = 3
+revision = "synthetic-v1"
+value_set = "live-130"
+sample = true
+provenance = "Issue #90 synthetic fixtures; no game gear values supplied"
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "tou"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "tou"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "tou"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "tou"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "tou"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "yi"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "yi"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "yi"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "yi"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "yi"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "yao"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "yao"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "yao"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "yao"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "yao"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "shou"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "shou"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+jiasu = 30
+
+[[templates]]
+school = "mowen"
+green = "yujin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "shou"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 30
+qixue = 100
+yujin = 15
+
+[[templates]]
+school = "mowen"
+green = "yujin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "shou"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 60
+qixue = 200
+yujin = 30
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "shou"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+zhuangfen = 1
+[templates.choice]
+slot = "ku"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+zhuangfen = 1
+[templates.choice]
+slot = "ku"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+zhuangfen = 1
+[templates.choice]
+slot = "ku"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+zhuangfen = 1
+[templates.choice]
+slot = "ku"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "ku"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "xie"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-mingjian"
+zhuangfen = 1
+[templates.choice]
+slot = "xie"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "xie"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-weiwang"
+zhuangfen = 1
+[templates.choice]
+slot = "xie"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "xie"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+zhuangfen = 1
+[templates.choice]
+slot = "wuqi"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+wuqi_shanghai = 5
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+zhuangfen = 1
+[templates.choice]
+slot = "wuqi"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+wuqi_shanghai = 5
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+zhuangfen = 1
+[templates.choice]
+slot = "wuqi"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+wuqi_shanghai = 5
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+zhuangfen = 1
+[templates.choice]
+slot = "wuqi"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+wuqi_shanghai = 5
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "wuqi"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+wuqi_shanghai = 5
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+zhuangfen = 1
+[templates.choice]
+slot = "anqi"
+source = "mingjian"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+zhuangfen = 1
+[templates.choice]
+slot = "anqi"
+source = "mingjian"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+zhuangfen = 1
+[templates.choice]
+slot = "anqi"
+source = "weiwang"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+zhuangfen = 1
+[templates.choice]
+slot = "anqi"
+source = "weiwang"
+tier = "upgraded"
+variant = 0
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "jiasu"
+zhuangfen = 1
+[templates.choice]
+slot = "anqi"
+source = "baowu"
+tier = "base"
+variant = 0
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+jiasu = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "xianglian"
+source = "weiwang"
+tier = "base"
+variant = 1
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "xianglian"
+source = "weiwang"
+tier = "base"
+variant = 2
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "xianglian"
+source = "weiwang"
+tier = "upgraded"
+variant = 1
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "xianglian"
+source = "weiwang"
+tier = "upgraded"
+variant = 2
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "yaozhui"
+source = "weiwang"
+tier = "base"
+variant = 1
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "yaozhui"
+source = "weiwang"
+tier = "base"
+variant = 2
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "yaozhui"
+source = "weiwang"
+tier = "upgraded"
+variant = 1
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "yaozhui"
+source = "weiwang"
+tier = "upgraded"
+variant = 2
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie1"
+source = "weiwang"
+tier = "base"
+variant = 1
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie1"
+source = "weiwang"
+tier = "base"
+variant = 2
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie1"
+source = "weiwang"
+tier = "upgraded"
+variant = 1
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie1"
+source = "weiwang"
+tier = "upgraded"
+variant = 2
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie2"
+source = "weiwang"
+tier = "base"
+variant = 1
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+huixin = 15
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie2"
+source = "weiwang"
+tier = "base"
+variant = 2
+[templates.stats]
+zhushuxing = 10
+gongji = 20
+qixue = 100
+pofang = 15
+
+[[templates]]
+school = "mowen"
+green = "huixin"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie2"
+source = "weiwang"
+tier = "upgraded"
+variant = 1
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+huixin = 30
+
+[[templates]]
+school = "mowen"
+green = "pofang"
+set = "sample-accessory"
+zhuangfen = 1
+[templates.choice]
+slot = "jie2"
+source = "weiwang"
+tier = "upgraded"
+variant = 2
+[templates.stats]
+zhushuxing = 20
+gongji = 40
+qixue = 200
+pofang = 30

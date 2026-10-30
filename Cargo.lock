@@ -2280,6 +2280,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jpcg_gear"
+version = "2.2.0-alpha.1"
+dependencies = [
+ "clap",
+ "jpcg_api",
+ "jpcg_combo",
+ "jpcg_core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml 1.1.6+spec-1.1.0",
+]
+
+[[package]]
 name = "jpcg_update"
 version = "2.2.0-alpha.1"
 dependencies = [

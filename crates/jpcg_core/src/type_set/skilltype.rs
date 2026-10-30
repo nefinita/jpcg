@@ -84,12 +84,86 @@ pub struct Skilltype {
     pub dot_duration: f32, // Dot 持续时长（秒）
     #[serde(skip_serializing_if = "is_zero_f32")]
     pub dot_up: f32, // Dot 递增系数（每跳递增比例，等比）
+    // ---- #92 时序字段（旧数据缺省 = 瞬发 / 占普通 GCD / 无调息 / 无充能） ----
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub cast_time: f32, // 吟唱/读条时长（秒，0=瞬发）
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub gcd_kind: u8, // GCD 类型（0=占普通 GCD，1=不占 GCD，2=固定 GCD 不受加速）
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub cooldown: f32, // 调息时间（秒，0=无调息）
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub charges: u8, // 充能层数（0 或 1 = 无充能；>1 = 最大层数）
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub recharge: f32, // 充能恢复间隔（秒）
+    #[serde(skip_serializing_if = "is_false")]
+    pub cd_haste: bool, // 调息是否受加速影响
+    #[serde(skip_serializing_if = "is_false")]
+    pub channel: bool, // 引导技能（吟唱期间持续结算）
+    #[serde(skip_serializing_if = "is_string_empty")]
+    pub buff_id: String, // 仅提供 buff 的技能所施加的 buff id（空 = 不施加）
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub gcd_base: f32, // 该技能所在形态的基础公共 CD（秒；0 = 用门派默认，双形态门派按技能标注 1.5/1.0）
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub gcd_group: u8, // GCD 分组（0=默认组；双形态另一套技能用 1，两组 GCD 独立；不占 GCD 的技能由 gcd_kind=1 表达）
 }
 
 impl Skilltype {
     /// 计算技能基础攻击（base_damage1 和 base_damage2 的平均值）
     pub fn base_atk(&self) -> u32 {
         (self.base_damage1 + self.base_damage2) / 2
+    }
+
+    /// 是否只提供 buff 的技能（effect_type = 1 有益）
+    pub fn is_buff_only(&self) -> bool {
+        self.effect_type == 1
+    }
+
+    /// 是否占公共 CD（gcd_kind = 1 不占）
+    pub fn occupies_gcd(&self) -> bool {
+        self.gcd_kind != 1
+    }
+
+    /// 加速后的读条时长（秒；固定 GCD 技能不受加速影响，瞬时技能恒为 0）
+    pub fn cast_time_with_haste(&self, haste_rate: f32) -> f32 {
+        if self.gcd_kind == 2 {
+            self.cast_time
+        } else {
+            crate::type_set::timing::quantize_secs(self.cast_time, haste_rate)
+        }
+    }
+
+    /// 加速后可用的公共 CD 时长（秒；不占 GCD 返回 0；固定 GCD 不受加速）。
+    /// `school_gcd_secs` 为门派默认 GCD；本技能标注了 `gcd_base` 时优先用技能的（双形态门派）。
+    pub fn gcd_with_haste(&self, school_gcd_secs: f32, haste_rate: f32) -> f32 {
+        let base = if self.gcd_base > 0.0 {
+            self.gcd_base
+        } else {
+            school_gcd_secs.max(0.0)
+        };
+        match self.gcd_kind {
+            1 => 0.0,
+            2 => base,
+            _ => crate::type_set::timing::quantize_gcd(base, haste_rate),
+        }
+    }
+
+    /// 加速后的调息时间（秒；cd_haste=false 时原样返回）。
+    /// 调息「直接吃百分比」：cooldown ÷ (1 + 加速率)，不按帧量化。
+    pub fn cooldown_with_haste(&self, haste_rate: f32) -> f32 {
+        if self.cd_haste && self.cooldown > 0.0 {
+            self.cooldown / (1.0 + haste_rate.max(0.0))
+        } else {
+            self.cooldown
+        }
+    }
+
+    /// 充能层数（0/1 视作 1 层，即无充能）
+    pub fn max_charges(&self) -> u32 {
+        if self.charges > 1 {
+            self.charges as u32
+        } else {
+            1
+        }
     }
 
     /// Dot 总跳数 = 持续时长 / 每跳间隔（均为 0 或数据非法时返回 0，即非 Dot）

@@ -26,6 +26,9 @@ pub struct PlayerConfigDTO {
     pub huixin_xiaoguo: u32,
     pub pofang_dengji: u32,
     pub wuqi_shanghai: u32,
+    /// 加速等级（#92 时序引擎；0=无加速）
+    #[serde(default)]
+    pub jiasu_dengji: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -70,6 +73,9 @@ pub struct CoefficientConfigDTO {
     pub huajin_xishu: f32,
     pub fangyu_xishu: f32,
     pub pvp_global_jianshang: f32,
+    /// 加速等级系数（加速率 = 加速等级 / 该系数 / 100；0 = 不启用加速换算）
+    #[serde(default)]
+    pub jiasu_xishu: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -81,6 +87,9 @@ pub struct XinfaConfigDTO {
     pub atk_up: f32,
     pub pofang_up: f32,
     pub huixin_up: f32,
+    /// 门派基础公共 CD（秒；0/缺失 = 1.5；特殊门派 1.0，双形态门派另有 per-skill gcd_base）
+    #[serde(default)]
+    pub gcd_base: f32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -194,6 +203,37 @@ pub struct SkillPoolItemDTO {
     /// 追加真伤系数（已损失生命值 × 系数，0=无；连招中动态结算）
     #[serde(default)]
     pub lost_hp_zhenshishanghai: f32,
+    // ---- #92 时序字段（与 SkillEditorItemDTO 同义） ----
+    /// 吟唱/读条时长（秒，0=瞬发）
+    #[serde(default)]
+    pub cast_time: f32,
+    /// GCD 类型（0=占普通 GCD，1=不占 GCD，2=固定 GCD 不受加速）
+    #[serde(default)]
+    pub gcd_kind: u8,
+    /// 调息时间（秒，0=无调息）
+    #[serde(default)]
+    pub cooldown: f32,
+    /// 充能层数（0 或 1 = 无充能；>1 = 最大层数）
+    #[serde(default)]
+    pub charges: u8,
+    /// 充能恢复间隔（秒）
+    #[serde(default)]
+    pub recharge: f32,
+    /// 调息是否受加速影响
+    #[serde(default)]
+    pub cd_haste: bool,
+    /// 引导技能
+    #[serde(default)]
+    pub channel: bool,
+    /// 仅提供 buff 的技能所施加的 buff id（空 = 不施加）
+    #[serde(default)]
+    pub buff_id: String,
+    /// 该技能所在形态的基础公共 CD（秒；0 = 用门派默认）
+    #[serde(default)]
+    pub gcd_base: f32,
+    /// GCD 分组（0 = 默认组；双形态门派另一套技能用 1，两组 GCD 互相独立）
+    #[serde(default)]
+    pub gcd_group: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -297,8 +337,6 @@ pub struct DerivativesOutputDTO {
     pub recommendation: OptimizeRecommendationDTO,
 }
 
-// ============ 技能编辑器 DTO ============
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SkillEditorItemDTO {
@@ -330,6 +368,37 @@ pub struct SkillEditorItemDTO {
     pub dot_interval: f32,
     pub dot_duration: f32,
     pub dot_up: f32,
+    // ---- #92 时序字段（旧数据缺省 = 瞬发 / 占普通 GCD / 无调息 / 无充能） ----
+    /// 吟唱/读条时长（秒，0=瞬发）
+    #[serde(default)]
+    pub cast_time: f32,
+    /// GCD 类型（0=占普通 GCD，1=不占 GCD，2=固定 GCD 不受加速）
+    #[serde(default)]
+    pub gcd_kind: u8,
+    /// 调息时间（秒，0=无调息）
+    #[serde(default)]
+    pub cooldown: f32,
+    /// 充能层数（0 或 1 = 无充能；>1 = 最大层数）
+    #[serde(default)]
+    pub charges: u8,
+    /// 充能恢复间隔（秒）
+    #[serde(default)]
+    pub recharge: f32,
+    /// 调息是否受加速影响
+    #[serde(default)]
+    pub cd_haste: bool,
+    /// 引导技能（吟唱期间持续结算，伤害按引导跳数）
+    #[serde(default)]
+    pub channel: bool,
+    /// 仅提供 buff 的技能所施加的 buff id（空 = 不施加）
+    #[serde(default)]
+    pub buff_id: String,
+    /// 该技能所在形态的基础公共 CD（秒；0 = 用门派默认）
+    #[serde(default)]
+    pub gcd_base: f32,
+    /// GCD 分组（0 = 默认组；双形态门派另一套技能用 1，两组 GCD 互相独立）
+    #[serde(default)]
+    pub gcd_group: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -364,3 +433,236 @@ pub struct HostEventsTable {
 }
 
 use serde::{Deserialize, Serialize};
+
+// ============ #92 时序引擎 / 战斗数据 DTO ============
+// 与 `data/combat/{门派}.toml`、`jpcg_combo::timeline` 一一对应；
+// 前端（TS）与后端（Rust）共用这一份契约，避免两套类型。
+
+/// 技能唯一键（skill_id, sub_id）；JSON 中表现为 [id, sub] 数组
+pub type SkillKeyDTO = (u32, u32);
+
+/// 形态定义（`[[form]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FormDefDTO {
+    pub id: String,
+    pub name: String,
+    /// 该形态基础 GCD（秒；0 = 门派默认）
+    pub gcd_base: f32,
+    pub initial: bool,
+    /// 该形态可用技能（空 = 不限）
+    pub skills: Vec<SkillKeyDTO>,
+}
+
+/// 技能施放副作用
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OnCastDTO {
+    pub switch_form: Option<String>,
+    pub gcd_lanes: Vec<String>,
+    pub lock_skills: Vec<SkillKeyDTO>,
+}
+
+/// 单技能时序 overlay（`[[skill_combat]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SkillCombatDTO {
+    pub skill_id: u32,
+    pub sub_id: u32,
+    pub form: Option<String>,
+    pub gcd_lane: String,
+    pub on_cast: OnCastDTO,
+    // ---- 可选覆盖（None = 沿用技能数据） ----
+    pub cast_time: Option<f32>,
+    pub gcd_base: Option<f32>,
+    pub gcd_kind: Option<u8>,
+    pub cooldown: Option<f32>,
+    pub charges: Option<u8>,
+    pub recharge: Option<f32>,
+    pub cd_haste: Option<bool>,
+    pub channel: Option<bool>,
+    pub buff_id: Option<String>,
+}
+
+/// 定时 buff 效果条目（百分比）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuffEffectDTO {
+    BaseAtkPct(f32),
+    HuixinPct(f32),
+    HuixiaoPct(f32),
+    PofangPct(f32),
+    WushiFangyuPct(f32),
+    ShanghaiPct(f32),
+    /// 加速率加成（百分比，如 2.0 = +2% 加速率）
+    JiasuPct(f32),
+}
+
+/// 带持续时间的 buff 定义（`[[buff]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimedBuffDefDTO {
+    pub id: String,
+    pub name: String,
+    /// 持续时间（秒；0 = 常驻）
+    pub duration: f32,
+    pub max_stacks: u8,
+    pub refresh: bool,
+    /// 该 buff 的加速能否突破 25% 上限
+    pub ignore_cap: bool,
+    pub effects: Vec<BuffEffectDTO>,
+}
+
+/// 技能修正项（秘籍 / 奇穴共用）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillModifierDTO {
+    BaseDamageAdd(u32),
+    BaseDamageMul(f32),
+    AtkXishuAdd(f32),
+    HitUpAdd(u32),
+    HuixinUpAdd(u32),
+    HuixiaoUpAdd(u32),
+    WushifangyuAdd(u32),
+    CastTimeMul(f32),
+    CooldownMul(f32),
+    DotDurationMul(f32),
+    DotIntervalMul(f32),
+}
+
+/// 秘籍定义（`[[miji]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MijiDefDTO {
+    pub id: String,
+    pub name: String,
+    pub skill_id: u32,
+    pub sub_id: u32,
+    pub modifiers: Vec<SkillModifierDTO>,
+}
+
+/// 奇穴定义（`[[qixue]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QixueDefDTO {
+    pub id: String,
+    pub name: String,
+    pub slot: u8,
+    pub replaces_skill_id: u32,
+    pub replaces_sub_id: u32,
+    /// 替换后的独立技能条目（None = 只施加 modifiers）
+    pub replacement: Option<SkillPoolItemDTO>,
+    pub modifiers: Vec<SkillModifierDTO>,
+}
+
+/// 战斗数据元信息
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CombatMetaDTO {
+    pub profession: String,
+    pub version: String,
+    pub note: String,
+}
+
+/// `data/combat/{门派}.toml` 的完整 DTO
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CombatDataDTO {
+    pub meta: CombatMetaDTO,
+    pub form: Vec<FormDefDTO>,
+    pub skill_combat: Vec<SkillCombatDTO>,
+    pub buff: Vec<TimedBuffDefDTO>,
+    pub miji: Vec<MijiDefDTO>,
+    pub qixue: Vec<QixueDefDTO>,
+}
+
+/// 时间轴动作
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TimelineActionDTO {
+    Cast {
+        skill_id: u32,
+        sub_id: u32,
+        /// 技能名：用于在 (skill_id, sub_id) 对应多个变体（如「入月·N 层」）时消歧
+        #[serde(default)]
+        skill_name: Option<String>,
+    },
+    SwitchForm {
+        form: String,
+    },
+}
+
+/// 时间轴计算请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineRequestDTO {
+    pub skills: Vec<SkillPoolItemDTO>,
+    #[serde(default)]
+    pub forms: Vec<FormDefDTO>,
+    #[serde(default)]
+    pub timed_buffs: Vec<TimedBuffDefDTO>,
+    #[serde(default)]
+    pub actions: Vec<TimelineActionDTO>,
+    /// 模拟窗口（秒；0 = 默认 300 秒）
+    #[serde(default)]
+    pub window: f32,
+    pub player: PlayerConfigDTO,
+    pub hostile: HostileConfigDTO,
+    pub xinfa: XinfaConfigDTO,
+    pub buff: BuffConfigDTO,
+    pub coeff: CoefficientConfigDTO,
+    /// 数值集 id（None = 默认值集）
+    #[serde(default)]
+    pub value_set: Option<String>,
+    /// 战斗时序 overlay（可选；提供时按 overlay 套形态 / GCD 通道 / on_cast）
+    #[serde(default)]
+    pub combat: Option<CombatDataDTO>,
+}
+
+/// 时间轴事件
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TimelineEventKindDTO {
+    Cast {
+        skill_name: String,
+        damage: u32,
+        hit_time: f32,
+    },
+    DotTick {
+        skill_name: String,
+        index: u32,
+        damage: u32,
+    },
+    FormSwitch {
+        from: String,
+        to: String,
+    },
+    BuffGain {
+        buff_id: String,
+        stacks: u8,
+    },
+}
+
+/// 时间轴事件 + 时刻
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineEventDTO {
+    pub time: f32,
+    pub kind: TimelineEventKindDTO,
+}
+
+/// 时间轴计算结果
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimelineResultDTO {
+    pub events: Vec<TimelineEventDTO>,
+    pub total_damage: f64,
+    pub window_dps: f64,
+    pub skipped_actions: u32,
+}
+
+/// 时间轴预览数据包：技能池（已套 combat overlay）+ combat 数据
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct CombatBundleDTO {
+    pub skills: Vec<SkillPoolItemDTO>,
+    pub combat: CombatDataDTO,
+}

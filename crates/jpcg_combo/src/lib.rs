@@ -17,6 +17,8 @@ pub mod conv;
 pub mod engine;
 pub mod ffi;
 pub mod host;
+pub mod timeline;
+pub mod timeline_host;
 
 /// 本 combo 模块库版本（与 FFI jpcg_combo_version 一致）
 pub const COMBO_VERSION: &str = env!("CARGO_PKG_VERSION");
