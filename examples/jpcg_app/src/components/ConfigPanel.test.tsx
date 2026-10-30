@@ -511,3 +511,45 @@ it("缺失心法元数据时保留有效名称/主属性，不写入字面 undef
   expect(form.xinfa_config.xinfa_name).toBe("莫问");
   expect(form.xinfa_config.xinfa_nom).toBe("gengu");
 });
+
+describe("初始化完成标记（manualReady）", () => {
+  async function mountControlled(onFormChange: ReturnType<typeof vi.fn>) {
+    await act(async () => {
+      root.render(
+        <ConfigPanel
+          calculating={false}
+          onCalculate={onCalculate}
+          addToast={addToast}
+          setStatus={setStatus}
+          onFormChange={onFormChange as never}
+        />,
+      );
+    });
+  }
+
+  it("首次心法加载失败时不写 ready，重挂载会重新拉取", async () => {
+    const onFormChange = vi.fn();
+    vi.mocked(api.loadProfessionConfig).mockRejectedValue(new Error("network down"));
+    await mountControlled(onFormChange);
+    expect(api.loadProfessionConfig).toHaveBeenCalled();
+    // 初始化占位写入保持 ready=false，不能让失败的加载变成「已初始化」。
+    expect(onFormChange.mock.calls.some((call) => call[1]?.ready === true)).toBe(false);
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    vi.mocked(api.loadProfessionConfig).mockClear();
+    await mountControlled(onFormChange);
+    expect(api.loadProfessionConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("加载成功或用户编辑后才写 ready", async () => {
+    const onFormChange = vi.fn();
+    vi.mocked(api.loadProfessionConfig).mockResolvedValue({
+      profession: "mowen", xinfa_name: "莫问", xinfa_nom: "gengu", atk_up: 10, pofang_up: 20, huixin_up: 30,
+    });
+    await mountControlled(onFormChange);
+    // 成功响应后有一次 ready=true 的写入（携带加载到的属性）
+    const readyWrite = onFormChange.mock.calls.find((call) => call[1]?.ready === true);
+    expect(readyWrite).toBeDefined();
+  });
+});

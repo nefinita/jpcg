@@ -76,3 +76,22 @@ it("页面访问后常驻，切换页面保留输入，加载配置的心法进�
   await click("加载"); expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.cockpit)!).data.form.xinfa).toBe("qixiu");
   await restart(); expect(host.querySelector("select")!.value).toBe("qixiu");
 });
+
+it("首次心法加载失败不把占位表单标记为已初始化，重启会重新加载，成功后不再重复拉取", async () => {
+  const storedCockpit = () => JSON.parse(localStorage.getItem(STORAGE_KEYS.cockpit)!).data as { manualReady?: boolean };
+  vi.mocked(api.loadProfessionConfig).mockRejectedValue(new Error("boom"));
+  await mount();
+  expect(storedCockpit().manualReady).toBe(false);
+
+  vi.mocked(api.loadProfessionConfig).mockClear();
+  vi.mocked(api.loadProfessionConfig).mockResolvedValue({
+    profession: "mowen", xinfa_name: "莫问", xinfa_nom: "gengu", atk_up: 12, pofang_up: 0, huixin_up: 0,
+  });
+  await restart();
+  expect(api.loadProfessionConfig).toHaveBeenCalledTimes(1);
+  expect(storedCockpit().manualReady).toBe(true);
+
+  const calls = vi.mocked(api.loadProfessionConfig).mock.calls.length;
+  await restart();
+  expect(api.loadProfessionConfig).toHaveBeenCalledTimes(calls);
+});

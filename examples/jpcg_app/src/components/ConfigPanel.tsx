@@ -16,7 +16,7 @@ interface Props {
   setStatus: (msg: string) => void;
   onXinfaChange?: (xinfa: string) => void;
   form?: FormData;
-  onFormChange?: Dispatch<SetStateAction<FormData>>;
+  onFormChange?: (update: SetStateAction<FormData>, options?: { ready?: boolean }) => void;
   preserveInitialForm?: boolean;
 }
 
@@ -41,8 +41,14 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   form: controlledForm, onFormChange, preserveInitialForm = false }: Props) {
   const [localForm, setLocalForm] = useState<FormData>(defaultManualForm);
   const form = controlledForm ?? localForm;
-  const setForm = onFormChange ?? setLocalForm;
   const preserveInitialRef = useRef(preserveInitialForm);
+  // 元数据（心法属性/存档）成功加载后才允许把表单标记为「已初始化」；
+  // 初始挂载的同步占位写入保持 ready=false，失败时下次启动会重新加载。
+  const hydratedRef = useRef(preserveInitialForm);
+  const setForm = useCallback((update: SetStateAction<FormData>) => {
+    if (onFormChange) onFormChange(update, { ready: hydratedRef.current });
+    else setLocalForm(update);
+  }, [onFormChange]);
 
   const [professionOptions, setProfessionOptions] = useState<{value: string; label: string; nom: string; version_label: string | null}[]>(
     () => XINFA_FALLBACK.map((x) => ({value: x.value, label: x.label, nom: "", version_label: null}))
@@ -158,19 +164,25 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     }));
     onXinfaChange?.(value);
     api.loadProfessionConfig(value).then((cfg) => {
-      if (cfg && revision === xinfaRevisionRef.current) {
-        setForm((prev): FormData => ({
-          ...prev,
-          xinfa_config: {
-            profession: typeof cfg.profession === "string" && cfg.profession ? cfg.profession : value,
-            xinfa_name: typeof cfg.xinfa_name === "string" && cfg.xinfa_name ? cfg.xinfa_name : entry?.label ?? value,
-            xinfa_nom: typeof cfg.xinfa_nom === "string" && cfg.xinfa_nom ? cfg.xinfa_nom : prev.xinfa_config.xinfa_nom,
-            atk_up: Number(cfg.atk_up) || 0,
-            pofang_up: Number(cfg.pofang_up) || 0,
-            huixin_up: Number(cfg.huixin_up) || 0,
-          },
-        }));
+      if (revision !== xinfaRevisionRef.current) return;
+      // 元数据请求成功（含该门派没有配置文件返回 null）才算初始化完成；
+      // 失败/挂起保持未完成，下次启动会重新拉取而不是永久保留占位属性。
+      hydratedRef.current = true;
+      if (!cfg) {
+        setForm((prev) => prev);
+        return;
       }
+      setForm((prev): FormData => ({
+        ...prev,
+        xinfa_config: {
+          profession: typeof cfg.profession === "string" && cfg.profession ? cfg.profession : value,
+          xinfa_name: typeof cfg.xinfa_name === "string" && cfg.xinfa_name ? cfg.xinfa_name : entry?.label ?? value,
+          xinfa_nom: typeof cfg.xinfa_nom === "string" && cfg.xinfa_nom ? cfg.xinfa_nom : prev.xinfa_config.xinfa_nom,
+          atk_up: Number(cfg.atk_up) || 0,
+          pofang_up: Number(cfg.pofang_up) || 0,
+          huixin_up: Number(cfg.huixin_up) || 0,
+        },
+      }));
     }).catch(() => {});
   }, [professionOptions, defaultXinfa, onXinfaChange]);
 
@@ -295,6 +307,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
         value_set: requestedId,
       });
+      hydratedRef.current = true;
       // 加载的系数以存档为准（不再自动 seed）；标记为“已自定义”以免数据热更新覆盖
       coefficientCustomRef.current = true;
       setCoefficientBaselinePending(false);
@@ -309,6 +322,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const handleClear = useCallback(() => {
     ++xinfaRevisionRef.current;
+    hydratedRef.current = true;
     const requestedId = selectedValueSetRef.current;
     setForm({ ...defaultForm(), value_set: requestedId });
     // 重新解析当前选择，不读取可能与当前表单不同的持久化偏好。
