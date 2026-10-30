@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
 it("12 槽按真实目录展示，改配装防抖自动合成/计算，切模式保留手动属性", async () => {
-  await render(); await wait(); expect(host.querySelectorAll("article")).toHaveLength(12);
+  await render(); await click("配装驱动"); await wait(); expect(api.calculateDamage).toHaveBeenCalledTimes(1); expect(host.querySelectorAll("article")).toHaveLength(12);
   expect(host.textContent).toContain("合成测试样例"); expect(api.composeGear).toHaveBeenCalledTimes(1);
   await click("手动属性");
   const input = [...host.querySelectorAll("label")].find((l) => l.textContent === "基础攻击")!.parentElement!.querySelector("input")!;

@@ -209,8 +209,8 @@ export default function App() {
 
       <div className={`${styles.calcLayout} ${gearMode ? styles.gearLayout : ""}`} style={{ display: curPage === "calc" ? "" : "none" }}>
         <div className={styles.modeBar} role="group" aria-label="输入模式">
-          <button aria-pressed={gearMode} onClick={() => { ++requestRevision.current; ++actionRevision.current; setCockpit((p) => ({ ...p, mode: "gear" })); }}>配装驱动</button>
-          <button aria-pressed={!gearMode} onClick={() => { ++requestRevision.current; ++actionRevision.current; setCockpit((p) => ({ ...p, mode: "manual" })); }}>手动属性</button>
+          <button aria-pressed={gearMode} onClick={() => { if (gearMode) return; ++requestRevision.current; ++actionRevision.current; setCockpit((p) => ({ ...p, mode: "gear" })); }}>配装驱动</button>
+          <button aria-pressed={!gearMode} onClick={() => { if (!gearMode) return; ++requestRevision.current; ++actionRevision.current; setCockpit((p) => ({ ...p, mode: "manual" })); }}>手动属性</button>
         </div>
         {gearMode ? <>
           <details className={styles.contextPanel}><summary>{formData.xinfa_config.xinfa_name} · {formData.value_set ?? "默认数值集"} · 目标血量 {formData.hostile.target_hp || 0} · 编辑计算环境</summary>{configPanel}</details>
