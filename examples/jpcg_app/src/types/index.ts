@@ -7,6 +7,8 @@ export interface PlayerConfigDTO {
   pofang_dengji: number;
   wuqi_shanghai: number;
   zuizhong_gongji?: number;
+  /** 加速等级（#92 时序引擎；0=无加速） */
+  jiasu_dengji?: number;
 }
 
 export interface HostileConfigDTO {
@@ -43,6 +45,8 @@ export interface CoefficientConfigDTO {
   huajin_xishu: number;
   fangyu_xishu: number;
   pvp_global_jianshang: number;
+  /** 加速等级系数（加速率 = 加速等级 / 系数 / 100；0 = 不启用） */
+  jiasu_xishu?: number;
 }
 
 export interface XinfaConfigDTO {
@@ -52,6 +56,8 @@ export interface XinfaConfigDTO {
   atk_up: number;
   pofang_up: number;
   huixin_up: number;
+  /** 门派基础公共 CD（秒；0/缺失 = 1.5） */
+  gcd_base?: number;
 }
 
 export interface CalculateRequest {
@@ -107,6 +113,19 @@ export interface SkillPoolItemDTO {
   dot_flag: number;
   has_critical_strike: boolean;
   lost_hp_zhenshishanghai: number;
+  // #92 时序字段（可选；旧数据缺失 = 默认值）
+  cast_time?: number;
+  gcd_kind?: number;
+  cooldown?: number;
+  charges?: number;
+  recharge?: number;
+  cd_haste?: boolean;
+  channel?: boolean;
+  buff_id?: string | null;
+  gcd_base?: number;
+  gcd_group?: number;
+  dot_interval?: number;
+  dot_duration?: number;
 }
 
 export interface StepOverrideDTO {
@@ -307,4 +326,117 @@ export interface FormData {
   coefficient: Record<string, number | string>;
   /** 选中的数值集 id（null/缺省 = 默认值集） */
   value_set?: string | null;
+}
+
+// ============ #92 战斗时序（时间轴） ============
+
+export type SkillKeyDTO = [number, number];
+
+export interface FormDefDTO {
+  id: string;
+  name: string;
+  gcd_base: number;
+  initial: boolean;
+  skills: SkillKeyDTO[];
+}
+
+export interface OnCastDTO {
+  switch_form: string | null;
+  gcd_lanes: string[];
+  lock_skills: SkillKeyDTO[];
+}
+
+export interface SkillCombatDTO {
+  skill_id: number;
+  sub_id: number;
+  form: string | null;
+  gcd_lane: string;
+  on_cast: OnCastDTO;
+  cast_time: number | null;
+  gcd_base: number | null;
+  gcd_kind: number | null;
+  cooldown: number | null;
+  charges: number | null;
+  recharge: number | null;
+  cd_haste: boolean | null;
+  channel: boolean | null;
+  buff_id: string | null;
+}
+
+export type BuffEffectDTO =
+  | { base_atk_pct: number }
+  | { huixin_pct: number }
+  | { huixiao_pct: number }
+  | { pofang_pct: number }
+  | { wushi_fangyu_pct: number }
+  | { shanghai_pct: number }
+  | { jiasu_pct: number };
+
+export interface TimedBuffDefDTO {
+  id: string;
+  name: string;
+  duration: number;
+  max_stacks: number;
+  refresh: boolean;
+  ignore_cap: boolean;
+  effects: BuffEffectDTO[];
+}
+
+export interface CombatMetaDTO {
+  profession: string;
+  version: string;
+  note: string;
+}
+
+export interface CombatDataDTO {
+  meta: CombatMetaDTO;
+  form: FormDefDTO[];
+  skill_combat: SkillCombatDTO[];
+  buff: TimedBuffDefDTO[];
+  miji: unknown[];
+  qixue: unknown[];
+}
+
+export interface CombatBundleDTO {
+  skills: SkillPoolItemDTO[];
+  combat: CombatDataDTO;
+}
+
+export type TimelineActionDTO =
+  | { kind: "cast"; skill_id: number; sub_id: number; skill_name?: string }
+  | { kind: "switch_form"; form: string };
+
+export interface TimelineRequestDTO {
+  skills: SkillPoolItemDTO[];
+  forms: FormDefDTO[];
+  timed_buffs: TimedBuffDefDTO[];
+  actions: TimelineActionDTO[];
+  window: number;
+  player: PlayerConfigDTO;
+  hostile: HostileConfigDTO;
+  xinfa: XinfaConfigDTO;
+  buff: BuffConfigDTO;
+  coeff: CoefficientConfigDTO;
+  value_set?: string | null;
+  combat?: CombatDataDTO | null;
+}
+
+// 与 Rust `TimelineEventKindDTO` 的 #[serde(tag = "kind")] 内部标签形状一致：
+// 真实 JSON 形如 { "kind": "cast", "skill_name": ..., "damage": ..., "hit_time": ... }
+export type TimelineEventKindDTO =
+  | { kind: "cast"; skill_name: string; damage: number; hit_time: number }
+  | { kind: "dot_tick"; skill_name: string; index: number; damage: number }
+  | { kind: "form_switch"; from: string; to: string }
+  | { kind: "buff_gain"; buff_id: string; stacks: number };
+
+export interface TimelineEventDTO {
+  time: number;
+  kind: TimelineEventKindDTO;
+}
+
+export interface TimelineResultDTO {
+  events: TimelineEventDTO[];
+  total_damage: number;
+  window_dps: number;
+  skipped_actions: number;
 }

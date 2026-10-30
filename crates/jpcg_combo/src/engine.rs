@@ -334,6 +334,7 @@ mod tests {
             pofang_dengji: 109160,
             wuqi_shanghai: 0,
             zuizhong_gongji: 0,
+            jiasu_dengji: 0,
         }
     }
 
@@ -358,6 +359,7 @@ mod tests {
             atk_up: 1.96,
             pofang_up: 2.0,
             huixin_up: 0.0,
+            gcd_base: 0.0,
         }
     }
 

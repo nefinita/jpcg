@@ -63,6 +63,16 @@ pub fn load_skill_pool(profession: String) -> Vec<jpcg_api::SkillPoolItemDTO> {
             zhenshishanghai: s.zhenshishanghai,
             has_critical_strike: s.has_critical_strike,
             lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
+            cast_time: s.cast_time,
+            gcd_kind: s.gcd_kind,
+            cooldown: s.cooldown,
+            charges: s.charges,
+            recharge: s.recharge,
+            cd_haste: s.cd_haste,
+            channel: s.channel,
+            buff_id: s.buff_id.clone(),
+            gcd_base: s.gcd_base,
+            gcd_group: s.gcd_group,
         })
         .collect()
 }
