@@ -553,3 +553,32 @@ fn pareto_keeps_damage_survival_tradeoff_and_removes_dominated_results() {
         out.pareto[1].composed.stats.qixue
     );
 }
+
+#[test]
+fn composed_acceleration_is_forwarded_to_player_dto() {
+    let mut c = catalog();
+    let mut l = loadout();
+    l.base.jiasu = 300;
+    select(&mut l, Slot::Tou, Source::Baowu, Tier::Base); // 样例装备+15加速
+    c.sets
+        .iter_mut()
+        .find(|s| s.id == "sample-weiwang")
+        .unwrap()
+        .tiers
+        .iter_mut()
+        .find(|t| t.tier == Tier::Base)
+        .unwrap()
+        .bonus2
+        .jiasu = 77;
+    let composed = c.compose(&l).unwrap();
+    assert_eq!(composed.stats.jiasu, 392); // 裸装300 + 装备15 + 套装77
+    let dto = player(&composed);
+    assert_eq!(dto.jiasu_dengji, 392);
+    let json = serde_json::to_string(&dto).unwrap();
+    let roundtrip: jpcg_api::PlayerConfigDTO = serde_json::from_str(&json).unwrap();
+    assert_eq!(roundtrip.jiasu_dengji, 392);
+    assert_eq!(
+        player(&catalog().compose(&loadout()).unwrap()).jiasu_dengji,
+        0
+    );
+}

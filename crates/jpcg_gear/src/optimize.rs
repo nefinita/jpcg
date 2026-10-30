@@ -244,7 +244,23 @@ pub fn player(composed: &Composed) -> jpcg_api::PlayerConfigDTO {
         huixin_xiaoguo: stats.huixiao,
         pofang_dengji: stats.pofang,
         wuqi_shanghai: stats.wuqi_shanghai,
+        jiasu_dengji: stats.jiasu,
     }
+}
+
+/// 保留 DTO 的加速等级；PlayerConfig::new 为兼容旧调用仍将该字段初始化为 0。
+fn core_player(p: &jpcg_api::PlayerConfigDTO) -> jpcg_core::type_set::player::PlayerConfig {
+    let mut player = jpcg_core::type_set::player::PlayerConfig::new(
+        p.jcsx.clone(),
+        p.jichu_shuxing,
+        p.jichu_gongji,
+        p.huixin_dengji,
+        p.huixin_xiaoguo,
+        p.pofang_dengji,
+        p.wuqi_shanghai,
+    );
+    player.jiasu_dengji = p.jiasu_dengji;
+    player
 }
 fn main_name(stat: MainStat) -> &'static str {
     match stat {
@@ -395,18 +411,8 @@ fn score(
             // 直接复用 core 同一个 q_cal，避免每候选重复加载技能及 host 的 stdout 日志。
             use jpcg_core::type_set::{
                 buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
-                player::PlayerConfig,
             };
-            let p = &config.player;
-            let player = PlayerConfig::new(
-                p.jcsx.clone(),
-                p.jichu_shuxing,
-                p.jichu_gongji,
-                p.huixin_dengji,
-                p.huixin_xiaoguo,
-                p.pofang_dengji,
-                p.wuqi_shanghai,
-            );
+            let player = core_player(&config.player);
             let hostile: HostilepileConfig = serde_json::from_value(
                 serde_json::to_value(&config.hostile).map_err(|e| e.to_string())?,
             )
@@ -454,6 +460,24 @@ fn score(
                 },
             )?;
             Ok(result.final_kill_prob)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::core_player;
+
+    #[test]
+    fn expected_damage_adapter_preserves_acceleration_rating() {
+        // 构造器默认加速为0，适配器必须保留显式值，也兼容旧配置的0值。
+        for rating in [0, 12345] {
+            let dto = jpcg_api::PlayerConfigDTO {
+                jcsx: "根骨".into(),
+                jiasu_dengji: rating,
+                ..Default::default()
+            };
+            assert_eq!(core_player(&dto).jiasu_dengji, rating);
         }
     }
 }

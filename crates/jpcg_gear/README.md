@@ -49,7 +49,7 @@ let player_dto = jpcg_gear::player(&composed);
 let response = jpcg_gear::call(&catalog, json_request);
 ```
 
-`Loadout` 的 `school/revision/value_set/base/choices` 全部随 TOML 保存；`base` 必须是**裸装基础值**，合成时不读取计算配置已有的 player 点数，避免装备重复相加。导出用 `toml::to_string_pretty(&composed.loadout)`，重新解析即可复现。`Composed` 返回 profile、完整 stats、各套装阈值及档位、未应用 CD 元数据与 warnings。player 转换只写现有 DTO 支持的伤害属性；气血/御劲/化劲/加速仍保留在 Composed 中，供驾驶台展示或约束。
+`Loadout` 的 `school/revision/value_set/base/choices` 全部随 TOML 保存；`base` 必须是**裸装基础值**，合成时不读取计算配置已有的 player 点数，避免装备重复相加。导出用 `toml::to_string_pretty(&composed.loadout)`，重新解析即可复现。`Composed` 返回 profile、完整 stats、各套装阈值及档位、未应用 CD 元数据与 warnings。player 转换写入现有 DTO 支持的伤害属性，并将合成加速等级写入 `jiasu_dengji`；gear 的期望伤害适配器也保留该值。气血/御劲/化劲继续保留在 Composed 中，供驾驶台展示或约束。当前优化目标仍不重排技能时序。
 
 防具仅头/衣/腰/手/鞋计数，裤子/武器/暗器不能声明防具套装。2 件奖励一次、4 件另附 CD，两者同时生效；跨来源 2+2 可叠；饰品 2/3 件奖励同时生效。
 
