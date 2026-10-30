@@ -73,8 +73,35 @@ impl TimingSkill {
 /// 模拟动作：施放技能 / 手动切形态
 #[derive(Debug, Clone)]
 pub enum TimelineAction {
-    Cast(SkillKey),
+    /// 施放技能。
+    /// `(skill_id, sub_id)` 可能对应多个变体（例如莫问「入月·N 层」共用同一对 id），
+    /// 此时必须带 `skill_name` 指定具体条目；只给 id 且命中多个变体时该动作会被跳过。
+    Cast {
+        skill_id: u32,
+        sub_id: u32,
+        skill_name: Option<String>,
+    },
     SwitchForm(String),
+}
+
+impl TimelineAction {
+    /// 按技能 id 施放（仅在 (skill_id, sub_id) 唯一时可用）
+    pub fn cast(skill_id: u32, sub_id: u32) -> Self {
+        TimelineAction::Cast {
+            skill_id,
+            sub_id,
+            skill_name: None,
+        }
+    }
+
+    /// 按技能 id + 名称施放（用于同名 id 的多变体，如「入月·9层」）
+    pub fn cast_named(skill_id: u32, sub_id: u32, skill_name: impl Into<String>) -> Self {
+        TimelineAction::Cast {
+            skill_id,
+            sub_id,
+            skill_name: Some(skill_name.into()),
+        }
+    }
 }
 
 /// 时序模拟输入
@@ -135,6 +162,15 @@ pub struct TimelineResult {
 
 // ============ 内部运行态 ============
 
+/// 充能状态：剩余层数 / 上限 / 恢复间隔 / 下一层恢复时刻（满层 = +∞）
+#[derive(Debug, Clone, Copy)]
+struct ChargeState {
+    left: u32,
+    max: u32,
+    interval: f32,
+    next: f32,
+}
+
 #[derive(Debug, Clone)]
 struct ActiveBuff {
     def_index: usize,
@@ -177,10 +213,10 @@ struct Sim<'a> {
     dots: Vec<DotInstance>,
     /// 各 GCD 通道就绪时刻
     lane_ready: HashMap<String, f32>,
-    /// 各技能就绪时刻（无充能技能的 CD；有充能技能不用）
-    skill_ready: HashMap<SkillKey, f32>,
-    /// 充能（剩余层数, 下一层恢复时刻, 恢复间隔）
-    charges: HashMap<SkillKey, (u32, f32, f32)>,
+    /// 各技能就绪时刻（按下标记录，避免同名 id 变体共享状态；有充能技能不使用）
+    skill_ready: HashMap<usize, f32>,
+    /// 充能（按下标记录）
+    charges: HashMap<usize, ChargeState>,
     /// 当前形态 id（空 = 无形态概念）
     current_form: String,
     /// 活跃定时 buff
@@ -258,29 +294,108 @@ impl<'a> Sim<'a> {
         }
     }
 
+    /// 通道默认 GCD 基础（形态 > 心法/门派）
+    fn lane_base(&self, lane: &str) -> f32 {
+        self.form(lane)
+            .map(|f| f.gcd_base_secs(self.school_gcd_secs))
+            .unwrap_or(self.school_gcd_secs)
+    }
+
     /// 某通道的 GCD 时长（秒，含加速与 25% 封顶）
     fn lane_gcd(&self, lane: &str, rate: f32) -> f32 {
-        let base = self
-            .form(lane)
-            .map(|f| f.gcd_base_secs(self.school_gcd_secs))
-            .unwrap_or(self.school_gcd_secs);
         // 注意：rate 已由 `jiasu_at` 按「25% 封顶 + 突破上限」合并，这里不能再夹一次，
         // 否则可突破上限的加速会被二次截断。
-        timing::quantize_secs(base, rate)
+        timing::quantize_secs(self.lane_base(lane), rate)
+    }
+
+    /// 技能自身占用的 GCD 时长：技能 `gcd_base` 覆盖形态/心法基础；
+    /// `gcd_kind=2`（固定 GCD）不受加速影响。
+    fn skill_gcd(&self, sk: &TimingSkill, rate: f32) -> f32 {
+        if !sk.skill.occupies_gcd() {
+            return 0.0;
+        }
+        let base = if sk.skill.gcd_base > 0.0 {
+            sk.skill.gcd_base
+        } else {
+            self.lane_base(sk.lane())
+        };
+        if sk.skill.gcd_kind == 2 {
+            base
+        } else {
+            timing::quantize_secs(base, rate)
+        }
+    }
+
+    /// 按下标结算已恢复的充能层数，并推进下一层恢复时刻
+    fn settle_charges(&mut self, index: usize, at: f32) {
+        let Some(state) = self.charges.get_mut(&index) else {
+            return;
+        };
+        if state.interval <= 0.0 {
+            state.left = state.max;
+            state.next = f32::INFINITY;
+            return;
+        }
+        while state.left < state.max && state.next <= at {
+            state.left += 1;
+            state.next += state.interval;
+        }
+        if state.left >= state.max {
+            state.left = state.max;
+            state.next = f32::INFINITY;
+        }
+    }
+
+    /// (skill_id, sub_id) 命中的所有技能下标（同名 id 的多个变体可能不止一个）
+    fn indices_for_key(&self, key: SkillKey) -> Vec<usize> {
+        self.input
+            .skills
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.skill.skill_id == key.0 && s.skill.sub_id == key.1)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// 解析施放目标：id 唯一时直接命中；命中多个变体时必须用名称消歧，否则返回 None（跳过）。
+    fn resolve_skill(&self, skill_id: u32, sub_id: u32, name: Option<&str>) -> Option<usize> {
+        let candidates: Vec<usize> = self
+            .input
+            .skills
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.skill.skill_id == skill_id && s.skill.sub_id == sub_id)
+            .map(|(i, _)| i)
+            .collect();
+        match candidates.as_slice() {
+            [] => None,
+            [only] => Some(*only),
+            _ => {
+                let name = name?;
+                let mut named = candidates
+                    .iter()
+                    .copied()
+                    .filter(|&i| self.input.skills[i].skill.skill_name == name);
+                match (named.next(), named.next()) {
+                    (Some(i), None) => Some(i),
+                    _ => None,
+                }
+            }
+        }
     }
 
     /// 技能最早可施放时刻（形态已校验；GCD 通道 + CD/充能）
-    fn earliest_start(&self, sk: &TimingSkill) -> f32 {
-        let key = sk.key();
+    fn earliest_start(&self, index: usize) -> f32 {
+        let sk = &self.input.skills[index];
         let mut t: f32 = 0.0;
         // CD / 充能
-        if let Some(&ready) = self.skill_ready.get(&key) {
+        if let Some(&ready) = self.skill_ready.get(&index) {
             t = t.max(ready);
         }
-        if let Some(&(left, next_recharge, _)) = self.charges.get(&key) {
-            if left == 0 {
-                t = t.max(next_recharge);
-            }
+        if let Some(state) = self.charges.get(&index)
+            && state.left == 0
+        {
+            t = t.max(state.next);
         }
         // GCD 通道
         if sk.skill.occupies_gcd() {
@@ -292,7 +407,6 @@ impl<'a> Sim<'a> {
     /// 执行一次施放
     fn cast(&mut self, sk_index: usize, start: f32) -> f32 {
         let sk = &self.input.skills[sk_index];
-        let key = sk.key();
         let rate = self.jiasu_at(start);
         let cast_time = sk.skill.cast_time_with_haste(rate);
         let hit_time = start + cast_time;
@@ -307,11 +421,18 @@ impl<'a> Sim<'a> {
         )
         .q_cal();
 
+        // DOT 技能的 q_damage 已是全部跳数之和，伤害由 DotTick 事件按实际跳点计入；
+        // 这里只记起手事件，避免与 dot 跳点重复累加。
+        let direct_damage = if damage.dot_jumps.is_empty() {
+            damage.q_damage
+        } else {
+            0
+        };
         self.events.push(TimelineEvent {
             time: start,
             kind: TimelineEventKind::Cast {
                 skill_name: sk.skill.skill_name.clone(),
-                damage: damage.q_damage,
+                damage: direct_damage,
                 hit_time,
             },
         });
@@ -333,38 +454,61 @@ impl<'a> Sim<'a> {
         }
 
         // ---- 占用 GCD 通道（自身通道 + 副作用额外通道） ----
-        let own_gcd = self.lane_gcd(sk.lane(), rate);
+        // 自身通道取技能自己的 gcd_base / 固定 GCD 语义；副作用通道按通道默认值。
+        let own_gcd = self.skill_gcd(sk, rate);
         if sk.skill.occupies_gcd() {
+            let now = self.lane_ready.get(sk.lane()).copied().unwrap_or(0.0);
             self.lane_ready
-                .insert(sk.lane().to_string(), start + own_gcd);
+                .insert(sk.lane().to_string(), now.max(start + own_gcd));
         }
         for lane in &sk.on_cast.gcd_lanes {
             let g = self.lane_gcd(lane, rate);
             let now = self.lane_ready.get(lane).copied().unwrap_or(0.0);
             self.lane_ready.insert(lane.clone(), now.max(start + g));
         }
-        // 锁技能（如断云把孤锋破浪顶进 GCD）
+        // 锁技能（如断云把孤锋破浪顶进 GCD）；同名 id 的所有变体一起锁
         for lk in &sk.on_cast.lock_skills {
-            let now = self.skill_ready.get(lk).copied().unwrap_or(0.0);
-            self.skill_ready.insert(*lk, now.max(start + own_gcd));
+            for index in self.indices_for_key(*lk) {
+                let now = self.skill_ready.get(&index).copied().unwrap_or(0.0);
+                self.skill_ready.insert(index, now.max(start + own_gcd));
+            }
         }
 
         // ---- CD / 充能 ----
         let max_charges = sk.skill.max_charges();
         if max_charges > 1 {
-            let entry = self
-                .charges
-                .entry(key)
-                .or_insert((max_charges, 0.0, sk.skill.recharge));
-            entry.0 = entry.0.saturating_sub(1);
-            if entry.0 + 1 == max_charges {
-                // 第一层消耗后开始恢复
-                entry.1 = start + entry.2.max(0.0);
+            self.settle_charges(sk_index, start);
+            if let Some(state) = self.charges.get_mut(&sk_index) {
+                let was_full = state.left >= state.max;
+                state.left = state.left.saturating_sub(1);
+                if was_full {
+                    // 从满层消耗第一层时，恢复计时从这一刻开始
+                    state.next = if state.interval > 0.0 {
+                        start + state.interval
+                    } else {
+                        f32::INFINITY
+                    };
+                }
+            } else {
+                let interval = sk.skill.recharge.max(0.0);
+                self.charges.insert(
+                    sk_index,
+                    ChargeState {
+                        left: max_charges - 1,
+                        max: max_charges,
+                        interval,
+                        next: if interval > 0.0 {
+                            start + interval
+                        } else {
+                            f32::INFINITY
+                        },
+                    },
+                );
             }
         } else if sk.skill.cooldown > 0.0 {
             let cd = sk.skill.cooldown_with_haste(rate);
-            let now = self.skill_ready.get(&key).copied().unwrap_or(0.0);
-            self.skill_ready.insert(key, now.max(start + cd));
+            let now = self.skill_ready.get(&sk_index).copied().unwrap_or(0.0);
+            self.skill_ready.insert(sk_index, now.max(start + cd));
         }
 
         // ---- 定时 buff（只提供 buff 的技能） ----
@@ -377,22 +521,28 @@ impl<'a> Sim<'a> {
         {
             let def = &self.input.timed_buffs[def_index];
             let max = def.max_stacks();
+            // duration=0 表示常驻（不随时间失效）
+            let expires = if def.duration > 0.0 {
+                start + def.duration
+            } else {
+                f32::INFINITY
+            };
             if let Some(a) = self
                 .active_buffs
                 .iter_mut()
                 .find(|a| a.def_index == def_index && a.expires > start)
             {
                 if def.refresh {
-                    a.expires = start + def.duration;
+                    a.expires = expires;
                 } else if a.stacks < max {
                     a.stacks += 1;
-                    a.expires = start + def.duration;
+                    a.expires = expires;
                 }
             } else {
                 self.active_buffs.push(ActiveBuff {
                     def_index,
                     stacks: 1,
-                    expires: start + def.duration,
+                    expires,
                 });
                 self.events.push(TimelineEvent {
                     time: start,
@@ -444,21 +594,24 @@ impl<'a> Sim<'a> {
                         skipped += 1;
                     }
                 }
-                TimelineAction::Cast(key) => {
-                    let Some(index) = self
-                        .input
-                        .skills
-                        .iter()
-                        .position(|s| s.skill.skill_id == key.0 && s.skill.sub_id == key.1)
+                TimelineAction::Cast {
+                    skill_id,
+                    sub_id,
+                    skill_name,
+                } => {
+                    let Some(index) = self.resolve_skill(*skill_id, *sub_id, skill_name.as_deref())
                     else {
+                        // id 无法唯一确定具体变体（且未提供 skill_name）→ 跳过，避免静默取错条目
                         skipped += 1;
                         continue;
                     };
+                    // 先按当前时刻结算充能，再判断能否施放
+                    self.settle_charges(index, now);
                     if !self.form_allows(&self.input.skills[index]) {
                         skipped += 1;
                         continue;
                     }
-                    let start = self.earliest_start(&self.input.skills[index]).max(now);
+                    let start = self.earliest_start(index).max(now);
                     if start > self.input.window {
                         skipped += 1;
                         continue;
@@ -491,7 +644,14 @@ impl<'a> Sim<'a> {
         let mut total = 0f64;
         for e in &self.events {
             match &e.kind {
-                TimelineEventKind::Cast { damage, .. } => total += *damage as f64,
+                // 读条/引导的伤害在命中时刻结算：只有命中落在窗口内才计入总伤
+                TimelineEventKind::Cast {
+                    damage, hit_time, ..
+                } => {
+                    if *hit_time <= self.input.window {
+                        total += *damage as f64;
+                    }
+                }
                 TimelineEventKind::DotTick { damage, .. } => total += *damage as f64,
                 _ => {}
             }
@@ -615,7 +775,7 @@ mod tests {
         let skills = vec![timing(skill(1, 0, "A"), "default")];
         let input = base_input(
             skills,
-            vec![TimelineAction::Cast((1, 0)), TimelineAction::Cast((1, 0))],
+            vec![TimelineAction::cast(1, 0), TimelineAction::cast(1, 0)],
             10.0,
         );
         let result = simulate(&input);
@@ -632,7 +792,7 @@ mod tests {
         };
         let mut input = base_input(
             vec![a, b],
-            vec![TimelineAction::Cast((1, 0)), TimelineAction::Cast((2, 0))],
+            vec![TimelineAction::cast(1, 0), TimelineAction::cast(2, 0)],
             10.0,
         );
         input.forms = vec![
@@ -666,7 +826,7 @@ mod tests {
         };
         result = simulate(&TimelineInput {
             skills: vec![a2, timing(skill(2, 0, "双持技能"), "dual")],
-            actions: vec![TimelineAction::Cast((1, 0)), TimelineAction::Cast((2, 0))],
+            actions: vec![TimelineAction::cast(1, 0), TimelineAction::cast(2, 0)],
             ..input.clone()
         });
         assert_eq!(result.skipped_actions, 0);
@@ -690,7 +850,7 @@ mod tests {
         };
         let mut input = base_input(
             vec![duanyun, gufeng],
-            vec![TimelineAction::Cast((1, 0)), TimelineAction::Cast((2, 0))],
+            vec![TimelineAction::cast(1, 0), TimelineAction::cast(2, 0)],
             10.0,
         );
         input.forms = vec![
@@ -724,7 +884,7 @@ mod tests {
         sk.cast_time = 1.5;
         let input = base_input(
             vec![timing(sk, "default")],
-            vec![TimelineAction::Cast((1, 0))],
+            vec![TimelineAction::cast(1, 0)],
             10.0,
         );
         let result = simulate(&input);
@@ -766,7 +926,7 @@ mod tests {
         sk.dot_up = 0.0;
         let input = base_input(
             vec![timing(sk.clone(), "default")],
-            vec![TimelineAction::Cast((1, 0))],
+            vec![TimelineAction::cast(1, 0)],
             30.0,
         );
         let result = simulate(&input);
@@ -810,9 +970,9 @@ mod tests {
         let input = base_input(
             vec![timing(sk, "default")],
             vec![
-                TimelineAction::Cast((1, 0)),
-                TimelineAction::Cast((1, 0)),
-                TimelineAction::Cast((1, 0)),
+                TimelineAction::cast(1, 0),
+                TimelineAction::cast(1, 0),
+                TimelineAction::cast(1, 0),
             ],
             20.0,
         );
@@ -829,7 +989,7 @@ mod tests {
         // 25% 封顶：加速等级 2024（20.02%）→ GCD 1.5 → floor(24/1.2002)=19 帧 = 1.1875 秒
         let mut input = base_input(
             vec![timing(skill(1, 0, "A"), "default")],
-            vec![TimelineAction::Cast((1, 0)), TimelineAction::Cast((1, 0))],
+            vec![TimelineAction::cast(1, 0), TimelineAction::cast(1, 0)],
             10.0,
         );
         input.player.jiasu_dengji = 2024;
@@ -852,9 +1012,9 @@ mod tests {
         buff_skill.buff_id = "jiasu_buff".into();
         input.skills.push(timing(buff_skill, "default"));
         input.actions = vec![
-            TimelineAction::Cast((2, 0)),
-            TimelineAction::Cast((1, 0)),
-            TimelineAction::Cast((1, 0)),
+            TimelineAction::cast(2, 0),
+            TimelineAction::cast(1, 0),
+            TimelineAction::cast(1, 0),
         ];
         let result = simulate(&input);
         let times = cast_times(&result);
@@ -912,7 +1072,7 @@ cast_time = 2.0
         let input = TimelineInput {
             skills,
             forms: data.form.clone(),
-            actions: vec![TimelineAction::Cast((1, 0)), TimelineAction::Cast((2, 0))],
+            actions: vec![TimelineAction::cast(1, 0), TimelineAction::cast(2, 0)],
             ..base_input(Vec::new(), Vec::new(), 10.0)
         };
         let result = simulate(&input);
@@ -946,7 +1106,7 @@ cast_time = 2.0
             vec![a, b],
             vec![
                 TimelineAction::SwitchForm("b".into()),
-                TimelineAction::Cast((2, 0)),
+                TimelineAction::cast(2, 0),
             ],
             10.0,
         );
@@ -969,5 +1129,210 @@ cast_time = 2.0
         let result = simulate(&input);
         assert_eq!(result.skipped_actions, 0);
         assert_eq!(cast_times(&result), vec![0.0]);
+    }
+
+    #[test]
+    fn dot_damage_counted_by_ticks_not_double() {
+        // 18 秒 9 跳 dot：总伤 = 逐跳之和（起手事件不再重复计入 q_damage 总和）
+        let mut sk = skill(1, 0, "dot");
+        sk.dot_flag = 1;
+        sk.dot_interval = 2.0;
+        sk.dot_duration = 18.0;
+        let input = base_input(
+            vec![timing(sk, "default")],
+            vec![TimelineAction::cast(1, 0)],
+            30.0,
+        );
+        let result = simulate(&input);
+        let tick_sum: f64 = result
+            .events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                TimelineEventKind::DotTick { damage, .. } => Some(*damage as f64),
+                _ => None,
+            })
+            .sum();
+        assert!(tick_sum > 0.0);
+        assert!((result.total_damage - tick_sum).abs() < 1.0);
+        // 起手事件本身不记直接伤害
+        let cast_damage: u32 = result
+            .events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                TimelineEventKind::Cast { damage, .. } => Some(*damage),
+                _ => None,
+            })
+            .sum();
+        assert_eq!(cast_damage, 0);
+    }
+
+    #[test]
+    fn dot_only_counts_ticks_inside_short_window() {
+        // 窗口 1 秒、首跳在 2 秒：窗口伤害应为 0
+        let mut sk = skill(1, 0, "dot");
+        sk.dot_flag = 1;
+        sk.dot_interval = 2.0;
+        sk.dot_duration = 18.0;
+        let input = base_input(
+            vec![timing(sk, "default")],
+            vec![TimelineAction::cast(1, 0)],
+            1.0,
+        );
+        let result = simulate(&input);
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|e| matches!(e.kind, TimelineEventKind::Cast { .. }))
+        );
+        assert!(
+            !result
+                .events
+                .iter()
+                .any(|e| matches!(e.kind, TimelineEventKind::DotTick { .. }))
+        );
+        assert_eq!(result.total_damage, 0.0);
+        assert_eq!(result.window_dps, 0.0);
+    }
+
+    #[test]
+    fn ambiguous_skill_key_is_skipped_unless_named() {
+        // 入月 1/9 层共用 (14870, 44386)，只给 id 时跳过；带名称时选中正确变体
+        let mut one = skill(14870, 44386, "入月·1层");
+        one.atk_xishu = 0.45833334;
+        let mut nine = skill(14870, 44386, "入月·9层");
+        nine.atk_xishu = 4.125;
+        let skills = vec![timing(one, "default"), timing(nine, "default")];
+
+        let ambiguous = base_input(
+            skills.clone(),
+            vec![TimelineAction::cast(14870, 44386)],
+            10.0,
+        );
+        let r = simulate(&ambiguous);
+        assert_eq!(r.skipped_actions, 1);
+        assert!(r.events.is_empty());
+
+        let named = base_input(
+            skills,
+            vec![TimelineAction::cast_named(14870, 44386, "入月·9层")],
+            10.0,
+        );
+        let r2 = simulate(&named);
+        assert_eq!(r2.skipped_actions, 0);
+        let name = r2
+            .events
+            .iter()
+            .find_map(|e| match &e.kind {
+                TimelineEventKind::Cast { skill_name, .. } => Some(skill_name.clone()),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(name, "入月·9层");
+    }
+
+    #[test]
+    fn charges_recover_on_continuing_timeline() {
+        // 2 层充能、8 秒恢复、1.5s GCD：5 次施放 = 0 / 1.5 / 8 / 16 / 24
+        let mut sk = skill(1, 0, "充能技能");
+        sk.charges = 2;
+        sk.recharge = 8.0;
+        let input = base_input(
+            vec![timing(sk, "default")],
+            vec![
+                TimelineAction::cast(1, 0),
+                TimelineAction::cast(1, 0),
+                TimelineAction::cast(1, 0),
+                TimelineAction::cast(1, 0),
+                TimelineAction::cast(1, 0),
+            ],
+            30.0,
+        );
+        let result = simulate(&input);
+        assert_eq!(result.skipped_actions, 0);
+        assert_eq!(cast_times(&result), vec![0.0, 1.5, 8.0, 16.0, 24.0]);
+    }
+
+    #[test]
+    fn skill_gcd_base_overrides_form_and_fixed_gcd_ignores_haste() {
+        // 技能自带 gcd_base=1.0：在 1.5s 心法下两次施放间隔 1.0s
+        let mut sk = skill(1, 0, "自带 GCD");
+        sk.gcd_base = 1.0;
+        let input = base_input(
+            vec![timing(sk, "default")],
+            vec![TimelineAction::cast(1, 0), TimelineAction::cast(1, 0)],
+            10.0,
+        );
+        assert_eq!(cast_times(&simulate(&input)), vec![0.0, 1.0]);
+
+        // gcd_kind=2 固定 GCD：20.02% 加速下仍为 1.5s
+        let mut fixed = skill(2, 0, "固定 GCD");
+        fixed.gcd_kind = 2;
+        let mut input2 = base_input(
+            vec![timing(fixed, "default")],
+            vec![TimelineAction::cast(2, 0), TimelineAction::cast(2, 0)],
+            10.0,
+        );
+        input2.player.jiasu_dengji = 2024;
+        input2.coeff.jiasu_xishu = 101.079;
+        assert_eq!(cast_times(&simulate(&input2)), vec![0.0, 1.5]);
+    }
+
+    #[test]
+    fn cast_straddling_window_counts_damage_only_when_hit_inside() {
+        // 2 秒读条、窗口 1 秒：起手事件保留，但命中在 2 秒 → 窗口伤害 0
+        let mut sk = skill(1, 0, "长读条");
+        sk.cast_time = 2.0;
+        let input = base_input(
+            vec![timing(sk, "default")],
+            vec![TimelineAction::cast(1, 0)],
+            1.0,
+        );
+        let result = simulate(&input);
+        let hit = result
+            .events
+            .iter()
+            .find_map(|e| match &e.kind {
+                TimelineEventKind::Cast { hit_time, .. } => Some(*hit_time),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(hit, 2.0);
+        assert_eq!(result.total_damage, 0.0);
+    }
+
+    #[test]
+    fn permanent_buff_affects_later_casts() {
+        // duration=0 常驻加速 buff：后续技能 GCD 按 25% 加速量化（1.1875s）
+        let mut buff_skill = skill(9, 0, "开爆发");
+        buff_skill.effect_type = 1;
+        buff_skill.buff_id = "burst".into();
+        let mut input = base_input(
+            vec![
+                timing(buff_skill, "default"),
+                timing(skill(1, 0, "输出"), "default"),
+            ],
+            vec![
+                TimelineAction::cast(9, 0),
+                TimelineAction::cast(1, 0),
+                TimelineAction::cast(1, 0),
+            ],
+            10.0,
+        );
+        input.timed_buffs = vec![TimedBuffDef {
+            id: "burst".into(),
+            name: "爆发".into(),
+            duration: 0.0,
+            max_stacks: 1,
+            refresh: true,
+            effects: vec![BuffEffect::JiasuPct(25.0)],
+            ignore_cap: false,
+        }];
+        let result = simulate(&input);
+        let times = cast_times(&result);
+        assert_eq!(times.len(), 3);
+        // 起手 buff 技能无读条，占 1.5s GCD；第二次输出在 1.5s，第三次在其后 1.1875s
+        assert!((times[1] - 1.5).abs() < 1e-4, "实际 {:?}", times);
+        assert!((times[2] - 2.6875).abs() < 1e-4, "实际 {:?}", times);
     }
 }

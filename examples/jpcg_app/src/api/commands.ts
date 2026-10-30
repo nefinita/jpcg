@@ -403,7 +403,10 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         const skill = req?.skills?.find((s) => s.skill_id === a.skill_id && (s.sub_id ?? 0) === a.sub_id);
         const damage = Math.floor(80000 + Math.random() * 20000);
         total += damage;
-        events.push({ time: t, kind: { cast: { skill_name: skill?.skill_name ?? "技能", damage, hit_time: t + (skill?.cast_time ?? 1.5) } } });
+        events.push({
+          time: t,
+          kind: { kind: "cast", skill_name: skill?.skill_name ?? "技能", damage, hit_time: t + (skill?.cast_time ?? 1.5) },
+        });
         t += skill?.cast_time ?? 1.5;
       }
       return {

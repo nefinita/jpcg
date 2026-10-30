@@ -580,8 +580,16 @@ pub struct CombatDataDTO {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TimelineActionDTO {
-    Cast { skill_id: u32, sub_id: u32 },
-    SwitchForm { form: String },
+    Cast {
+        skill_id: u32,
+        sub_id: u32,
+        /// 技能名：用于在 (skill_id, sub_id) 对应多个变体（如「入月·N 层」）时消歧
+        #[serde(default)]
+        skill_name: Option<String>,
+    },
+    SwitchForm {
+        form: String,
+    },
 }
 
 /// 时间轴计算请求

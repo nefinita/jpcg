@@ -403,7 +403,7 @@ export interface CombatBundleDTO {
 }
 
 export type TimelineActionDTO =
-  | { kind: "cast"; skill_id: number; sub_id: number }
+  | { kind: "cast"; skill_id: number; sub_id: number; skill_name?: string }
   | { kind: "switch_form"; form: string };
 
 export interface TimelineRequestDTO {
@@ -421,11 +421,13 @@ export interface TimelineRequestDTO {
   combat?: CombatDataDTO | null;
 }
 
+// 与 Rust `TimelineEventKindDTO` 的 #[serde(tag = "kind")] 内部标签形状一致：
+// 真实 JSON 形如 { "kind": "cast", "skill_name": ..., "damage": ..., "hit_time": ... }
 export type TimelineEventKindDTO =
-  | { cast: { skill_name: string; damage: number; hit_time: number } }
-  | { dot_tick: { skill_name: string; index: number; damage: number } }
-  | { form_switch: { from: string; to: string } }
-  | { buff_gain: { buff_id: string; stacks: number } };
+  | { kind: "cast"; skill_name: string; damage: number; hit_time: number }
+  | { kind: "dot_tick"; skill_name: string; index: number; damage: number }
+  | { kind: "form_switch"; from: string; to: string }
+  | { kind: "buff_gain"; buff_id: string; stacks: number };
 
 export interface TimelineEventDTO {
   time: number;

@@ -68,9 +68,14 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         .actions
         .into_iter()
         .map(|a| match a {
-            TimelineActionDTO::Cast { skill_id, sub_id } => {
-                TimelineAction::Cast((skill_id, sub_id))
-            }
+            TimelineActionDTO::Cast {
+                skill_id,
+                sub_id,
+                skill_name,
+            } => match skill_name {
+                Some(name) => TimelineAction::cast_named(skill_id, sub_id, name),
+                None => TimelineAction::cast(skill_id, sub_id),
+            },
             TimelineActionDTO::SwitchForm { form } => TimelineAction::SwitchForm(form),
         })
         .collect();
@@ -161,10 +166,12 @@ mod tests {
                 TimelineActionDTO::Cast {
                     skill_id: 1,
                     sub_id: 0,
+                    skill_name: None,
                 },
                 TimelineActionDTO::Cast {
                     skill_id: 1,
                     sub_id: 0,
+                    skill_name: None,
                 },
             ],
             window: 10.0,

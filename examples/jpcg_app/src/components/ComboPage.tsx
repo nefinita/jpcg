@@ -7,6 +7,7 @@ import type {
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
 import { IconGear, IconClose, IconSave, IconTrash, IconStar } from "./icons";
+import { formatTimelineEvent } from "./timelineFormat";
 import styles from "./ComboPage.module.css";
 
 interface Props {
@@ -128,6 +129,8 @@ export default function ComboPage({ xinfaName, formData }: Props) {
           kind: "cast" as const,
           skill_id: s.skill.skill_id,
           sub_id: s.skill.sub_id ?? 0,
+          // 同一 (skill_id, sub_id) 可能对应多个变体（入月·N 层），必须带名字消歧
+          skill_name: s.skill.skill_name,
         })),
         window: 300,
         player: req.player,
@@ -323,24 +326,11 @@ export default function ComboPage({ xinfaName, formData }: Props) {
             <span>事件 {timelineResult.events.length}</span>
           </div>
           <div style={{ maxHeight: 200, overflowY: "auto", fontSize: 12, fontFamily: "monospace" }}>
-            {timelineResult.events.slice(0, 200).map((e, i) => {
-              const k = e.kind as Record<string, unknown>;
-              let label = "";
-              if ("cast" in k) {
-                const c = k.cast as { skill_name: string; damage: number; hit_time: number };
-                label = `施放 ${c.skill_name} @${c.hit_time.toFixed(2)}s 伤害 ${c.damage}`;
-              } else if ("dot_tick" in k) {
-                const d = k.dot_tick as { skill_name: string; index: number; damage: number };
-                label = `dot ${d.skill_name} #${d.index} 伤害 ${d.damage}`;
-              } else if ("form_switch" in k) {
-                const f = k.form_switch as { from: string; to: string };
-                label = `切形态 ${f.from} → ${f.to}`;
-              } else if ("buff_gain" in k) {
-                const b = k.buff_gain as { buff_id: string; stacks: number };
-                label = `buff ${b.buff_id} ×${b.stacks}`;
-              }
-              return <div key={i}>{e.time.toFixed(2)}s  {label}</div>;
-            })}
+            {timelineResult.events.slice(0, 200).map((e, i) => (
+              <div key={i}>
+                {e.time.toFixed(2)}s  {formatTimelineEvent(e)}
+              </div>
+            ))}
           </div>
         </section>
       )}
