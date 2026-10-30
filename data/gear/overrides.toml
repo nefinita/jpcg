@@ -1,0 +1,10 @@
+overrides = []
+
+# 合成测试样例：全部装备/套装点数均人为构造，不是游戏数据。
+[version]
+schema = 1
+season = 3
+revision = "synthetic-v1"
+value_set = "live-130"
+sample = true
+provenance = "Issue #90 synthetic fixtures; no game gear values supplied"
