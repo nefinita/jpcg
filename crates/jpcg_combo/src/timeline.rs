@@ -49,10 +49,16 @@ impl TimingSkill {
         if let Some(sc) = sc {
             sc.apply_to(&mut resolved);
         }
+        // 没有显式 combat.gcd_lane 时，从技能的 gcd_group 派生稳定通道：
+        // 0 = 默认通道；1 = 另一套（双形态）独立通道。避免分组信息被忽略后全部挤进 default。
+        let mut gcd_lane = sc.map(|s| s.gcd_lane.clone()).unwrap_or_default();
+        if gcd_lane.is_empty() && resolved.gcd_group != 0 {
+            gcd_lane = format!("group_{}", resolved.gcd_group);
+        }
         TimingSkill {
             skill: resolved,
             form: sc.and_then(|s| s.form.clone()),
-            gcd_lane: sc.map(|s| s.gcd_lane.clone()).unwrap_or_default(),
+            gcd_lane,
             on_cast: sc.map(|s| s.on_cast.clone()).unwrap_or_default(),
         }
     }
@@ -521,35 +527,54 @@ impl<'a> Sim<'a> {
         {
             let def = &self.input.timed_buffs[def_index];
             let max = def.max_stacks();
+            let refresh = def.refresh;
+            let buff_id = def.id.clone();
             // duration=0 表示常驻（不随时间失效）
             let expires = if def.duration > 0.0 {
                 start + def.duration
             } else {
                 f32::INFINITY
             };
-            if let Some(a) = self
-                .active_buffs
-                .iter_mut()
-                .find(|a| a.def_index == def_index && a.expires > start)
-            {
-                if def.refresh {
-                    a.expires = expires;
-                } else if a.stacks < max {
-                    a.stacks += 1;
+            let mut applied_stacks: Option<u8> = None;
+            if refresh {
+                // refresh=true：叠加层数并刷新持续时间（已有实例合并为一层）
+                if let Some(a) = self
+                    .active_buffs
+                    .iter_mut()
+                    .find(|a| a.def_index == def_index && a.expires > start)
+                {
+                    if a.stacks < max {
+                        a.stacks += 1;
+                        applied_stacks = Some(a.stacks);
+                    }
                     a.expires = expires;
                 }
-            } else {
-                self.active_buffs.push(ActiveBuff {
-                    def_index,
-                    stacks: 1,
-                    expires,
-                });
+            }
+            if applied_stacks.is_none() {
+                // refresh=false：每个实例独立计时（受总层数上限约束）
+                let active_count = self
+                    .active_buffs
+                    .iter()
+                    .filter(|a| a.def_index == def_index && a.expires > start)
+                    .count();
+                let can_push = if refresh {
+                    true
+                } else {
+                    active_count < max as usize
+                };
+                if can_push {
+                    self.active_buffs.push(ActiveBuff {
+                        def_index,
+                        stacks: 1,
+                        expires,
+                    });
+                    applied_stacks = Some(1);
+                }
+            }
+            if let Some(stacks) = applied_stacks {
                 self.events.push(TimelineEvent {
                     time: start,
-                    kind: TimelineEventKind::BuffGain {
-                        buff_id: def.id.clone(),
-                        stacks: 1,
-                    },
+                    kind: TimelineEventKind::BuffGain { buff_id, stacks },
                 });
             }
         }
@@ -1334,5 +1359,58 @@ cast_time = 2.0
         // 起手 buff 技能无读条，占 1.5s GCD；第二次输出在 1.5s，第三次在其后 1.1875s
         assert!((times[1] - 1.5).abs() < 1e-4, "实际 {:?}", times);
         assert!((times[2] - 2.6875).abs() < 1e-4, "实际 {:?}", times);
+    }
+
+    #[test]
+    fn non_refresh_buff_instances_expire_independently() {
+        // refresh=false：duration=3、max_stacks=2，t=0 / 1.5 各施加一次
+        // → t=2.9 两层都活着（+20%），t=3 第一层到期只剩一层（+10%）
+        let mut buff_skill = skill(9, 0, "上护甲");
+        buff_skill.effect_type = 1;
+        buff_skill.buff_id = "armor".into();
+        let mut input = base_input(vec![timing(buff_skill, "default")], vec![], 10.0);
+        input.timed_buffs = vec![TimedBuffDef {
+            id: "armor".into(),
+            name: "护甲".into(),
+            duration: 3.0,
+            max_stacks: 2,
+            refresh: false,
+            effects: vec![BuffEffect::BaseAtkPct(10.0)],
+            ignore_cap: false,
+        }];
+        let mut sim = Sim::new(&input);
+        sim.cast(0, 0.0);
+        sim.cast(0, 1.5);
+        assert_eq!(sim.active_buffs.len(), 2, "两层应为两个独立实例");
+        assert!((sim.buff_at(2.9).base_atk_pct - 20.0).abs() < 1e-4);
+        assert!(
+            (sim.buff_at(3.0).base_atk_pct - 10.0).abs() < 1e-4,
+            "第一层应在 t=3 到期，只剩第二层（实际 {}）",
+            sim.buff_at(3.0).base_atk_pct
+        );
+        assert!((sim.buff_at(4.5).base_atk_pct - 0.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn gcd_group_derives_independent_lanes_without_overlay() {
+        // 无 combat overlay 时，gcd_group=0 / 1 应各自成为独立通道 → 两个瞬发都在 0 秒
+        let mut a = skill(1, 0, "A");
+        a.gcd_group = 0;
+        let mut b = skill(2, 0, "B");
+        b.gcd_group = 1;
+        let data = CombatData::default();
+        let skills = vec![
+            TimingSkill::from_combat(&a, &data),
+            TimingSkill::from_combat(&b, &data),
+        ];
+        assert_eq!(skills[0].lane(), "default");
+        assert_eq!(skills[1].lane(), "group_1");
+        let input = base_input(
+            skills,
+            vec![TimelineAction::cast(1, 0), TimelineAction::cast(2, 0)],
+            10.0,
+        );
+        let result = simulate(&input);
+        assert_eq!(cast_times(&result), vec![0.0, 0.0]);
     }
 }
