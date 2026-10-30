@@ -178,6 +178,10 @@ fn invalid_catalog_rules_are_rejected() {
         Box::new(|c| c.templates[0].green = Green::Yujin),
         Box::new(|c| c.sets.push(c.sets[0].clone())),
         Box::new(|c| c.sets[0].source = Source::Baowu),
+        Box::new(|c| c.sets[0].tiers[0].cooldown4.clear()),
+        Box::new(|c| c.sets[0].tiers[0].bonus2 = Stats::default()),
+        Box::new(|c| c.sets[2].tiers[0].bonus2.huajin = 0),
+        Box::new(|c| c.sets[2].tiers[0].bonus3.as_mut().unwrap().yujin = 0),
         Box::new(|c| c.version.schema = 2),
         Box::new(|c| c.templates.retain(|t| t.choice.slot != Slot::Anqi)),
         Box::new(|c| {

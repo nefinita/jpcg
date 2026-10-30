@@ -123,7 +123,13 @@ impl Catalog {
                     return Err("重复套装档位".into());
                 }
                 match set.kind {
-                    SetKind::Armor if tier.bonus3.is_some() => return Err("防具没有3件套".into()),
+                    SetKind::Armor
+                        if tier.bonus3.is_some()
+                            || tier.bonus2 == Stats::default()
+                            || tier.cooldown4.is_empty() =>
+                    {
+                        return Err("防具须有非零2件属性和4件CD，不能有3件套".into());
+                    }
                     SetKind::Accessory => {
                         let only_huajin = Stats {
                             huajin: tier.bonus2.huajin,
@@ -134,7 +140,9 @@ impl Catalog {
                             yujin: bonus3.yujin,
                             ..Default::default()
                         };
-                        if tier.bonus2 != only_huajin
+                        if tier.bonus2.huajin == 0
+                            || bonus3.yujin == 0
+                            || tier.bonus2 != only_huajin
                             || bonus3 != &only_yujin
                             || !tier.cooldown4.is_empty()
                         {

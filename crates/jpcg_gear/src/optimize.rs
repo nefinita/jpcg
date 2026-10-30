@@ -270,6 +270,7 @@ pub fn optimize(
     req: &OptimizeRequest,
     on_progress: impl FnMut(Progress) -> bool,
 ) -> Result<OptimizeResult, String> {
+    catalog.validate()?;
     validate_context(catalog, req)?;
     let skill_table = jpcg_core::skill_editor::load_skills(&req.loadout.school);
     let x = &skill_table.xinfa;

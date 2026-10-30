@@ -26,7 +26,7 @@ compose/optimize 成功输出 JSON；api 输出 `{"status":"ok","result":...}` �
 
 - `schools`：`id` 是现有心法 key；`zhushuxing=liliang/shenfa/gengu/yuanqi`，`gongji_type/pofang_type=waigong/neigong`。主属性点由模板的 `zhushuxing` 携带，profile 指明其类型。攻击和破防类型必须与主属性一致。没有按门派臆造点数或御劲攻击公式。
 - `templates`：`school`、`choice={slot,source,tier,variant}`、`green`、`stats`、可选 `set/zhuangfen`。唯一键是门派+完整 choice；非饰品 variant=0，饰品 variant=1/2。同一键的基础/升级档绿字固定。装分只展示，完全不参与搜索。
-- `sets`：每个来源最多一套防具与一套饰品，避免同源 2+2。每套按 tier 定义 `bonus2`、可选 `bonus3`、`cooldown4=[{skill_id,seconds}]`。防具不能有 bonus3；饰品 bonus2 仅化劲、bonus3 仅御劲，没有 cooldown4。宝物堆不能定义套装。
+- `sets`：每个来源最多一套防具与一套饰品，避免同源 2+2。每套按 tier 定义 `bonus2`、可选 `bonus3`、`cooldown4=[{skill_id,seconds}]`。防具2件属性与4件CD必须显式给出且非零，不能有 bonus3；饰品 bonus2 仅正化劲、bonus3 仅正御劲，没有 cooldown4。宝物堆不能定义套装。
 - `overrides`：通过 `school+choice` 指向已有唯一模板；可替换 green 和/或**整份** stats，不做增量加法，不创建新模板；应用前后均校验。空覆盖与重复覆盖报错。
 
 | 字段 | 枚举 / 含义 |
@@ -88,7 +88,7 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 
 | 目标 | 基线 | 最佳 | CLI耗时中位数 |
 | --- | ---: | ---: | ---: |
-| 徵期望伤害 | 40506 | 40544 | 2.283 ms |
-| 合成单步击杀率 | 0.09724 | 0.09724 | 3.862 ms |
+| 徵期望伤害 | 40506 | 40544 | 2.430 ms |
+| 合成单步击杀率 | 0.09724 | 0.09724 | 4.948 ms |
 
 该表只证明小样例可运行和推荐不劣于合法基线，不能替代真实装备场景、长连招或约1亿组合的性能验收。
