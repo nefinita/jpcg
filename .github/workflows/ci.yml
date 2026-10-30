@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [dev, beta, release, integration/91-gear-base]
   push:
-    branches: [dev]
+    branches: [dev, feature/91-gear-cockpit]
 
 concurrency:
   group: ci-${{ github.ref }}
