@@ -124,6 +124,19 @@ pub fn values_dir() -> Option<PathBuf> {
         .find(|d| d.is_dir())
 }
 
+/// 配装目录与值集共享读取优先级；存在但损坏的高优先级目录由调用方报错，不能静默回退。
+pub fn gear_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("JPCG_DATA_DIR") {
+        let root = env_data_root(&PathBuf::from(dir))?;
+        let gear = root.join("gear");
+        return gear.is_dir().then_some(gear);
+    }
+    read_root_candidates()
+        .into_iter()
+        .map(|r| r.join("gear"))
+        .find(|p| p.is_dir())
+}
+
 /// 由 `JPCG_DATA_DIR` 的值解析 values 目录。
 /// 兼容两种既有写法：
 ///   - 指向数据根（含 shuxing/、values/）→ `<root>/values`

@@ -157,3 +157,8 @@ pub mod calculate {
         cal::start_calculation_with_config(player, hostilepile, xinfa, buff, coeff)
     }
 }
+
+/// 与现有 data 通道同源的宿主数据路径（不暴露存储实现）。
+pub mod data_paths {
+    pub use crate::store::paths::gear_dir;
+}

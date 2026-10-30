@@ -1,8 +1,15 @@
 //! #90 配装模板、合成与有界优化。API 独立于 core/combo 共享 DTO，不包含 UI 或时序公式。
+#[cfg(feature = "engine")]
 mod catalog;
+#[cfg(feature = "engine")]
+pub mod ffi;
+#[cfg(feature = "engine")]
+pub mod host;
 pub mod model;
+#[cfg(feature = "engine")]
 pub mod optimize;
 pub use model::*;
+#[cfg(feature = "engine")]
 pub use optimize::{optimize, optimize_with, player};
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +28,7 @@ pub enum ApiResponse {
     Error { message: String },
 }
 /// API 统一错误信封；CLI api 子命令可做无 GUI 的回归入口。
+#[cfg(feature = "engine")]
 pub fn call(catalog: &Catalog, input: &str) -> ApiResponse {
     fn run(catalog: &Catalog, input: &str) -> Result<serde_json::Value, String> {
         let req: ApiRequest = serde_json::from_str(input).map_err(|e| e.to_string())?;

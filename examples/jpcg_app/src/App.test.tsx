@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
+import { defaultCockpit } from "./state/cockpit";
 import * as api from "./api/commands";
 import type { SkillResultDTO, ValueSetDTO } from "./types";
 import { DEFAULT_COEFFICIENT, STORAGE_KEYS } from "./utils/constants";
@@ -16,6 +17,9 @@ let root: Root; let host: HTMLDivElement;
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); vi.resetAllMocks(); localStorage.clear();
   host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
+  vi.mocked(api.gearCatalog).mockRejectedValue(new Error("not available"));
+  const { loadouts, ...legacy } = defaultCockpit();
+  localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 1, data: { ...legacy, mode: "manual" } }));
   vi.mocked(api.listProfessions).mockResolvedValue([]); vi.mocked(api.loadProfessionConfig).mockResolvedValue(null);
   vi.mocked(api.getModuleVersions).mockResolvedValue({ app: "test", core: "test", combo: "test", update: "test", const: "test" });
   vi.mocked(api.listValueSets).mockResolvedValue([valueSet]); vi.mocked(api.resolveValueSet).mockResolvedValue(valueSet);
@@ -53,7 +57,7 @@ it("未计算的新属性不能钉住旧结果；恢复后忽略迟到的计算�
 });
 it("损坏存储安全回退；恢复时不会重新加载心法覆盖已保存修正", async () => {
   localStorage.setItem(STORAGE_KEYS.cockpit, '{"version":1,"data":{"form":{}}}');
-  await mount(); await edit("基础攻击", "42");
+  await mount(); await click("手动属性"); await edit("基础攻击", "42");
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.cockpit)!).data;
   saved.form.xinfa_config.atk_up = 23;
   localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 1, data: saved }));

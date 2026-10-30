@@ -92,3 +92,14 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 | 合成单步击杀率 | 0.09724 | 0.09724 | 4.948 ms |
 
 该表只证明小样例可运行和推荐不劣于合法基线，不能替代真实装备场景、长连招或约1亿组合的性能验收。
+
+
+## #91 桌面接入（后续叠放分支）
+
+- `host::catalog` 按 core 的既有数据根优先级读取完整 `gear/` 四文件并校验，支持 `JPCG_DATA_DIR` 指向根或 `shuxing/`。前端不能传任意文件路径，损坏数据报错，不伪装成空目录或静默回退样例。
+- Tauri 命令 `gear_catalog / compose_gear / export_gear / import_gear` 在后台阻塞任务中调用同一 host。合成返回 `Composition { composed, player }`，其中 `player` 复用本 crate 原有的转换，裸装 base 与手动总属性分开保存。
+- 静态模式开启 `engine`；动态壳仅依赖 `default-features=false` 的模型，通过 `commands/gear_bridge.rs` dlopen gear。独立 ABI 1：`jpcg_gear_call(method,input_json)` 返回原有 status/result/message 信封，`jpcg_gear_free_string` 释放本库字符串，另有 ABI/版本 getter；无可变会话，panic 不跨 ABI。方法为 `catalog/compose/export/import`，不是时序模拟接口。
+- 动态库搜索：显式 `JPCG_GEAR_LIB` → exe 的 `modules/` → exe 同目录 → CWD `target/debug` / `target/release`。缺库、缺符号或 ABI 不匹配直接报错。
+- `make build-modules` / `modules-dir` 包含第五个 gear 模块；发布资产与 deploy-gen 模块清单同步加入 gear。此改动仅准备构建/打包，不发布或部署。
+- 核查动态壳不链接引擎：`cargo tree -p jpcg_app --no-default-features --features dynamic -e normal`；验证实际 bridge：先 `cargo build -p jpcg_gear`，再 `cargo test -p jpcg_gear --no-default-features --test dynamic_bridge`。`python3 scripts/test-gear-dynamic.py` 验证 C ABI、目录、错误及 TOML 往返。
+- 前端新安装默认配装模式；#95 的 v1 存储迁移后仍保留手动模式。配装按心法保存、选项只来自校验后的目录；数值集不匹配时不计算。CD/加速仅展示已有元数据，连招仍调用现有接口，不新增 #92 规则。

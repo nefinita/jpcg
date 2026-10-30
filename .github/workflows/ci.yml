@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [dev, beta, release]
+    branches: [dev, beta, release, integration/91-gear-base]
   push:
     branches: [dev]
 
@@ -82,8 +82,9 @@ jobs:
 
       - name: 双 cdylib 数值快照修复回归
         run: |
-          cargo build -p jpcg_core -p jpcg_combo
+          cargo build -p jpcg_core -p jpcg_combo -p jpcg_gear
           python3 scripts/test-values-dynamic.py
+          python3 scripts/test-gear-dynamic.py
 
   golden-regression:
     name: 金标准回归（计算数值）

@@ -113,3 +113,14 @@
 
 .residentPage { flex: 1; min-height: 0; overflow: auto; }
 .residentPage[hidden] { display: none; }
+.calcLayout { flex-direction: column; }
+.modeBar { display: flex; gap: 8px; width: 100%; }
+.modeBar button, .gearAlert button { border: 1px solid var(--border-default); background: var(--glass-bg); border-radius: var(--radius-sm); padding: 8px 12px; }
+.modeBar button[aria-pressed="true"] { border-color: var(--primary-500); color: var(--primary-600); background: var(--glass-highlight); }
+.manualBody { display: flex; width: 100%; gap: var(--space-lg); align-items: flex-start; }
+.gearLayout { align-items: stretch; }.gearBody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 24px; }
+.contextPanel { border: 1px solid var(--border-subtle); background: var(--glass-bg); border-radius: var(--radius-md); padding: 12px; }
+.contextPanel > summary { cursor: pointer; }.contextPanel > div { max-height: 400px; overflow: auto; margin-top: 12px; }
+.gearAlert { padding: 12px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-secondary); }.gearAlert button { margin-left: 12px; }
+@media(max-width:1200px) { .gearBody { grid-template-columns: 1fr; } }
+@media(max-width:1100px) { .manualBody { flex-direction: column; } }
