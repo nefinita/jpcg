@@ -8,14 +8,16 @@
 // ============================================================================
 
 use jpcg_api::{
-    CombatDataDTO, TimelineActionDTO, TimelineEventDTO, TimelineEventKindDTO,
-    TimelineRequestDTO, TimelineResultDTO,
+    CombatDataDTO, TimelineActionDTO, TimelineEventDTO, TimelineEventKindDTO, TimelineRequestDTO,
+    TimelineResultDTO,
 };
 use jpcg_core::type_set::buff::TimedBuffDef;
 use jpcg_core::type_set::combat::{CombatData, FormDef};
 
-use crate::timeline::{self, TimelineAction, TimelineEvent, TimelineEventKind, TimelineInput, TimingSkill};
 use crate::conv;
+use crate::timeline::{
+    self, TimelineAction, TimelineEvent, TimelineEventKind, TimelineInput, TimingSkill,
+};
 
 /// 读取某门派的战斗时序 overlay（文件缺失 = 空数据）
 pub fn load_combat(profession: String) -> Result<CombatDataDTO, String> {
@@ -57,13 +59,18 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         })
         .collect();
     let forms: Vec<FormDef> = req.forms.into_iter().map(FormDef::from).collect();
-    let timed_buffs: Vec<TimedBuffDef> =
-        req.timed_buffs.into_iter().map(TimedBuffDef::from).collect();
+    let timed_buffs: Vec<TimedBuffDef> = req
+        .timed_buffs
+        .into_iter()
+        .map(TimedBuffDef::from)
+        .collect();
     let actions: Vec<TimelineAction> = req
         .actions
         .into_iter()
         .map(|a| match a {
-            TimelineActionDTO::Cast { skill_id, sub_id } => TimelineAction::Cast((skill_id, sub_id)),
+            TimelineActionDTO::Cast { skill_id, sub_id } => {
+                TimelineAction::Cast((skill_id, sub_id))
+            }
             TimelineActionDTO::SwitchForm { form } => TimelineAction::SwitchForm(form),
         })
         .collect();
@@ -191,10 +198,12 @@ mod tests {
         let result = calculate_timeline(request()).expect("模拟应成功");
         assert_eq!(result.skipped_actions, 0);
         assert!(result.total_damage > 0.0);
-        assert!(result.events.iter().any(|e| matches!(
-            e.kind,
-            TimelineEventKindDTO::Cast { .. }
-        )));
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|e| matches!(e.kind, TimelineEventKindDTO::Cast { .. }))
+        );
         // 两个 GCD 技能：第二发应落在 1.5s 之后
         let casts: Vec<f32> = result
             .events

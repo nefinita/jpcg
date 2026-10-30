@@ -335,7 +335,8 @@ impl<'a> Sim<'a> {
         // ---- 占用 GCD 通道（自身通道 + 副作用额外通道） ----
         let own_gcd = self.lane_gcd(sk.lane(), rate);
         if sk.skill.occupies_gcd() {
-            self.lane_ready.insert(sk.lane().to_string(), start + own_gcd);
+            self.lane_ready
+                .insert(sk.lane().to_string(), start + own_gcd);
         }
         for lane in &sk.on_cast.gcd_lanes {
             let g = self.lane_gcd(lane, rate);
@@ -351,7 +352,10 @@ impl<'a> Sim<'a> {
         // ---- CD / 充能 ----
         let max_charges = sk.skill.max_charges();
         if max_charges > 1 {
-            let entry = self.charges.entry(key).or_insert((max_charges, 0.0, sk.skill.recharge));
+            let entry = self
+                .charges
+                .entry(key)
+                .or_insert((max_charges, 0.0, sk.skill.recharge));
             entry.0 = entry.0.saturating_sub(1);
             if entry.0 + 1 == max_charges {
                 // 第一层消耗后开始恢复
@@ -482,8 +486,7 @@ impl<'a> Sim<'a> {
             }
         }
 
-        self.events
-            .sort_by(|a, b| a.time.total_cmp(&b.time));
+        self.events.sort_by(|a, b| a.time.total_cmp(&b.time));
 
         let mut total = 0f64;
         for e in &self.events {
@@ -578,7 +581,11 @@ mod tests {
         }
     }
 
-    fn base_input(skills: Vec<TimingSkill>, actions: Vec<TimelineAction>, window: f32) -> TimelineInput {
+    fn base_input(
+        skills: Vec<TimingSkill>,
+        actions: Vec<TimelineAction>,
+        window: f32,
+    ) -> TimelineInput {
         TimelineInput {
             player: player(),
             hostile: hostile(),
@@ -715,7 +722,11 @@ mod tests {
         // 读条 1.5 秒 + 20% 加速：floor(24/1.2)=20 帧 = 1.25 秒
         let mut sk = skill(1, 0, "读条");
         sk.cast_time = 1.5;
-        let input = base_input(vec![timing(sk, "default")], vec![TimelineAction::Cast((1, 0))], 10.0);
+        let input = base_input(
+            vec![timing(sk, "default")],
+            vec![TimelineAction::Cast((1, 0))],
+            10.0,
+        );
         let result = simulate(&input);
         let hit = result
             .events
@@ -739,7 +750,10 @@ mod tests {
                 _ => None,
             })
             .unwrap();
-        assert_eq!(hit2, 1.1875, "20.02% 加速后读条 floor(24/1.2002)=19 帧 = 1.1875 秒");
+        assert_eq!(
+            hit2, 1.1875,
+            "20.02% 加速后读条 floor(24/1.2002)=19 帧 = 1.1875 秒"
+        );
     }
 
     #[test]
@@ -750,7 +764,11 @@ mod tests {
         sk.dot_interval = 2.0;
         sk.dot_duration = 18.0;
         sk.dot_up = 0.0;
-        let input = base_input(vec![timing(sk.clone(), "default")], vec![TimelineAction::Cast((1, 0))], 30.0);
+        let input = base_input(
+            vec![timing(sk.clone(), "default")],
+            vec![TimelineAction::Cast((1, 0))],
+            30.0,
+        );
         let result = simulate(&input);
         let ticks: Vec<f32> = result
             .events
@@ -842,7 +860,12 @@ mod tests {
         let times = cast_times(&result);
         // 第一次上 buff 本身占 GCD（1.5s），随后两次技能在 1.5 与 1.5+1.125 秒
         assert_eq!(times.len(), 3);
-        assert!((times[2] - times[1] - 1.125).abs() < 1e-4, "{} vs {}", times[2], times[1]);
+        assert!(
+            (times[2] - times[1] - 1.125).abs() < 1e-4,
+            "{} vs {}",
+            times[2],
+            times[1]
+        );
     }
 
     #[test]
@@ -882,7 +905,10 @@ cast_time = 2.0
         data.validate().unwrap();
         let raw = vec![skill(1, 0, "断云势"), skill(2, 0, "孤锋破浪")];
         data.validate_against_skills(&raw).unwrap();
-        let skills: Vec<TimingSkill> = raw.iter().map(|s| TimingSkill::from_combat(s, &data)).collect();
+        let skills: Vec<TimingSkill> = raw
+            .iter()
+            .map(|s| TimingSkill::from_combat(s, &data))
+            .collect();
         let input = TimelineInput {
             skills,
             forms: data.form.clone(),

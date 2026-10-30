@@ -192,7 +192,10 @@ mod tests {
             name: "秘籍".into(),
             skill_id: 100,
             sub_id: 0,
-            modifiers: vec![SkillModifier::BaseDamageAdd(20), SkillModifier::CastTimeMul(-10.0)],
+            modifiers: vec![
+                SkillModifier::BaseDamageAdd(20),
+                SkillModifier::CastTimeMul(-10.0),
+            ],
         };
         let out = resolve_skill(&skill(), &[&miji], &[]);
         assert_eq!(out.base_damage1, 120);

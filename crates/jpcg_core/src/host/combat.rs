@@ -15,9 +15,7 @@ use jpcg_api::{
 use crate::host::conv::skilltype_to_pool_item;
 use crate::store;
 use crate::type_set::buff::{BuffEffect, TimedBuffDef};
-use crate::type_set::combat::{
-    CombatData, CombatMeta, FormDef, OnCast, SkillCombatDef,
-};
+use crate::type_set::combat::{CombatData, CombatMeta, FormDef, OnCast, SkillCombatDef};
 use crate::type_set::modifier::{MijiDef, QixueDef, SkillModifier};
 use crate::type_set::skilltype::Skilltype;
 
@@ -285,7 +283,6 @@ impl From<QixueDefDTO> for QixueDef {
         }
     }
 }
-
 
 impl From<MijiDefDTO> for MijiDef {
     fn from(m: MijiDefDTO) -> Self {

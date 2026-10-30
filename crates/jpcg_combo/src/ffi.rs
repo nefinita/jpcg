@@ -280,7 +280,9 @@ mod tests {
         if s.is_empty() {
             let err = unsafe { jpcg_combo_last_error() };
             if !err.is_null() {
-                let e = unsafe { CStr::from_ptr(err) }.to_string_lossy().into_owned();
+                let e = unsafe { CStr::from_ptr(err) }
+                    .to_string_lossy()
+                    .into_owned();
                 unsafe { jpcg_combo_free_string(err) };
                 eprintln!("FFI error: {}", e);
             }
@@ -351,6 +353,10 @@ mod tests {
     fn load_combat_without_data_file_returns_empty() {
         let out = call("load_combat", r#"{"profession": "no_such_profession_xyz"}"#);
         assert!(out.contains("\"meta\""), "应返回空 combat 数据: {}", out);
-        assert!(out.contains("\"form\":[]") || out.contains("\"form\": []"), "form 应为空: {}", out);
+        assert!(
+            out.contains("\"form\":[]") || out.contains("\"form\": []"),
+            "form 应为空: {}",
+            out
+        );
     }
 }

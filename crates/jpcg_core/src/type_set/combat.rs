@@ -202,10 +202,7 @@ impl CombatData {
             }
             let key = (sc.skill_id, sc.sub_id);
             if seen_skills.contains(&key) {
-                errors.push(format!(
-                    "skill_combat: 技能 {}:{} 重复配置",
-                    key.0, key.1
-                ));
+                errors.push(format!("skill_combat: 技能 {}:{} 重复配置", key.0, key.1));
             } else {
                 seen_skills.push(key);
             }
@@ -227,17 +224,26 @@ impl CombatData {
             if let Some(t) = sc.cast_time
                 && (!t.is_finite() || t < 0.0)
             {
-                errors.push(format!("skill_combat {}:{}: cast_time 非法", sc.skill_id, sc.sub_id));
+                errors.push(format!(
+                    "skill_combat {}:{}: cast_time 非法",
+                    sc.skill_id, sc.sub_id
+                ));
             }
             if let Some(c) = sc.cooldown
                 && (!c.is_finite() || c < 0.0)
             {
-                errors.push(format!("skill_combat {}:{}: cooldown 非法", sc.skill_id, sc.sub_id));
+                errors.push(format!(
+                    "skill_combat {}:{}: cooldown 非法",
+                    sc.skill_id, sc.sub_id
+                ));
             }
             if let Some(r) = sc.recharge
                 && (!r.is_finite() || r < 0.0)
             {
-                errors.push(format!("skill_combat {}:{}: recharge 非法", sc.skill_id, sc.sub_id));
+                errors.push(format!(
+                    "skill_combat {}:{}: recharge 非法",
+                    sc.skill_id, sc.sub_id
+                ));
             }
             if let Some(to) = &sc.on_cast.switch_form
                 && !to.trim().is_empty()
@@ -494,7 +500,10 @@ modifiers = [{ atk_xishu_add = 0.2 }]
         );
         assert_eq!(data.buff.len(), 1);
         assert!(data.buff[0].ignore_cap);
-        assert!(matches!(data.buff[0].effects[0], crate::type_set::buff::BuffEffect::JiasuPct(_)));
+        assert!(matches!(
+            data.buff[0].effects[0],
+            crate::type_set::buff::BuffEffect::JiasuPct(_)
+        ));
         assert_eq!(data.miji[0].modifiers.len(), 1);
         assert_eq!(data.qixue[0].slot, 1);
     }
