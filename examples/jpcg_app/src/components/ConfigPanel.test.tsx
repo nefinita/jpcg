@@ -502,3 +502,12 @@ describe("ConfigPanel 心法配置请求顺序", () => {
   });
 
 });
+
+it("缺失心法元数据时保留有效名称/主属性，不写入字面 undefined", async () => {
+  vi.mocked(api.loadProfessionConfig).mockResolvedValue({});
+  await mount();
+  const form = await request();
+  expect(form.xinfa_config.profession).toBe("mowen");
+  expect(form.xinfa_config.xinfa_name).toBe("莫问");
+  expect(form.xinfa_config.xinfa_nom).toBe("gengu");
+});

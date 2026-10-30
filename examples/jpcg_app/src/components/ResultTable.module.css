@@ -187,3 +187,10 @@
   white-space: normal;
 }
 .tableScroll { overflow-x: auto; }
+
+.positive { color: var(--success, #16803c); }
+.negative { color: var(--danger, #c73535); }
+.controls label { min-width: 0; max-width: 100%; }
+@media (max-width: 600px) {
+  .controls input, .controls select { min-width: 0; width: 100%; }
+}

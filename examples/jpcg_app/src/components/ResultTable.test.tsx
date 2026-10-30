@@ -81,3 +81,19 @@ describe("计算结果技能筛选与排序", () => {
     expect(Array.from(container.querySelectorAll("tbody tr")).every((tr) => tr.children[4].textContent === "-" && tr.children[5].textContent === "-")).toBe(true);
   });
 });
+
+describe("钉住基准差值", () => {
+  it("仅钉住后显示；按原始重名顺序匹配、支持 DOT 单跳、零基准与缺项", async () => {
+    const data = [skill("重名", 20), skill("重名", 5), skill("DOT", 30, { dot_jumps: [10, 20] }), skill("新增", 4)];
+    const base = [skill("重名", 10), skill("重名", 0), skill("DOT", 20, { dot_jumps: [8, 12] })];
+    await act(async () => root.render(<ResultTable results={data} calculating={false} baseline={base} />));
+    const differences = () => [...container.querySelectorAll("tbody tr")].map((row) => row.children[7].textContent);
+    expect(differences()).toEqual(["+10 / +100.0%", "+5 / —", "+2 / +25.0%", "+8 / +66.7%", "—"]);
+    await sort("q-asc"); expect(differences()).toEqual(["—", "+5 / —", "+10 / +100.0%", "+2 / +25.0%", "+8 / +66.7%"]);
+    await render(data); expect(container.textContent).not.toContain("ΔQ");
+  });
+  it("负差值保留负号", async () => {
+    await act(async () => root.render(<ResultTable results={[skill("测试", 50)]} baseline={[skill("测试", 100)]} calculating={false} />));
+    expect(container.textContent).toContain("-50 / -50.0%");
+  });
+});
