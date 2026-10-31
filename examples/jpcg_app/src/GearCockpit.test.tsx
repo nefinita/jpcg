@@ -109,3 +109,195 @@ it("实际解析回退到其他值集时不提交配装计算", async () => {
   await click("使用模板数值集 live-130"); expect(host.textContent).toContain("模板对应数值集不可用");
   expect(api.calculateDamage).not.toHaveBeenCalled();
 });
+
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+async function selectImport(text: string | Promise<string>) {
+  const file = new File([], "loadout.toml");
+  Object.defineProperty(file, "text", { value: async () => text });
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+  Object.defineProperty(input, "files", { configurable: true, value: [file] });
+  await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+}
+function selectedRingVariant() {
+  return saved().loadouts.mowen.choices.find((choice: GearLoadout["choices"][number]) => choice.slot === "jie1").variant;
+}
+
+it("导入解析迟到时不覆盖导入后手动选择的配装", async () => {
+  const pending = deferred<GearComposition>();
+  vi.mocked(api.importGear).mockReturnValueOnce(pending.promise);
+  await render(); await wait(); await selectImport("old");
+  await click("威望 · 基础 · 属性套2", section("戒指一"));
+  await act(async () => pending.resolve(fixture.cases[0]));
+  expect(selectedRingVariant()).toBe(2);
+  await wait();
+  expect(saved().calculation.loadout.choices.find((choice: GearLoadout["choices"][number]) => choice.slot === "jie1").variant).toBe(2);
+});
+
+it("读取文件迟到时不启动已被新配装选择取消的导入", async () => {
+  const pending = deferred<string>();
+  vi.mocked(api.importGear).mockResolvedValue(fixture.cases[0]);
+  await render(); await wait(); await selectImport(pending.promise);
+  await click("威望 · 基础 · 属性套2", section("戒指一"));
+  await act(async () => pending.resolve("old"));
+  expect(api.importGear).not.toHaveBeenCalled();
+  expect(selectedRingVariant()).toBe(2);
+});
+
+it("两次导入逆序完成时保留最后选择的文件", async () => {
+  const pending = deferred<GearComposition>();
+  vi.mocked(api.importGear).mockReturnValueOnce(pending.promise).mockResolvedValueOnce(fixture.cases[1]);
+  await render(); await wait(); await selectImport("old"); await selectImport("new");
+  expect(selectedRingVariant()).toBe(2);
+  await act(async () => pending.resolve(fixture.cases[0]));
+  expect(selectedRingVariant()).toBe(2);
+});
+
+it("导入解析期间切换手动模式后不被迟到响应切回配装", async () => {
+  const pending = deferred<GearComposition>();
+  vi.mocked(api.importGear).mockReturnValueOnce(pending.promise);
+  await render(); await wait(); await selectImport("old"); await click("手动属性");
+  await act(async () => pending.resolve(fixture.cases[0]));
+  expect(saved().mode).toBe("manual");
+  expect([...host.querySelectorAll("button")].find((button) => button.textContent === "手动属性")?.getAttribute("aria-pressed")).toBe("true");
+});
+
+it("旧导入失败不覆盖较新成功导入的反馈", async () => {
+  const pending = deferred<GearComposition>();
+  vi.mocked(api.importGear).mockReturnValueOnce(pending.promise).mockResolvedValueOnce(fixture.cases[1]);
+  await render(); await wait(); await selectImport("old"); await selectImport("new");
+  await act(async () => pending.reject(new Error("旧文件损坏")));
+  expect(host.textContent).not.toContain("旧文件损坏");
+  expect(selectedRingVariant()).toBe(2);
+});
+
+it("当前导入失败仍显示错误且保留原配装", async () => {
+  vi.mocked(api.importGear).mockRejectedValue(new Error("当前文件损坏"));
+  await render(); await wait(); await selectImport("bad");
+  expect(host.textContent).toContain("当前文件损坏");
+  expect(selectedRingVariant()).toBe(1);
+});
+
+
+it("后选文件尚在解析时也会使旧导入的值集响应失效", async () => {
+  const oldValueSet = deferred<Awaited<ReturnType<typeof api.resolveValueSet>>>();
+  const newerImport = deferred<GearComposition>();
+  await render(); await wait();
+  vi.mocked(api.importGear).mockResolvedValueOnce(fixture.cases[1]).mockReturnValueOnce(newerImport.promise);
+  vi.mocked(api.resolveValueSet).mockReturnValueOnce(oldValueSet.promise);
+  await selectImport("old"); await selectImport("new");
+  await act(async () => oldValueSet.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
+  expect(selectedRingVariant()).toBe(1);
+  await act(async () => newerImport.resolve(fixture.cases[0]));
+  expect(selectedRingVariant()).toBe(1);
+});
+
+it("恢复基准后不被旧导入覆盖", async () => {
+  const pending = deferred<GearComposition>();
+  vi.mocked(api.importGear).mockReturnValueOnce(pending.promise);
+  await render(); await wait(); await click("钉住基准"); await selectImport("old"); await click("恢复基准");
+  await act(async () => pending.resolve(fixture.cases[1]));
+  expect(selectedRingVariant()).toBe(1);
+});
+
+it("当前文件读取失败由导入错误提示处理", async () => {
+  const pending = deferred<string>();
+  await render(); await wait(); await selectImport(pending.promise);
+  await act(async () => pending.reject(new Error("文件读取失败")));
+  expect(host.textContent).toContain("文件读取失败");
+  expect(api.importGear).not.toHaveBeenCalled();
+  expect(selectedRingVariant()).toBe(1);
+});
+
+it.each(["读取文件", "宿主解析"])("旧值集响应不能取消后选导入（%s 阶段）", async (stage) => {
+  const older = deferred<Awaited<ReturnType<typeof api.resolveValueSet>>>();
+  const fileRead = deferred<string>();
+  const pendingImport = deferred<GearComposition>();
+  await render(); await wait();
+  vi.mocked(api.resolveValueSet).mockReturnValueOnce(older.promise);
+  const valueSelect = host.querySelectorAll<HTMLSelectElement>("select")[1];
+  await act(async () => {
+    valueSelect.value = "";
+    valueSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport(stage === "读取文件" ? fileRead.promise : "newer import");
+  await act(async () => older.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
+  if (stage === "读取文件") await act(async () => fileRead.resolve("newer import"));
+  expect(api.importGear).toHaveBeenCalledWith("newer import");
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(selectedRingVariant()).toBe(2);
+});
+
+it("启动时旧心法元数据响应不能取消后选导入", async () => {
+  const older = deferred<Awaited<ReturnType<typeof api.loadProfessionConfig>>>();
+  const pendingImport = deferred<GearComposition>();
+  const state = saved(); state.manualReady = false;
+  localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
+  vi.mocked(api.loadProfessionConfig).mockReturnValueOnce(older.promise);
+  await render(); await wait();
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport("newer import");
+  await act(async () => older.resolve({ profession: "mowen", xinfa_name: "莫问", xinfa_nom: "gengu", atk_up: 0, pofang_up: 0, huixin_up: 0 }));
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(selectedRingVariant()).toBe(2);
+});
+
+it("导入之后的真实数值集选择仍取消旧导入", async () => {
+  const pendingImport = deferred<GearComposition>();
+  await render(); await wait();
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport("old import");
+  const valueSelect = host.querySelectorAll<HTMLSelectElement>("select")[1];
+  await act(async () => {
+    valueSelect.value = "";
+    valueSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(saved().form.value_set).toBeNull();
+  expect(selectedRingVariant()).toBe(1);
+});
+
+it("首次启动的自动值集匹配不能取消后选导入", async () => {
+  localStorage.clear();
+  const startup = deferred<Awaited<ReturnType<typeof api.resolveValueSet>>>();
+  const pendingImport = deferred<GearComposition>();
+  vi.mocked(api.resolveValueSet).mockReturnValueOnce(startup.promise);
+  await render(); await wait();
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport("newer import");
+  expect(api.importGear).toHaveBeenCalledWith("newer import");
+  await act(async () => startup.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(selectedRingVariant()).toBe(2);
+});
+
+
+
+it("无用户操作时首次启动仍自动匹配模板值集", async () => {
+  localStorage.clear();
+  vi.mocked(api.listValueSets).mockResolvedValue([{ id: "other", name: "其他默认", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }]);
+  await render(); await wait();
+  expect(saved().form.value_set).toBe("live-130");
+  expect(api.composeGear).toHaveBeenCalled();
+});
+
+it("已启动的自动匹配迟到时不覆盖较新的导入", async () => {
+  localStorage.clear();
+  const automatic = deferred<Awaited<ReturnType<typeof api.resolveValueSet>>>();
+  vi.mocked(api.resolveValueSet)
+    .mockResolvedValueOnce({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT })
+    .mockReturnValueOnce(automatic.promise);
+  await render(); await wait();
+  expect(api.resolveValueSet).toHaveBeenCalledTimes(2);
+  vi.mocked(api.importGear).mockResolvedValueOnce(fixture.cases[1]);
+  await selectImport("newer import");
+  expect(selectedRingVariant()).toBe(2);
+  await act(async () => automatic.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
+  expect(selectedRingVariant()).toBe(2);
+});
