@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions, ValueSetDTO } from "../types";
 import {
   XINFA_LIST as XINFA_FALLBACK, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS,
   BUFF_FIELDS, COEFFICIENT_FIELDS, DEFAULT_BUFF, DEFAULT_COEFFICIENT,
 } from "../utils/constants";
 import * as api from "../api/commands";
+import { readPreference, writePreference } from "../hooks/usePersistentState";
+import { defaultManualForm } from "../state/cockpit";
 import styles from "./ConfigPanel.module.css";
 
 interface Props {
@@ -13,6 +15,9 @@ interface Props {
   addToast: (msg: string, type?: "success" | "error" | "warning" | "info") => void;
   setStatus: (msg: string) => void;
   onXinfaChange?: (xinfa: string) => void;
+  form?: FormData;
+  onFormChange?: (update: SetStateAction<FormData>, options?: { ready?: boolean }) => void;
+  preserveInitialForm?: boolean;
 }
 
 const defaultForm = (): FormData => ({
@@ -32,15 +37,18 @@ const defaultForm = (): FormData => ({
   value_set: null,
 });
 
-export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus, onXinfaChange }: Props) {
-  const [form, setForm] = useState<FormData>(() => {
-    const last = typeof localStorage !== "undefined"
-      ? localStorage.getItem(STORAGE_KEYS.lastXinfa)
-      : null;
-    const defaultXinfa = last || "mowen";
-    const entry = XINFA_FALLBACK.find((x) => x.value === defaultXinfa) || XINFA_FALLBACK[0];
-    return { ...defaultForm(), xinfa: defaultXinfa, xinfa_config: { ...defaultForm().xinfa_config, xinfa_name: entry.label, profession: defaultXinfa } };
-  });
+export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus, onXinfaChange,
+  form: controlledForm, onFormChange, preserveInitialForm = false }: Props) {
+  const [localForm, setLocalForm] = useState<FormData>(defaultManualForm);
+  const form = controlledForm ?? localForm;
+  const preserveInitialRef = useRef(preserveInitialForm);
+  // 元数据（心法属性/存档）成功加载后才允许把表单标记为「已初始化」；
+  // 初始挂载的同步占位写入保持 ready=false，失败时下次启动会重新加载。
+  const hydratedRef = useRef(preserveInitialForm);
+  const setForm = useCallback((update: SetStateAction<FormData>) => {
+    if (onFormChange) onFormChange(update, { ready: hydratedRef.current });
+    else setLocalForm(update);
+  }, [onFormChange]);
 
   const [professionOptions, setProfessionOptions] = useState<{value: string; label: string; nom: string; version_label: string | null}[]>(
     () => XINFA_FALLBACK.map((x) => ({value: x.value, label: x.label, nom: "", version_label: null}))
@@ -49,7 +57,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const [updateProgress, setUpdateProgress] = useState(0);
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
-  const [betaChannel, setBetaChannel] = useState(() => localStorage.getItem(STORAGE_KEYS.betaChannel) === "true");
+  const [betaChannel, setBetaChannel] = useState(() => readPreference(STORAGE_KEYS.betaChannel) === "true");
   const [moduleVersions, setModuleVersions] = useState<ModuleVersions | null>(null);
   const [valueSets, setValueSets] = useState<ValueSetDTO[]>([]);
   const [appliedValueSet, setAppliedValueSet] = useState<ValueSetDTO | null>(null);
@@ -57,12 +65,12 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   // 新选择/清空的系数基线尚未就绪时禁止编辑；同值集热更新仍允许自定义。
   const [coefficientBaselinePending, setCoefficientBaselinePending] = useState(true);
   // 用户是否手动改过系数（改过则数据热更新后不自动覆盖）
-  const coefficientCustomRef = useRef(false);
+  const coefficientCustomRef = useRef(preserveInitialForm);
   // 应用内确认（Tauri v2 禁用 window.confirm，需自绘）
   const [confirmKind, setConfirmKind] = useState<null | "app" | "modules">(null);
 
   // 当前选择是唯一来源；storage 仅用于启动恢复，异步结果必须匹配操作版本。
-  const selectedValueSetRef = useRef<string | null>(null);
+  const selectedValueSetRef = useRef<string | null>(form.value_set ?? null);
   // 切换、加载或清空后，迟到的心法配置不得覆盖当前表单。
   const xinfaRevisionRef = useRef(0);
   const valueSetRevisionRef = useRef(0);
@@ -70,8 +78,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const persistValueSet = useCallback((id: string | null) => {
     selectedValueSetRef.current = id;
-    if (id === null) localStorage.removeItem(STORAGE_KEYS.valueSet);
-    else localStorage.setItem(STORAGE_KEYS.valueSet, id);
+    if (id === null) writePreference(STORAGE_KEYS.valueSet, null);
+    else writePreference(STORAGE_KEYS.valueSet, id);
   }, []);
 
   // 选择/清空会重新 seed；加载或用户编辑的系数在解析及热更新后保留。
@@ -113,7 +121,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   // 从列表选一个初始值集 id：localStorage（且可用）→ 默认（且可用）→ 首个可用 → 默认 → 首个
   const pickValueSetId = useCallback((sets: ValueSetDTO[]): string | null => {
     const stored = typeof localStorage !== "undefined"
-      ? localStorage.getItem(STORAGE_KEYS.valueSet)
+      ? readPreference(STORAGE_KEYS.valueSet)
       : null;
     const pick =
       sets.find((s) => s.id === stored && s.available) ??
@@ -133,7 +141,12 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     api.listValueSets().then((sets) => {
       setValueSets(sets);
       // 统一走 resolveValueSet：即使默认项快照损坏，也应用实际回退的值集与常数
-      if (revision === valueSetRevisionRef.current) selectValueSet(pickValueSetId(sets));
+      if (revision === valueSetRevisionRef.current) {
+        if (preserveInitialRef.current) {
+          persistValueSet(selectedValueSetRef.current);
+          void resolveCurrentValueSet(selectedValueSetRef.current, revision);
+        } else void selectValueSet(pickValueSetId(sets));
+      }
     }).catch(() => {});
     return () => { ++valueSetRevisionRef.current; };
   }, [selectValueSet, pickValueSetId]);
@@ -143,7 +156,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const handleXinfaChange = useCallback((value: string) => {
     const revision = ++xinfaRevisionRef.current;
     const entry = professionOptions.find((x) => x.value === value);
-    localStorage.setItem(STORAGE_KEYS.lastXinfa, value);
+    writePreference(STORAGE_KEYS.lastXinfa, value);
     setForm((prev): FormData => ({
       ...prev,
       xinfa: value,
@@ -151,19 +164,25 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     }));
     onXinfaChange?.(value);
     api.loadProfessionConfig(value).then((cfg) => {
-      if (cfg && revision === xinfaRevisionRef.current) {
-        setForm((prev): FormData => ({
-          ...prev,
-          xinfa_config: {
-            profession: String(cfg.profession) || value,
-            xinfa_name: String(cfg.xinfa_name),
-            xinfa_nom: String(cfg.xinfa_nom),
-            atk_up: Number(cfg.atk_up) || 0,
-            pofang_up: Number(cfg.pofang_up) || 0,
-            huixin_up: Number(cfg.huixin_up) || 0,
-          },
-        }));
+      if (revision !== xinfaRevisionRef.current) return;
+      // 元数据请求成功（含该门派没有配置文件返回 null）才算初始化完成；
+      // 失败/挂起保持未完成，下次启动会重新拉取而不是永久保留占位属性。
+      hydratedRef.current = true;
+      if (!cfg) {
+        setForm((prev) => prev);
+        return;
       }
+      setForm((prev): FormData => ({
+        ...prev,
+        xinfa_config: {
+          profession: typeof cfg.profession === "string" && cfg.profession ? cfg.profession : value,
+          xinfa_name: typeof cfg.xinfa_name === "string" && cfg.xinfa_name ? cfg.xinfa_name : entry?.label ?? value,
+          xinfa_nom: typeof cfg.xinfa_nom === "string" && cfg.xinfa_nom ? cfg.xinfa_nom : prev.xinfa_config.xinfa_nom,
+          atk_up: Number(cfg.atk_up) || 0,
+          pofang_up: Number(cfg.pofang_up) || 0,
+          huixin_up: Number(cfg.huixin_up) || 0,
+        },
+      }));
     }).catch(() => {});
   }, [professionOptions, defaultXinfa, onXinfaChange]);
 
@@ -220,7 +239,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       ...f,
       player: num(f.player),
       hostile: num(f.hostile),
-      buff: num(f.buff),
+      buff: { ...num(f.buff), mode_is_point: !!f.buff.mode_is_point },
       coefficient: num(f.coefficient),
     } as typeof form;
   }, [normalizeNum]);
@@ -262,7 +281,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       persistValueSet(requestedId);
       setAppliedValueSet(null);
       const xinfaVal = cfg.xinfa_config.profession || "mowen";
-      localStorage.setItem(STORAGE_KEYS.lastXinfa, xinfaVal);
+      writePreference(STORAGE_KEYS.lastXinfa, xinfaVal);
       setForm({
         xinfa: xinfaVal,
         player: {
@@ -288,6 +307,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
         value_set: requestedId,
       });
+      hydratedRef.current = true;
       // 加载的系数以存档为准（不再自动 seed）；标记为“已自定义”以免数据热更新覆盖
       coefficientCustomRef.current = true;
       setCoefficientBaselinePending(false);
@@ -302,6 +322,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const handleClear = useCallback(() => {
     ++xinfaRevisionRef.current;
+    hydratedRef.current = true;
     const requestedId = selectedValueSetRef.current;
     setForm({ ...defaultForm(), value_set: requestedId });
     // 重新解析当前选择，不读取可能与当前表单不同的持久化偏好。
@@ -347,7 +368,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   const handleBetaToggle = useCallback(() => {
     setBetaChannel((prev) => {
       const next = !prev;
-      localStorage.setItem(STORAGE_KEYS.betaChannel, String(next));
+      writePreference(STORAGE_KEYS.betaChannel, String(next));
       return next;
     });
   }, []);
@@ -477,7 +498,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, [betaChannel, updateCheckResult, addToast]);
 
   useEffect(() => {
-    handleXinfaChange(form.xinfa);
+    if (!preserveInitialRef.current) handleXinfaChange(form.xinfa);
     return () => { ++xinfaRevisionRef.current; };
   }, []);
 

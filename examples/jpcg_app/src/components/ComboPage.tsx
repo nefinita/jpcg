@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
@@ -7,6 +7,9 @@ import type {
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
 import { IconGear, IconClose, IconSave, IconTrash, IconStar } from "./icons";
+import { usePersistentState, readPreference, writePreference } from "../hooks/usePersistentState";
+import { STORAGE_KEYS } from "../utils/constants";
+import { comboDraftSchema, defaultComboDraft, type ComboDraft } from "../state/cockpit";
 import { formatTimelineEvent } from "./timelineFormat";
 import styles from "./ComboPage.module.css";
 
@@ -17,7 +20,19 @@ interface Props {
 
 export default function ComboPage({ xinfaName, formData }: Props) {
   const [skillPool, setSkillPool] = useState<SkillPoolItemDTO[]>([]);
-  const [sequence, setSequence] = useState<ComboStepDTO[]>([]);
+  const [draft, setDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(xinfaName ?? "mowen")}`, defaultComboDraft, comboDraftSchema);
+  const setDraftField = useCallback(<K extends keyof ComboDraft,>(key: K, update: SetStateAction<ComboDraft[K]>) => {
+    setDraft((previous) => ({ ...previous, [key]: typeof update === "function"
+      ? (update as (value: ComboDraft[K]) => ComboDraft[K])(previous[key]) : update }));
+  }, [setDraft]);
+  const { sequence, presetName, poolQuery } = draft;
+  const collapsedGroups = useMemo(() => new Set(draft.collapsedGroups), [draft.collapsedGroups]);
+  const setSequence = useCallback((update: SetStateAction<ComboStepDTO[]>) => setDraftField("sequence", update), [setDraftField]);
+  const setPresetName = useCallback((value: string) => setDraftField("presetName", value), [setDraftField]);
+  const setPoolQuery = useCallback((value: string) => setDraftField("poolQuery", value), [setDraftField]);
+  const setCollapsedGroups = useCallback((update: SetStateAction<Set<string>>) => {
+    setDraftField("collapsedGroups", (previous) => [...(typeof update === "function" ? update(new Set(previous)) : update)]);
+  }, [setDraftField]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [presets, setPresets] = useState<string[]>([]);
   const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
@@ -25,16 +40,15 @@ export default function ComboPage({ xinfaName, formData }: Props) {
   const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
-  const [presetName, setPresetName] = useState("");
-  const [poolQuery, setPoolQuery] = useState("");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    let cancelled = false;
+    setSkillPool([]);
     if (xinfaName) {
-      api.loadSkillPool(xinfaName).then(setSkillPool).catch(() => {});
+      api.loadSkillPool(xinfaName).then((pool) => { if (!cancelled) setSkillPool(pool); }).catch(() => {});
     }
-    api.listComboPresets().then(setPresets).catch(() => {});
-    const stored = localStorage.getItem("jpcg_favorites");
+    api.listComboPresets().then((names) => { if (!cancelled) setPresets(names); }).catch(() => {});
+    const stored = readPreference(STORAGE_KEYS.favorites);
     if (stored) {
       try {
         const raw = JSON.parse(stored);
@@ -45,12 +59,21 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         setFavorites(favs);
       } catch {}
     }
+    return () => { cancelled = true; };
   }, [xinfaName]);
 
   const saveFavorites = useCallback((favs: Set<string>) => {
     setFavorites(favs);
-    localStorage.setItem("jpcg_favorites", JSON.stringify([...favs]));
+    writePreference(STORAGE_KEYS.favorites, JSON.stringify([...favs]));
   }, []);
+
+  const calculationRevision = useRef(0);
+  useEffect(() => {
+    ++calculationRevision.current;
+    setComboResult(null);
+    setComputing(false);
+    return () => { ++calculationRevision.current; };
+  }, [sequence, formData]);
 
   const pool = skillPool;
 
@@ -59,16 +82,16 @@ export default function ComboPage({ xinfaName, formData }: Props) {
 
   const addToSequence = useCallback((skill: SkillPoolItemDTO) => {
     setSequence((prev) => [...prev, { skill, overrides: null }]);
-  }, []);
+  }, [setSequence]);
 
   const removeFromSequence = useCallback((index: number) => {
     setSequence((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  }, [setSequence]);
 
   const clearSequence = useCallback(() => {
     setSequence([]);
     setComboResult(null);
-  }, []);
+  }, [setSequence]);
 
   const toggleFavorite = useCallback((s: SkillPoolItemDTO) => {
     const key = `${s.skill_id}-${s.sub_id ?? 0}`;
@@ -81,18 +104,19 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     const [removed] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, removed);
     setSequence(items);
-  }, [sequence]);
+  }, [sequence, setSequence]);
 
   const updateOverride = useCallback((index: number, overrides: StepOverrideDTO) => {
     setSequence((prev) => prev.map((s, i) => i === index ? { ...s, overrides } : s));
-  }, []);
+  }, [setSequence]);
 
   const resetOverride = useCallback((index: number) => {
     setSequence((prev) => prev.map((s, i) => i === index ? { ...s, overrides: null } : s));
-  }, []);
+  }, [setSequence]);
 
   const handleCalculate = useCallback(async () => {
     if (sequence.length === 0 || !formData) return;
+    const revision = ++calculationRevision.current;
     setComputing(true);
     try {
       const data = formData;
@@ -106,11 +130,11 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         req.coefficient,
         req.value_set,
       );
-      setComboResult(result);
+      if (revision === calculationRevision.current) setComboResult(result);
     } catch (err) {
       console.error(err);
     } finally {
-      setComputing(false);
+      if (revision === calculationRevision.current) setComputing(false);
     }
   }, [sequence, formData]);
 
@@ -153,22 +177,25 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     if (!presetName.trim()) return;
     try {
       await api.saveComboPreset(presetName.trim(), sequence);
-      setPresetName("");
+      setDraftField("selectedPreset", presetName.trim());
       setSaveDialog(false);
       setPresets(await api.listComboPresets());
     } catch (err) {
       console.error(err);
     }
-  }, [presetName, sequence]);
+  }, [presetName, sequence, setDraftField]);
 
   const handleLoadPreset = useCallback(async (name: string) => {
     try {
       const preset = await api.loadComboPreset(name);
       setSequence(preset.steps);
+      setPresetName(name);
+      setDraftField("selectedPreset", name);
+      setComboResult(null);
     } catch (err) {
       console.error(err);
     }
-  }, []);
+  }, [setSequence, setPresetName, setDraftField]);
 
   const handleDeletePreset = useCallback(async (name: string) => {
     try {
@@ -215,12 +242,12 @@ export default function ComboPage({ xinfaName, formData }: Props) {
       if (next.has(name)) next.delete(name); else next.add(name);
       return next;
     });
-  }, []);
+  }, [setCollapsedGroups]);
 
-  const expandAll = useCallback(() => setCollapsedGroups(new Set()), []);
+  const expandAll = useCallback(() => setCollapsedGroups(new Set()), [setCollapsedGroups]);
   const collapseAll = useCallback(() => {
     setCollapsedGroups(new Set(groups.filter(([, items]) => items.length > 1).map(([name]) => name)));
-  }, [groups]);
+  }, [groups, setCollapsedGroups]);
 
   // 需先同步面板属性（未计算过时 formData 为 null，全 0 提交会让追加真伤恒为 0）
   const noForm = !formData;
@@ -339,7 +366,7 @@ export default function ComboPage({ xinfaName, formData }: Props) {
       <section className={styles.section}>
         <div className={styles.presetBar}>
           <span className={styles.sectionTitle}>预设</span>
-          <select className={styles.presetSelect} defaultValue="" onChange={(e) => e.target.value && handleLoadPreset(e.target.value)}>
+          <select className={styles.presetSelect} value={presets.includes(draft.selectedPreset) ? draft.selectedPreset : ""} onChange={(e) => e.target.value && handleLoadPreset(e.target.value)}>
             <option value="" disabled>加载预设...</option>
             {presets.map((p) => (
               <option key={p} value={p}>{p}</option>
