@@ -6,7 +6,7 @@ import styles from "./GearPanel.module.css";
 export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, pending }: {
   catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
   onChange: (loadout: GearLoadout) => void; onReset: () => void; onExport: () => void;
-  onImport: (text: string) => Promise<void>; pending: boolean;
+  onImport: (file: File) => Promise<void>; pending: boolean;
 }) {
   const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
   const change = (choice: GearChoice) => onChange({ ...loadout, choices: loadout.choices.map((c) => c.slot === choice.slot ? choice : c) });
@@ -16,8 +16,9 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
       <div className={styles.actions}>
         <button onClick={onReset}>重置配装</button>
         <button onClick={onExport} disabled={stale}>导出配装</button>
-        <label>导入配装<input type="file" accept=".toml" onChange={async (e) => {
-          const file = e.target.files?.[0]; if (file) await onImport(await file.text()); e.target.value = "";
+        <label>导入配装<input type="file" accept=".toml" onChange={(e) => {
+          const file = e.currentTarget.files?.[0]; e.currentTarget.value = "";
+          if (file) void onImport(file);
         }} /></label>
       </div>
     </header>

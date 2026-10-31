@@ -141,11 +141,11 @@ export default function App() {
     });
     setRestoreRevision((value) => value + 1); setStatus("已恢复钉住时的配装、属性与结果");
   };
-  const adoptValueSet = async (nextLoadout?: GearLoadout) => {
+  const adoptValueSet = async (nextLoadout?: GearLoadout, action = ++actionRevision.current) => {
     const selected = nextLoadout ?? loadout; if (!selected) return;
-    const action = ++actionRevision.current;
     try {
       const vs = await api.resolveValueSet(selected.value_set);
+      if (action !== actionRevision.current) return;
       if (!vs.available || vs.id !== selected.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
       const config = selected.school !== formData.xinfa ? await api.loadProfessionConfig(selected.school) : null;
       if (selected.school !== formData.xinfa && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
@@ -159,7 +159,7 @@ export default function App() {
             pofang_up: Number(config.pofang_up) || 0, huixin_up: Number(config.huixin_up) || 0 }
             : previous.form.xinfa_config } }));
       setRestoreRevision((value) => value + 1); setGearError("");
-    } catch (err) { addToast(String(err), "error"); }
+    } catch (err) { if (action === actionRevision.current) addToast(String(err), "error"); }
   };
   useEffect(() => {
     if (!freshCockpit.current || !gearMode || !loadout || !contextReady) return;
@@ -175,9 +175,16 @@ export default function App() {
       const link = document.createElement("a"); link.href = url; link.download = `${loadout.school}_gear.toml`; link.click(); URL.revokeObjectURL(url);
     } catch (err) { addToast(String(err), "error"); }
   };
-  const importLoadout = async (text: string) => {
-    try { const value = await api.importGear(text); await adoptValueSet(value.composed.loadout); }
-    catch (err) { addToast(String(err), "error"); }
+  const importLoadout = async (file: File) => {
+    // 从选择文件起保留同一操作版本；后续编辑/切模式/导入均使旧链路失效。
+    const action = ++actionRevision.current;
+    try {
+      const text = await file.text();
+      if (action !== actionRevision.current) return;
+      const value = await api.importGear(text);
+      if (action !== actionRevision.current) return;
+      await adoptValueSet(value.composed.loadout, action);
+    } catch (err) { if (action === actionRevision.current) addToast(String(err), "error"); }
   };
   const composition = cockpit.calculation?.mode === "gear" && cockpit.calculation.loadout?.school === formData.xinfa ? cockpit.calculation.composition : undefined;
   const activeForm = gearMode ? (compatible && !stale && cockpit.calculation?.mode === "gear" ? cockpit.calculation.form : null) : formData;
