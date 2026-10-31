@@ -4,7 +4,7 @@
 # 一键流程（干净检出后一条命令）：
 #   make all
 #     = setup → frontend → updater（复制到 Tauri externalBin 位置）
-#       → modules-dir（动态 app + 4 个模块库，动态 app 另存为 jpcg_app-dynamic）
+#       → modules-dir（动态 app + 5 个模块库，动态 app 另存为 jpcg_app-dynamic）
 #       → build-static（最后落地：jpcg_app 为默认 static 变体）
 #
 # 目标一览：
@@ -13,8 +13,8 @@
 #   make frontend-test 前端测试（npm test / vitest）
 #   make build-static  静态模式 app（编译期链接 jpcg_core；默认）
 #   make build-dynamic 动态模式 app（运行时 dlopen libjpcg_core）
-#   make build-modules 四个模块 cdylib（core / combo / update / const）
-#   make modules-dir   动态 app + 4 个模块库，复制到 $(MODULES_DIR)
+#   make build-modules 五个模块 cdylib（core / combo / update / const / gear）
+#   make modules-dir   动态 app + 5 个模块库，复制到 $(MODULES_DIR)
 #   make updater       构建 jpcg_updater 并复制到 app 的 externalBin 位置
 #   make test          cargo test --workspace + dynamic 模式库测试
 #   make fmt-check     rustfmt 检查
@@ -42,9 +42,9 @@
 # 产物布局（BUILD=debug 默认；BUILD=release 时全部落在 target/release/）：
 #   target/$(BUILD)/jpcg_app                      app 本体（make all 后为默认 static 变体）
 #   target/$(BUILD)/jpcg_app-dynamic[.exe]        dynamic 变体（modules-dir 另存，便于对比/发布）
-#   target/$(BUILD)/libjpcg_{core,combo,update,const}.{so,dylib}
-#   target/$(BUILD)/jpcg_*.dll                    四个模块库（动态模式/跨语言/增量更新）
-#   target/$(BUILD)/modules/                      上述 4 个库的副本（动态模式加载首选）
+#   target/$(BUILD)/libjpcg_{core,combo,update,const,gear}.{so,dylib}
+#   target/$(BUILD)/jpcg_*.dll                    五个模块库（动态模式/跨语言/增量更新）
+#   target/$(BUILD)/modules/                      上述 5 个库的副本（动态模式加载首选）
 #   examples/jpcg_app/dist/                       前端静态资源（编译期嵌入 app）
 #   examples/jpcg_app/src-tauri/binaries/jpcg_updater-<host-triple>[.exe]
 #                                                 Tauri externalBin（打包必需）
@@ -85,7 +85,7 @@ HOST_TRIPLE := $(shell rustc -vV 2>/dev/null | sed -n 's/^host: //p')
 
 BIN_DIR := target/$(BUILD)
 MODULES_DIR ?= $(BIN_DIR)/modules
-MODULES := jpcg_core jpcg_combo jpcg_update jpcg_const
+MODULES := jpcg_core jpcg_combo jpcg_update jpcg_const jpcg_gear
 APP_BIN := $(BIN_DIR)/jpcg_app$(EXE_SUFFIX)
 APP_DYN := $(BIN_DIR)/jpcg_app-dynamic$(EXE_SUFFIX)
 UPDATER_SRC := $(BIN_DIR)/jpcg_updater$(EXE_SUFFIX)
@@ -112,13 +112,13 @@ APP_BUILD_DEPS := frontend updater
 # 一键目标
 # ----------------------------------------------------------------------------
 
-## 一键：依赖安装 → 前端构建 → 动态 app + 4 个模块库（另存 dynamic 变体）→ updater
+## 一键：依赖安装 → 前端构建 → 动态 app + 5 个模块库（另存 dynamic 变体）→ updater
 ##       → 静态 app（最后落地，jpcg_app = 默认 static）
 all: setup frontend updater modules-dir build-static
 	@echo "==> make all 完成"
 	@echo "    app(static):  $(APP_BIN)"
 	@echo "    app(dynamic): $(APP_DYN)"
-	@echo "    模块库:       $(MODULES_DIR)/（4 个）"
+	@echo "    模块库:       $(MODULES_DIR)/（5 个）"
 	@echo "    updater:      $(UPDATER_DST)"
 
 # ----------------------------------------------------------------------------
@@ -165,14 +165,14 @@ build-dynamic: $(APP_BUILD_DEPS)
 	@echo "==> cargo build -p jpcg_app（dynamic）"
 	$(CARGO) build -p jpcg_app --no-default-features --features dynamic $(CARGO_BUILD_FLAGS)
 
-## 四个模块库 cdylib（jpcg_core / jpcg_combo / jpcg_update / jpcg_const）
+## 五个模块库 cdylib（jpcg_core / jpcg_combo / jpcg_update / jpcg_const / jpcg_gear）
 build-modules:
-	@echo "==> cargo build 四个模块库"
-	$(CARGO) build -p jpcg_core -p jpcg_combo -p jpcg_update -p jpcg_const $(CARGO_BUILD_FLAGS)
+	@echo "==> cargo build 五个模块库"
+	$(CARGO) build -p jpcg_core -p jpcg_combo -p jpcg_update -p jpcg_const -p jpcg_gear $(CARGO_BUILD_FLAGS)
 
-## 动态 app + 4 个模块库：复制到 $(MODULES_DIR)；dynamic app 另存为 $(APP_DYN)
+## 动态 app + 5 个模块库：复制到 $(MODULES_DIR)；dynamic app 另存为 $(APP_DYN)
 modules-dir: build-dynamic build-modules
-	@echo "==> 复制 4 个模块库到 $(MODULES_DIR)"
+	@echo "==> 复制 5 个模块库到 $(MODULES_DIR)"
 	@mkdir -p "$(MODULES_DIR)"; missing=0; \
 	for lib in $(MODULES); do \
 	  src=""; \
@@ -186,7 +186,7 @@ modules-dir: build-dynamic build-modules
 	  fi; \
 	done; \
 	[ "$$missing" -eq 0 ] || { echo "错误：模块库不完整" >&2; exit 1; }; \
-	echo "  已就绪：$$(ls "$(MODULES_DIR)" | grep -E 'jpcg_(core|combo|update|const)' | tr '\n' ' ')"; \
+	echo "  已就绪：$$(ls "$(MODULES_DIR)" | grep -E 'jpcg_(core|combo|update|const|gear)' | tr '\n' ' ')"; \
 	if [ -f "$(APP_BIN)" ]; then \
 	  cp -f "$(APP_BIN)" "$(APP_DYN)" && echo "  ✓ $(APP_BIN) → $(APP_DYN)（dynamic 变体另存）"; \
 	else \
@@ -239,8 +239,8 @@ help:
 	@echo "  make frontend-test  npm test（vitest）"
 	@echo "  make build-static   静态模式 app（默认 goal）"
 	@echo "  make build-dynamic  动态模式 app（dlopen 模块库）"
-	@echo "  make build-modules  四个模块 cdylib（core/combo/update/const）"
-	@echo "  make modules-dir    动态 app + 4 个模块库 → $(MODULES_DIR)（dynamic app 另存 $(APP_DYN)）"
+	@echo "  make build-modules  五个模块 cdylib（core/combo/update/const/gear）"
+	@echo "  make modules-dir    动态 app + 5 个模块库 → $(MODULES_DIR)（dynamic app 另存 $(APP_DYN)）"
 	@echo "  make updater        构建 updater → $(APP_DIR)/binaries/"
 	@echo "  make test           cargo test --workspace + dynamic 库测试"
 	@echo "  make fmt-check      rustfmt 检查"

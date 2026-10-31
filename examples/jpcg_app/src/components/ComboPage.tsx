@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction, type Dispatch } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
@@ -16,11 +16,16 @@ import styles from "./ComboPage.module.css";
 interface Props {
   xinfaName?: string;
   formData?: FormData | null;
+  draft?: ComboDraft;
+  onDraftChange?: Dispatch<SetStateAction<ComboDraft>>;
+  configurationOnly?: boolean;
 }
 
-export default function ComboPage({ xinfaName, formData }: Props) {
+export default function ComboPage({ xinfaName, formData, draft: controlledDraft, onDraftChange, configurationOnly = false }: Props) {
   const [skillPool, setSkillPool] = useState<SkillPoolItemDTO[]>([]);
-  const [draft, setDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(xinfaName ?? "mowen")}`, defaultComboDraft, comboDraftSchema);
+  const [localDraft, setLocalDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(xinfaName ?? "mowen")}`, defaultComboDraft, comboDraftSchema);
+  const draft = controlledDraft ?? localDraft;
+  const setDraft = onDraftChange ?? setLocalDraft;
   const setDraftField = useCallback(<K extends keyof ComboDraft,>(key: K, update: SetStateAction<ComboDraft[K]>) => {
     setDraft((previous) => ({ ...previous, [key]: typeof update === "function"
       ? (update as (value: ComboDraft[K]) => ComboDraft[K])(previous[key]) : update }));
@@ -261,14 +266,16 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         <div className={styles.headerActions}>
           {sequence.length > 0 && (
             <>
-              <button className={styles.primaryBtn} onClick={handleCalculate} disabled={computing || noForm}
-                title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
-                {computing ? "计算中..." : "计算连招"}
-              </button>
-              <button className={styles.btn} onClick={handleTimeline} disabled={computing || noForm}
-                title="按当前序列跑时间轴（GCD / 读条 / CD / 形态 / buff / dot）">
-                {computing ? "计算中..." : "时间轴预览"}
-              </button>
+              {!configurationOnly && <>
+                <button className={styles.primaryBtn} onClick={handleCalculate} disabled={computing || noForm}
+                  title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
+                  {computing ? "计算中..." : "计算连招"}
+                </button>
+                <button className={styles.btn} onClick={handleTimeline} disabled={computing || noForm}
+                  title="按当前序列跑时间轴（GCD / 读条 / CD / 形态 / buff / dot）">
+                  {computing ? "计算中..." : "时间轴预览"}
+                </button>
+              </>}
               <button className={styles.btn} onClick={clearSequence}>清空</button>
             </>
           )}
@@ -277,9 +284,10 @@ export default function ComboPage({ xinfaName, formData }: Props) {
 
       {noForm && (
         <div className={styles.warnBanner}>
-          尚未同步面板属性：请先在「计算器」页输入属性并点击计算，再回来排轴（否则以 0 属性提交，追加真伤不会生效）。
+          {configurationOnly ? "请先在驾驶台完成配装或手动属性计算；连招草稿可继续编辑。" : "尚未同步面板属性：请先在「计算器」页输入属性并点击计算，再回来排轴（否则以 0 属性提交，追加真伤不会生效）。"}
         </div>
       )}
+      {configurationOnly && <p className={styles.zhenshiHint}>草稿自动保存；切回计算驾驶台查看连招伤害与击杀率。</p>}
       {!noForm && targetHp <= 0 && (
         <div className={styles.warnBanner}>
           目标血量 = 0：追加真伤（已损失生命值 × 系数）不会生效，请在计算器页设置目标血量。
@@ -338,7 +346,7 @@ export default function ComboPage({ xinfaName, formData }: Props) {
       )}
 
       {/* Combo result */}
-      {comboResult && (
+      {!configurationOnly && comboResult && (
         <ComboResultDisplay result={comboResult} />
       )}
 
@@ -422,11 +430,11 @@ export default function ComboPage({ xinfaName, formData }: Props) {
                 </button>
                 {!collapsed && (
                   <div className={styles.poolGroupItems}>
-                    {items.map((s) => {
+                    {items.map((s, itemIndex) => {
                       const key = skillKey(s);
                       const fav = favorites.has(key);
                       return (
-                        <button key={key}
+                        <button key={`${key}-${itemIndex}`}
                           className={`${styles.skillChip} ${fav ? styles.favoriteChip : ""}`}
                           onClick={() => addToSequence(s)}
                           onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}

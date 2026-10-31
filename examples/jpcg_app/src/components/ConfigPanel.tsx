@@ -18,6 +18,9 @@ interface Props {
   form?: FormData;
   onFormChange?: (update: SetStateAction<FormData>, options?: { ready?: boolean }) => void;
   preserveInitialForm?: boolean;
+  manualMode?: boolean;
+  onReady?: (ready: boolean) => void;
+  playerPreview?: Record<string, number | string>;
 }
 
 const defaultForm = (): FormData => ({
@@ -38,7 +41,7 @@ const defaultForm = (): FormData => ({
 });
 
 export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus, onXinfaChange,
-  form: controlledForm, onFormChange, preserveInitialForm = false }: Props) {
+  form: controlledForm, onFormChange, preserveInitialForm = false, manualMode = true, playerPreview, onReady }: Props) {
   const [localForm, setLocalForm] = useState<FormData>(defaultManualForm);
   const form = controlledForm ?? localForm;
   const preserveInitialRef = useRef(preserveInitialForm);
@@ -173,16 +176,16 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         return;
       }
       setForm((prev): FormData => ({
-        ...prev,
-        xinfa_config: {
-          profession: typeof cfg.profession === "string" && cfg.profession ? cfg.profession : value,
-          xinfa_name: typeof cfg.xinfa_name === "string" && cfg.xinfa_name ? cfg.xinfa_name : entry?.label ?? value,
-          xinfa_nom: typeof cfg.xinfa_nom === "string" && cfg.xinfa_nom ? cfg.xinfa_nom : prev.xinfa_config.xinfa_nom,
-          atk_up: Number(cfg.atk_up) || 0,
-          pofang_up: Number(cfg.pofang_up) || 0,
-          huixin_up: Number(cfg.huixin_up) || 0,
-        },
-      }));
+          ...prev,
+          xinfa_config: {
+            profession: typeof cfg.profession === "string" && cfg.profession ? cfg.profession : value,
+            xinfa_name: typeof cfg.xinfa_name === "string" && cfg.xinfa_name ? cfg.xinfa_name : entry?.label ?? value,
+            xinfa_nom: typeof cfg.xinfa_nom === "string" && cfg.xinfa_nom ? cfg.xinfa_nom : prev.xinfa_config.xinfa_nom,
+            atk_up: Number(cfg.atk_up) || 0,
+            pofang_up: Number(cfg.pofang_up) || 0,
+            huixin_up: Number(cfg.huixin_up) || 0,
+          },
+        }));
     }).catch(() => {});
   }, [professionOptions, defaultXinfa, onXinfaChange]);
 
@@ -502,6 +505,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     return () => { ++xinfaRevisionRef.current; };
   }, []);
 
+  useEffect(() => { onReady?.(valueSetReady && !coefficientBaselinePending && (manualMode || (!!appliedValueSet?.available && (form.value_set == null || appliedValueSet.id === form.value_set)))); }, [valueSetReady, coefficientBaselinePending, manualMode, appliedValueSet, form.value_set, onReady]);
+
   const playerStats = React.useMemo(() => {
     const pct = (v: number) => (v * 100).toFixed(1) + "%";
     const huixinRate = normalizeNum(form.player.huixin_dengji) / (normalizeNum(form.coefficient.huixin_xishu) || 197703);
@@ -552,13 +557,14 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       </div>
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>玩家属性</div>
+        <div className={styles.sectionTitle}>{manualMode ? "玩家属性" : "合成属性（只读）"}</div>
         <div className={styles.grid}>
           {PLAYER_FIELDS.map((f) => (
             <div key={f.id} className={styles.field}>
               <label className={styles.fieldLabel}>{f.label}</label>
               <input className={styles.input} type="number" min={f.min} step={f.step}
-                value={form.player[f.id] ?? ""}
+                readOnly={!manualMode}
+                value={manualMode ? form.player[f.id] ?? "" : playerPreview?.[f.id] ?? 0}
                 onChange={(e) => updateField("player", f.id, e.target.value)} />
             </div>
           ))}
@@ -616,15 +622,17 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
       <div className={styles.section}>
         <div className={styles.actions}>
-          <button className={`${styles.btn} ${styles.btnPrimary}`}
+          {manualMode && <button className={`${styles.btn} ${styles.btnPrimary}`}
             onClick={handleCalculate} disabled={calculating || !valueSetReady}>
             {calculating ? "计算中..." : "开始计算"}
-          </button>
+          </button>}
+          {manualMode && <>
           <button className={styles.btn} onClick={handleSave} disabled={!valueSetReady}>保存</button>
           <button className={styles.btn} onClick={handleLoad}>加载</button>
           <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleClear}>清空</button>
           <button className={styles.btn} onClick={handleExport}>导出</button>
           <button className={styles.btn} onClick={handleImport}>导入</button>
+          </>}
           <label className={styles.betaToggle}>
             <input type="checkbox" checked={betaChannel} onChange={handleBetaToggle} />
             Beta 版本

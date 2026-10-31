@@ -307,3 +307,10 @@ pub struct OptimizeResult {
     pub stop_reason: String,
     pub warnings: Vec<String>,
 }
+
+/// 桌面合成响应：保留完整配装元数据，伤害属性转换复用 player() 唯一实现。
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Composition {
+    pub composed: Composed,
+    pub player: jpcg_api::PlayerConfigDTO,
+}

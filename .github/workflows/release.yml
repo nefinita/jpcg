@@ -93,7 +93,7 @@ jobs:
 
       - name: 构建模块库（dll）
         run: |
-          cargo build -p jpcg_core -p jpcg_update -p jpcg_const --release
+          cargo build -p jpcg_core -p jpcg_update -p jpcg_const -p jpcg_gear --release
 
       - name: 构建 app（static；用 tauri build 以嵌入前端资源）
         working-directory: examples/jpcg_app
@@ -114,6 +114,7 @@ jobs:
           cp target/release/libjpcg_core.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_core.${{ matrix.ext }} dist/modules/
           cp target/release/libjpcg_update.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_update.${{ matrix.ext }} dist/modules/
           cp target/release/libjpcg_const.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_const.${{ matrix.ext }} dist/modules/
+          cp target/release/libjpcg_gear.${{ matrix.ext }} dist/modules/ || cp target/release/jpcg_gear.${{ matrix.ext }} dist/modules/
           # app 产物命名用 core 版本（tag），文件名/清单 os+arch 与客户端 env::consts 对齐
           if [ "${{ matrix.platform }}" = "windows-latest" ]; then
             cp target/release/jpcg_app.exe "dist/app/jpcg-app-${{ matrix.os }}-${{ matrix.arch }}.exe"

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import type { SkillResultDTO } from "../types";
 import { formatNumber } from "../utils/format";
 import clsx from "../utils/clsx";
+import AnimatedNumber from "./AnimatedNumber";
 import styles from "./ResultTable.module.css";
 
 interface Props {
@@ -10,11 +11,14 @@ interface Props {
   baseline?: SkillResultDTO[];
 }
 
-export default function ResultTable({ results, calculating, baseline }: Props) {
+function ResultTable({ results, calculating, baseline }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("original");
+  const previousResults = useRef<SkillResultDTO[] | null>(null);
+  const previous = previousResults.current;
+  useEffect(() => { previousResults.current = results; }, [results]);
 
-  if (calculating) {
+  if (calculating && !results?.length) {
     return (
       <div className={styles.card}>
         <div className={styles.header}>
@@ -43,6 +47,7 @@ export default function ResultTable({ results, calculating, baseline }: Props) {
     );
   }
 
+  const totalQ = results.reduce((sum, result) => sum + result.q, 0);
   const maxQ = Math.max(...results.map((r) => r.q));
   const avgQ = Math.round(results.reduce((s, r) => s + r.q, 0) / results.length);
   const critSkills = results.filter((r) => r.h > r.n);
@@ -80,7 +85,7 @@ export default function ResultTable({ results, calculating, baseline }: Props) {
       <div className={styles.header}>
         <span>计算结果</span>
         <span role="status" aria-atomic="true" style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
-          {visibleSkills.length} / {results.length} 个技能
+          {calculating ? "计算中 · " : ""}{visibleSkills.length} / {results.length} 个技能
         </span>
       </div>
       <div className={styles.controls}>
@@ -114,11 +119,12 @@ export default function ResultTable({ results, calculating, baseline }: Props) {
             <th title="会心伤害">H</th>
             <th title="期望伤害">Q</th>
             {baseline && <th>ΔQ / Δ%</th>}
+            <th title="各技能期望在当前技能池中的占比">技能池占比</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
-            <tr><td className={styles.emptyRow} colSpan={baseline ? 8 : 7}>没有匹配的技能，请修改搜索或重置筛选。</td></tr>
+            <tr><td className={styles.emptyRow} colSpan={baseline ? 9 : 8}>没有匹配的技能，请修改搜索或重置筛选。</td></tr>
           )}
           {rows.map((row, i) => {
             const jumps = row.dot_jumps ?? [];
@@ -127,12 +133,15 @@ export default function ResultTable({ results, calculating, baseline }: Props) {
             const base = baselineByName.get(row.skill_name)?.[row.occurrence];
             const baseQ = base && (isDotRow ? base.dot_jumps?.[row.dotIndex!] : base.q);
             const difference = baseQ === undefined ? null : q - baseQ;
+            const old = previous?.filter((r) => r.skill_name === row.skill_name)[row.occurrence];
+            const oldQ = old && (isDotRow ? old.dot_jumps?.[row.dotIndex!] : old.q);
+            const share = totalQ > 0 ? q / totalQ * 100 : 0;
             const isBest = !isDotRow && row.q === maxQ;
             const isFixed = row.has_critical_strike || (row.zhenshishanghai ?? 0) > 0;
             return (
               <tr
-                key={`${row.skill_name}-${row.dotIndex ?? "row"}-${i}`}
-                className={clsx(isBest && styles.highlightRow)}
+                key={`${row.skill_name}-${row.occurrence}-${row.dotIndex ?? "row"}`}
+                className={clsx(isBest && styles.highlightRow, oldQ !== undefined && oldQ !== q && styles.changedRow)}
               >
                 <td>
                   {row.skill_name}
@@ -164,6 +173,7 @@ export default function ResultTable({ results, calculating, baseline }: Props) {
                 {baseline && <td className={clsx(styles.colNum, difference !== null && difference > 0 && styles.positive, difference !== null && difference < 0 && styles.negative)}>
                   {difference === null ? "—" : `${difference >= 0 ? "+" : ""}${formatNumber(difference)} / ${baseQ === 0 ? "—" : `${difference >= 0 ? "+" : ""}${(difference / baseQ! * 100).toFixed(1)}%`}`}
                 </td>}
+                <td className={styles.shareCell}><span className={styles.shareTrack}><span style={{ width: `${share}%` }} /></span>{share.toFixed(1)}%</td>
               </tr>
             );
           })}
@@ -173,11 +183,11 @@ export default function ResultTable({ results, calculating, baseline }: Props) {
       <div className={styles.stats}>
         <div className={styles.statItem}>
           <span className={styles.statLabel}>最大期望</span>
-          <span className={styles.statValue}>{formatNumber(maxQ)}</span>
+          <span className={styles.statValue}><AnimatedNumber value={maxQ} /></span>
         </div>
         <div className={styles.statItem}>
           <span className={styles.statLabel}>平均期望</span>
-          <span className={styles.statValue}>{formatNumber(avgQ)}</span>
+          <span className={styles.statValue}><AnimatedNumber value={avgQ} /></span>
         </div>
         <div className={styles.statItem}>
           <span className={styles.statLabel}>会心占比</span>
@@ -187,3 +197,5 @@ export default function ResultTable({ results, calculating, baseline }: Props) {
     </div>
   );
 }
+
+export default memo(ResultTable);

@@ -9,6 +9,7 @@ Rust workspace for a 剑网3 damage calculator. Edition 2024 (requires rustc >= 
 | `crates/jpcg_api/` | 纯 DTO 类型契约 crate（serde 类型 + HostEventsTable，零依赖，双端单一来源） |
 | `crates/jpcg_core/` | Core calculation engine + `host/` JSON 入口 + FFI（句柄 + JSON 协议） |
 | `crates/jpcg_combo/` | 连招引擎（依赖 jpcg_core，排轴器后端）：编排 + MC 击杀率 + hp 步进真伤；cdylib+rlib，双产物（static 直调 / dynamic 经 ffi_bridge 加载 libjpcg_combo），dll 不进 modules_manifest |
+| `crates/jpcg_gear/` | 配装契约/模板合成/有界搜索 + host/ffi（独立 cdylib）；默认 engine，`default-features=false` 仅模型，供 dynamic 壳避免静态链接计算引擎 |
 | `crates/jpcg_const/` | 等级常数真源 + 药品/食物常量（编译期 const；jpcg_core 默认系数与固定公式取自 `jpcg_const::level_constant`；独立版本 `130.3.{YYYYMMDD}`） |
 | `crates/jpcg_update/` | App + data + modules(dll) auto-update (fetches from `nefinita-ai.com`) |
 | `crates/jpcg_updater/` | Standalone updater binary — replaces main exe & relaunches |
@@ -28,7 +29,7 @@ make frontend                        # 前端构建（tsc + vite → dist/，app
 make frontend-test                   # 前端测试（vitest）
 make updater                         # 编译 jpcg_updater → binaries/jpcg_updater-<host-triple>
 make all                             # setup → frontend → updater → modules-dir → build-static
-                                     # 结束：jpcg_app=static、jpcg_app-dynamic=dynamic、modules/ 含 4 库
+                                     # 结束：jpcg_app=static、jpcg_app-dynamic=dynamic、modules/ 含 5 库
 make check-all                       # fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端 test/build
 make help                            # 列出所有目标
 
@@ -39,7 +40,7 @@ cargo test --workspace
 # 以下为 .cargo/config.toml 别名，与 make build-* 目标一致
 cargo build-app-static               # 默认 static：编译期链接 jpcg_core
 cargo build-app-dynamic              # dynamic：dlopen libjpcg_core（更新只换 dll）
-cargo build-modules                  # 四个 cdylib（core/combo/update/const）
+cargo build-modules                  # 五个 cdylib（core/combo/update/const/gear）
 make build-static | build-dynamic | build-modules | modules-dir | test
 # make modules-dir 产物：target/<build>/modules/{4 dll} + jpcg_app-dynamic；make all 最终 jpcg_app=static
 

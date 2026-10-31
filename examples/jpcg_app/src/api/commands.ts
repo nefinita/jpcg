@@ -544,3 +544,21 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       return { success: true };
   }
 }
+
+// 桌面配装入口：失败必须显示，浏览器不伪造 Rust 合成或 TOML 解析。
+export async function gearCatalog(): Promise<import("../types/gear").GearCatalog> {
+  if (!isTauri()) throw new Error("配装模板需要桌面应用；可切换手动属性模式");
+  return invoke("gear_catalog");
+}
+export async function composeGear(loadout: import("../types/gear").GearLoadout): Promise<import("../types/gear").GearComposition> {
+  if (!isTauri()) throw new Error("配装合成需要桌面应用");
+  return invoke("compose_gear", { loadout });
+}
+export async function exportGear(loadout: import("../types/gear").GearLoadout): Promise<string> {
+  if (!isTauri()) throw new Error("配装导出需要桌面应用");
+  return invoke("export_gear", { loadout });
+}
+export async function importGear(toml: string): Promise<import("../types/gear").GearComposition> {
+  if (!isTauri()) throw new Error("配装导入需要桌面应用");
+  return invoke("import_gear", { toml });
+}
