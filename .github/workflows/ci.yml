@@ -46,7 +46,7 @@ jobs:
       - name: 构建前端 (tauri frontendDist)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: examples/jpcg_app/package-lock.json
       - name: npm ci + build
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: examples/jpcg_app/package-lock.json
       - run: npm ci

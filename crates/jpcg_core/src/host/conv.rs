@@ -358,3 +358,53 @@ impl From<XinfaSummary> for XinfaSummaryDTO {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preset_roundtrip_keeps_damage_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let input = SkillPoolItemDTO {
+            skill_name: "预设伤害属性回归".into(),
+            skill_id: 1,
+            sub_id: 2,
+            base_damage1: 100,
+            base_damage2: 200,
+            atk_xishu: 1.5,
+            watk_xishu: 16,
+            hit_up: 32,
+            huixin_up: 64,
+            huixiao_up: 128,
+            wushifangyu: 256,
+            wushihuajin: 512,
+            dot_flag: 1,
+            dot_interval: 2.0,
+            dot_duration: 18.0,
+            dot_up: 0.12,
+            wushijianshang: 128,
+            zhenshishanghai: 12345,
+            has_critical_strike: true,
+            lost_hp_zhenshishanghai: 0.18,
+            ..Default::default()
+        };
+        // 与保存/加载预设相同的转换及 TOML 往返，不读写文件或修改全局状态。
+        let preset = ComboPreset {
+            name: "regression".into(),
+            steps: vec![ComboStep::from(ComboStepDTO {
+                skill: input.clone(),
+                overrides: None,
+            })],
+        };
+        let encoded = toml::to_string_pretty(&preset)?;
+        let decoded: ComboPreset = toml::from_str(&encoded)?;
+        let actual = ComboPresetDTO::from(decoded);
+        assert_eq!(actual.steps.len(), 1);
+        assert_eq!(
+            serde_json::to_value(&actual.steps[0].skill)?,
+            serde_json::to_value(&input)?,
+            "预设往返必须保留技能池条目的全部属性"
+        );
+        Ok(())
+    }
+}

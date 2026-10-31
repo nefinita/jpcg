@@ -9,6 +9,11 @@ import { readPreference, writePreference } from "../hooks/usePersistentState";
 import { defaultManualForm } from "../state/cockpit";
 import styles from "./ConfigPanel.module.css";
 
+export interface FormChangeOptions {
+  ready?: boolean;
+  source?: "user" | "metadata";
+}
+
 interface Props {
   onCalculate: (form: FormData) => void;
   calculating: boolean;
@@ -16,7 +21,7 @@ interface Props {
   setStatus: (msg: string) => void;
   onXinfaChange?: (xinfa: string) => void;
   form?: FormData;
-  onFormChange?: (update: SetStateAction<FormData>, options?: { ready?: boolean }) => void;
+  onFormChange?: (update: SetStateAction<FormData>, options?: FormChangeOptions) => void;
   preserveInitialForm?: boolean;
   manualMode?: boolean;
   onReady?: (ready: boolean) => void;
@@ -48,8 +53,8 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   // 元数据（心法属性/存档）成功加载后才允许把表单标记为「已初始化」；
   // 初始挂载的同步占位写入保持 ready=false，失败时下次启动会重新加载。
   const hydratedRef = useRef(preserveInitialForm);
-  const setForm = useCallback((update: SetStateAction<FormData>) => {
-    if (onFormChange) onFormChange(update, { ready: hydratedRef.current });
+  const setForm = useCallback((update: SetStateAction<FormData>, source: "user" | "metadata" = "user") => {
+    if (onFormChange) onFormChange(update, { ready: hydratedRef.current, source });
     else setLocalForm(update);
   }, [onFormChange]);
 
@@ -100,7 +105,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       setCoefficientBaselinePending(false);
       const coefficient = vs.coefficient;
       if (!coefficientCustomRef.current && coefficient) {
-        setForm((prev) => ({ ...prev, coefficient: { ...coefficient } }));
+        setForm((prev) => ({ ...prev, coefficient: { ...coefficient } }), "metadata");
       }
       return vs;
     } catch (err) {
@@ -111,13 +116,13 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     }
   }, [addToast]);
 
-  const selectValueSet = useCallback((id: string | null) => {
+  const selectValueSet = useCallback((id: string | null, source: "user" | "metadata" = "user") => {
     const revision = ++valueSetRevisionRef.current;
     persistValueSet(id);
     coefficientCustomRef.current = false;
     setCoefficientBaselinePending(true);
     setAppliedValueSet(null);
-    setForm((prev) => ({ ...prev, value_set: id }));
+    setForm((prev) => ({ ...prev, value_set: id }), source);
     return resolveCurrentValueSet(id, revision);
   }, [persistValueSet, resolveCurrentValueSet]);
 
@@ -148,7 +153,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         if (preserveInitialRef.current) {
           persistValueSet(selectedValueSetRef.current);
           void resolveCurrentValueSet(selectedValueSetRef.current, revision);
-        } else void selectValueSet(pickValueSetId(sets));
+        } else void selectValueSet(pickValueSetId(sets), "metadata");
       }
     }).catch(() => {});
     return () => { ++valueSetRevisionRef.current; };
@@ -156,7 +161,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const defaultXinfa = XINFA_FALLBACK.find((x) => x.default) || XINFA_FALLBACK[0];
 
-  const handleXinfaChange = useCallback((value: string) => {
+  const handleXinfaChange = useCallback((value: string, source: "user" | "metadata" = "user") => {
     const revision = ++xinfaRevisionRef.current;
     const entry = professionOptions.find((x) => x.value === value);
     writePreference(STORAGE_KEYS.lastXinfa, value);
@@ -164,7 +169,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       ...prev,
       xinfa: value,
       xinfa_config: { ...prev.xinfa_config, xinfa_name: entry?.label ?? defaultXinfa.label, profession: value },
-    }));
+    }), source);
     onXinfaChange?.(value);
     api.loadProfessionConfig(value).then((cfg) => {
       if (revision !== xinfaRevisionRef.current) return;
@@ -172,7 +177,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       // 失败/挂起保持未完成，下次启动会重新拉取而不是永久保留占位属性。
       hydratedRef.current = true;
       if (!cfg) {
-        setForm((prev) => prev);
+        setForm((prev) => prev, "metadata");
         return;
       }
       setForm((prev): FormData => ({
@@ -185,7 +190,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
             pofang_up: Number(cfg.pofang_up) || 0,
             huixin_up: Number(cfg.huixin_up) || 0,
           },
-        }));
+        }), "metadata");
     }).catch(() => {});
   }, [professionOptions, defaultXinfa, onXinfaChange]);
 
@@ -509,7 +514,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, [betaChannel, updateCheckResult, addToast]);
 
   useEffect(() => {
-    if (!preserveInitialRef.current) handleXinfaChange(form.xinfa);
+    if (!preserveInitialRef.current) handleXinfaChange(form.xinfa, "metadata");
     return () => { ++xinfaRevisionRef.current; };
   }, []);
 

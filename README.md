@@ -204,7 +204,7 @@ pub enum Roadmap {
 
 ## 🔧 编译与运行
 
-> 源码编译需要 Rust ≥ 1.85（rustup 默认 toolchain）与 Node.js ≥ 18。
+> 源码编译需要 Rust ≥ 1.85（rustup 默认 toolchain）与 Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`（前端工具链要求，CI 使用 Node 22）。
 > Windows / macOS / Linux 三平台均可构建。
 
 ### 一键构建（推荐）

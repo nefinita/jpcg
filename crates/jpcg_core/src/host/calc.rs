@@ -103,6 +103,11 @@ pub(crate) fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltyp
         wushifangyu: s.wushifangyu,
         wushihuajin: s.wushihuajin,
         dot_flag: s.dot_flag,
+        dot_interval: s.dot_interval,
+        dot_duration: s.dot_duration,
+        dot_up: s.dot_up,
+        wushijianshang: s.wushijianshang,
+        zhenshishanghai: s.zhenshishanghai,
         has_critical_strike: s.has_critical_strike,
         lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
         ..Default::default()

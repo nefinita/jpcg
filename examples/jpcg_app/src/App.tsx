@@ -6,7 +6,7 @@ import * as api from "./api/commands";
 import ActivityBar from "./components/ActivityBar";
 import ThemeToggle from "./components/ThemeToggle";
 import { GITHUB_ISSUES_URL, STORAGE_KEYS } from "./utils/constants";
-import ConfigPanel from "./components/ConfigPanel";
+import ConfigPanel, { type FormChangeOptions } from "./components/ConfigPanel";
 import ResultTable from "./components/ResultTable";
 import ForumPage from "./components/ForumPage";
 import ComboPage from "./components/ComboPage";
@@ -40,6 +40,7 @@ export default function App() {
   const [restoreRevision, setRestoreRevision] = useState(0);
   const requestRevision = useRef(0);
   const actionRevision = useRef(0);
+  const startupAction = useRef(actionRevision.current);
   const [calculating, setCalculating] = useState(false);
   const [status, setStatus] = useState("就绪");
   const [catalog, setCatalog] = useState<GearCatalog | null>(null);
@@ -61,9 +62,10 @@ export default function App() {
   // 否则首次加载失败会被永久当成已初始化，下次启动跳过重新加载。
   const setFormData = useCallback((
     update: SetStateAction<FormData>,
-    options?: { ready?: boolean },
+    options?: FormChangeOptions,
   ) => {
-    ++actionRevision.current;
+    // 旧选择的异步元数据回填不是新用户意图，不能取消后选的导入。
+    if (options?.source !== "metadata") ++actionRevision.current;
     setCockpit((previous) => ({ ...previous,
       manualReady: options?.ready ?? true,
       form: typeof update === "function" ? update(previous.form) : update }));
@@ -158,11 +160,11 @@ export default function App() {
     });
     setRestoreRevision((value) => value + 1); setStatus("已恢复钉住时的配装、属性与结果");
   };
-  const adoptValueSet = async (nextLoadout?: GearLoadout) => {
-    const selected = nextLoadout ?? loadout; if (!selected) return;
-    const action = ++actionRevision.current;
+  const adoptValueSet = async (nextLoadout?: GearLoadout, action = ++actionRevision.current) => {
+    const selected = nextLoadout ?? loadout; if (!selected || action !== actionRevision.current) return;
     try {
       const vs = await api.resolveValueSet(selected.value_set);
+      if (action !== actionRevision.current) return;
       if (!vs.available || vs.id !== selected.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
       const config = selected.school !== formData.xinfa ? await api.loadProfessionConfig(selected.school) : null;
       if (selected.school !== formData.xinfa && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
@@ -176,12 +178,13 @@ export default function App() {
             pofang_up: Number(config.pofang_up) || 0, huixin_up: Number(config.huixin_up) || 0 }
             : previous.form.xinfa_config } }));
       setRestoreRevision((value) => value + 1); setGearError("");
-    } catch (err) { addToast(String(err), "error"); }
+    } catch (err) { if (action === actionRevision.current) addToast(String(err), "error"); }
   };
   useEffect(() => {
     if (!freshCockpit.current || !gearMode || !loadout || !contextReady) return;
     freshCockpit.current = false;
-    void adoptValueSet();
+    // 自动初始化沿用启动版本，不能抢占启动后发生的用户操作。
+    void adoptValueSet(loadout, startupAction.current);
   }, [gearMode, loadout, contextReady]);
   const changeLoadout = (next: GearLoadout) => { ++actionRevision.current; setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } })); };
   const exportLoadout = async () => {
@@ -192,9 +195,16 @@ export default function App() {
       const link = document.createElement("a"); link.href = url; link.download = `${loadout.school}_gear.toml`; link.click(); URL.revokeObjectURL(url);
     } catch (err) { addToast(String(err), "error"); }
   };
-  const importLoadout = async (text: string) => {
-    try { const value = await api.importGear(text); await adoptValueSet(value.composed.loadout); }
-    catch (err) { addToast(String(err), "error"); }
+  const importLoadout = async (file: File) => {
+    // 从选择文件起保留同一操作版本；后续编辑/切模式/导入均使旧链路失效。
+    const action = ++actionRevision.current;
+    try {
+      const text = await file.text();
+      if (action !== actionRevision.current) return;
+      const value = await api.importGear(text);
+      if (action !== actionRevision.current) return;
+      await adoptValueSet(value.composed.loadout, action);
+    } catch (err) { if (action === actionRevision.current) addToast(String(err), "error"); }
   };
   const composition = cockpit.calculation?.mode === "gear" && cockpit.calculation.loadout?.school === formData.xinfa ? cockpit.calculation.composition : undefined;
   const activeForm = gearMode ? (compatible && rulesCurrent && !stale && cockpit.calculation?.mode === "gear" ? cockpit.calculation.form : null) : formData;
