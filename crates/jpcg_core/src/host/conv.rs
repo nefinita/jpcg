@@ -385,6 +385,7 @@ mod tests {
             zhenshishanghai: 12345,
             has_critical_strike: true,
             lost_hp_zhenshishanghai: 0.18,
+            ..Default::default()
         };
         // 与保存/加载预设相同的转换及 TOML 往返，不读写文件或修改全局状态。
         let preset = ComboPreset {
