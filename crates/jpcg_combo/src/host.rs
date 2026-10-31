@@ -30,18 +30,7 @@ pub(crate) fn into_core(
     BuffConfig,
     CoefficientConfig,
 ) {
-    let jiasu_dengji = player.jiasu_dengji;
-    let mut player = PlayerConfig::new(
-        player.jcsx,
-        player.jichu_shuxing,
-        player.jichu_gongji,
-        player.huixin_dengji,
-        player.huixin_xiaoguo,
-        player.pofang_dengji,
-        player.wuqi_shanghai,
-    );
-    // #92：加速等级随配置传入（旧连招按步累加不读此字段，不改变旧行为）
-    player.jiasu_dengji = jiasu_dengji;
+    let player = PlayerConfig::from(player);
     let hostile = HostilepileConfig {
         waigong_fangyu: hostile.waigong_fangyu,
         neigong_fangyu: hostile.neigong_fangyu,
@@ -199,6 +188,7 @@ mod tests {
             pofang_dengji: 109160,
             wuqi_shanghai: 0,
             jiasu_dengji: 0,
+            zhuanhua_gongji: None,
         }
     }
 
@@ -243,6 +233,18 @@ mod tests {
                 jiasu_xishu: 0.0,
             },
         )
+    }
+
+    #[test]
+    fn combo_and_timeline_adapter_keeps_converted_attack_and_haste() {
+        let mut dto = player();
+        dto.jiasu_dengji = 1234;
+        dto.jichu_gongji = 1001;
+        dto.zhuanhua_gongji = Some(251);
+        let (buff, coeff) = buff_coeff();
+        let (core, _, _, _, _) = into_core(dto, hostile(), xinfa(), buff, coeff, None);
+        assert_eq!(core.jiasu_dengji, 1234);
+        assert_eq!(core.atk_with_buff(100.0, 12.5).total(), 1377);
     }
 
     /// 回归：连招与单技能/求导共用同一运行期值集解析（分母省略时按值集回退）

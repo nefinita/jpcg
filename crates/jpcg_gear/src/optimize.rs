@@ -50,7 +50,7 @@ impl Constraints {
     }
     fn satisfied(&self, composed: &Composed) -> Result<bool, String> {
         for (name, bounds) in &self.stats {
-            let value = composed.stats.value(name)?;
+            let value = effective_value(composed, name)?;
             if bounds.min.is_some_and(|min| value < min)
                 || bounds.max.is_some_and(|max| value > max)
             {
@@ -61,10 +61,35 @@ impl Constraints {
     }
 }
 
+/// 规则模式的约束使用派生点数；旧模式仍为原始合计。
+fn effective_value(composed: &Composed, name: &str) -> Result<u32, String> {
+    if let Some(p) = &composed.panel {
+        match name {
+            "qixue" => return Ok(p.qixue),
+            "gongji" => return Ok(p.gongji),
+            "huixin" => return Ok(p.huixin),
+            "pofang" => return Ok(p.pofang),
+            "zhushuxing" | "gengu" => return Ok(p.gengu),
+            _ => (),
+        }
+    }
+    composed.stats.value(name)
+}
+
+fn effective_qixue(composed: &Composed) -> u32 {
+    composed
+        .panel
+        .as_ref()
+        .map_or(composed.stats.qixue, |p| p.qixue)
+}
+
 fn dominates(a: &Candidate, b: &Candidate) -> bool {
     let x = &a.composed.stats;
     let y = &b.composed.stats;
-    a.score >= b.score && x.qixue >= y.qixue && x.yujin >= y.yujin && x.huajin >= y.huajin
+    a.score >= b.score
+        && effective_qixue(&a.composed) >= effective_qixue(&b.composed)
+        && x.yujin >= y.yujin
+        && x.huajin >= y.huajin
 }
 
 /// 有界穷举：小空间给全局最优证明；大空间明确报告截断。回调返回 false 可取消。
@@ -233,19 +258,25 @@ pub fn optimize_with(
     Ok(result)
 }
 
-/// 保持现有 DTO 不变，纯转换可供 #91 静态集成使用。
+/// 唯一的原始/派生面板到玩家适配器；显式标记心法额外攻击以避免 core 二次换算。
 pub fn player(composed: &Composed) -> jpcg_api::PlayerConfigDTO {
     let stats = &composed.stats;
     jpcg_api::PlayerConfigDTO {
         jcsx: main_name(composed.profile.zhushuxing).into(),
-        jichu_shuxing: stats.zhushuxing,
-        jichu_gongji: stats.gongji,
-        huixin_dengji: stats.huixin,
+        jichu_shuxing: composed
+            .panel
+            .as_ref()
+            .map_or(stats.zhushuxing, |p| p.gengu),
+        jichu_gongji: composed
+            .panel
+            .as_ref()
+            .map_or(stats.gongji, |p| p.gongji_base),
+        zhuanhua_gongji: composed.panel.as_ref().map(|p| p.gongji_extra),
+        huixin_dengji: composed.panel.as_ref().map_or(stats.huixin, |p| p.huixin),
         huixin_xiaoguo: stats.huixiao,
-        pofang_dengji: stats.pofang,
+        pofang_dengji: composed.panel.as_ref().map_or(stats.pofang, |p| p.pofang),
         wuqi_shanghai: stats.wuqi_shanghai,
-        // 加速等级由时序/战斗数据侧提供，配装合成不涉及
-        jiasu_dengji: 0,
+        jiasu_dengji: stats.jiasu,
     }
 }
 fn main_name(stat: MainStat) -> &'static str {
@@ -388,9 +419,6 @@ fn score(
     skills: &[jpcg_core::type_set::skilltype::Skilltype],
     xinfa: &jpcg_core::type_set::xinfa::XinfaConfig,
 ) -> Result<f64, String> {
-    if composed.stats.pofang > u32::MAX / 1024 {
-        return Err("破防超出当前core安全换算范围".into());
-    }
     let config = request(&req.config, composed);
     match &req.objective {
         Objective::Expected { weights } => {
@@ -399,16 +427,7 @@ fn score(
                 buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
                 player::PlayerConfig,
             };
-            let p = &config.player;
-            let player = PlayerConfig::new(
-                p.jcsx.clone(),
-                p.jichu_shuxing,
-                p.jichu_gongji,
-                p.huixin_dengji,
-                p.huixin_xiaoguo,
-                p.pofang_dengji,
-                p.wuqi_shanghai,
-            );
+            let player = PlayerConfig::from(config.player.clone());
             let hostile: HostilepileConfig = serde_json::from_value(
                 serde_json::to_value(&config.hostile).map_err(|e| e.to_string())?,
             )

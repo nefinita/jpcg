@@ -20,7 +20,7 @@ import { usePersistentState, writePreference, readPreference } from "./hooks/use
 import { cockpitSchema, defaultCockpit, comboDraftSchema, defaultComboDraft } from "./state/cockpit";
 import SnapshotDiff from "./components/SnapshotDiff";
 import type { GearCatalog, GearLoadout } from "./types/gear";
-import { initialLoadout, gearInputKey } from "./state/gear";
+import { initialLoadout, gearInputKey, gearPlayerForm } from "./state/gear";
 import CockpitCombo from "./components/CockpitCombo";
 import GearPanel from "./components/GearPanel";
 import styles from "./App.module.css";
@@ -96,9 +96,9 @@ export default function App() {
       try {
         const composition = await api.composeGear(loadout);
         if (revision !== requestRevision.current) return;
-        const { jcsx, ...player } = composition.player;
+        const { jcsx, ...player } = gearPlayerForm(composition.player);
         const effectiveForm: FormData = { ...formData, player,
-          xinfa_config: { ...formData.xinfa_config, xinfa_nom: jcsx } };
+          xinfa_config: { ...formData.xinfa_config, xinfa_nom: String(jcsx) } };
         const data = await api.calculateDamage(toCalculateRequest(effectiveForm));
         if (revision !== requestRevision.current) return;
         setCockpit((previous) => ({ ...previous, calculation: { mode: "gear", form: effectiveForm,
@@ -191,7 +191,7 @@ export default function App() {
   </div>;
   const configPanel = <ConfigPanel key={restoreRevision} form={formData} onFormChange={setFormData}
     preserveInitialForm={cockpit.manualReady} manualMode={!gearMode} onReady={setContextReady}
-    playerPreview={composition ? { ...composition.player } : undefined}
+    playerPreview={composition ? gearPlayerForm(composition.player) : undefined}
     onCalculate={handleCalculate} calculating={calculating} addToast={addToast} setStatus={setStatus} />;
 
   return <div className={styles.container}><div className={styles.body}>

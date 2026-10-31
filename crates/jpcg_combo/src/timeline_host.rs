@@ -228,6 +228,24 @@ mod tests {
     }
 
     #[test]
+    fn converted_attack_reaches_timeline_damage_without_second_conversion() {
+        let mut converted = request();
+        converted.player.jichu_gongji = 1001;
+        converted.player.jichu_shuxing = 100;
+        converted.player.zhuanhua_gongji = Some(251);
+        converted.xinfa.atk_up = 99.0;
+        converted.buff.base_atk_pct = 12.5;
+        let mut manual = request();
+        // 手算：floor(1001 * 1.125) + 251 = 1377。
+        manual.player.jichu_gongji = 1377;
+        manual.player.jichu_shuxing = 0;
+        let converted = calculate_timeline(converted).unwrap();
+        let manual = calculate_timeline(manual).unwrap();
+        assert!(converted.total_damage > 0.0);
+        assert_eq!(converted.total_damage, manual.total_damage);
+    }
+
+    #[test]
     fn request_roundtrips_through_json() {
         let json = serde_json::to_string(&request()).unwrap();
         let back: TimelineRequestDTO = serde_json::from_str(&json).unwrap();

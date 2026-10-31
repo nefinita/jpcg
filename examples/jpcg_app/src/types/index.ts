@@ -9,6 +9,8 @@ export interface PlayerConfigDTO {
   zuizhong_gongji?: number;
   /** 加速等级（#92 时序引擎；0=无加速） */
   jiasu_dengji?: number;
+  /** 配装引擎已换算的额外攻击；缺失时沿用手动属性换算。 */
+  zhuanhua_gongji?: number | null;
 }
 
 export interface HostileConfigDTO {

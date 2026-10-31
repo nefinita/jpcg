@@ -327,10 +327,25 @@ impl Catalog {
         if !cooldowns.is_empty() {
             warnings.push("4件套CD仅返回元数据，当前计算引擎未应用".into());
         }
+        let panel = match loadout.attribute_rules.as_deref() {
+            Some(rule_id) => {
+                let panel =
+                    crate::attributes::convert(&stats, &profile, &loadout.value_set, rule_id)?;
+                warnings.push("属性换算使用 2026-08-14 的130级莫问来源快照，尚未经真实游戏面板验证；不含战斗体质/气血增益、强化、镶嵌、附魔及装备特效规则".into());
+                Some(panel)
+            }
+            None => {
+                crate::attributes::validate_legacy(&stats)?;
+                warnings
+                    .push("旧属性模式未换算体质及基础属性会心；可显式选择有来源的历史规则".into());
+                None
+            }
+        };
         Ok(Composed {
             loadout: loadout.clone(),
             profile,
             stats,
+            panel,
             active_bonuses,
             cooldowns,
             warnings,

@@ -29,6 +29,10 @@ pub struct PlayerConfigDTO {
     /// 加速等级（#92 时序引擎；0=无加速）
     #[serde(default)]
     pub jiasu_dengji: u32,
+    /// 已换算的心法额外攻击；Some(0) 也禁用旧主属性转换。
+    /// 基础攻击增益只作用于 jichu_gongji，此项在其取整后相加。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zhuanhua_gongji: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

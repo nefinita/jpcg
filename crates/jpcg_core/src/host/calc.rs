@@ -20,15 +20,7 @@ pub(crate) fn into_core(
     BuffConfig,
     CoefficientConfig,
 ) {
-    let player = PlayerConfig::new(
-        req.player.jcsx,
-        req.player.jichu_shuxing,
-        req.player.jichu_gongji,
-        req.player.huixin_dengji,
-        req.player.huixin_xiaoguo,
-        req.player.pofang_dengji,
-        req.player.wuqi_shanghai,
-    );
+    let player = PlayerConfig::from(req.player);
     // 数值集：按请求选择（None = index.toml 默认）；加载失败回退内置兜底
     let value_set = crate::store::values::load_value_set(req.value_set.as_deref());
     let hostile = HostilepileConfig {
@@ -72,6 +64,11 @@ pub fn calculate(req: CalculateRequest) -> Result<Vec<SkillResultDTO>, String> {
 
 /// 自动求导（6 属性对全部技能）
 pub fn compute_derivatives(req: CalculateRequest) -> Result<DerivativesOutputDTO, String> {
+    if req.player.zhuanhua_gongji.is_some() {
+        return Err(
+            "配装属性已换算，主属性变化需重新合成配装；当前手填属性求导不支持此输入".into(),
+        );
+    }
     let (player, hostile, xinfa, buff, coeff) = into_core(req);
     let toml_config = crate::store::load_config(&xinfa.profession);
     let output = engine::derivatives::compute_derivatives(
@@ -104,5 +101,43 @@ pub(crate) fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltyp
         has_critical_strike: s.has_critical_strike,
         lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request() -> CalculateRequest {
+        CalculateRequest {
+            player: jpcg_api::PlayerConfigDTO {
+                jiasu_dengji: 1234,
+                zhuanhua_gongji: Some(251),
+                jichu_gongji: 1001,
+                jichu_shuxing: 100,
+                ..Default::default()
+            },
+            hostile: Default::default(),
+            xinfa_config: Default::default(),
+            buff: Default::default(),
+            coefficient: Default::default(),
+            value_set: Some("live-130".into()),
+        }
+    }
+
+    #[test]
+    fn single_skill_host_keeps_converted_attack_and_haste() {
+        let (player, _, _, _, _) = into_core(request());
+        assert_eq!(player.jiasu_dengji, 1234);
+        assert_eq!(player.atk_with_buff(100.0, 12.5).total(), 1377);
+    }
+
+    #[test]
+    fn derivative_host_requires_recomposition_for_converted_attributes() {
+        assert!(
+            compute_derivatives(request())
+                .unwrap_err()
+                .contains("重新合成配装")
+        );
     }
 }

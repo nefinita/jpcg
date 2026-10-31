@@ -1,11 +1,30 @@
-import { GEAR_SLOTS, emptyGearStats, type GearCatalog, type GearChoice, type GearLoadout, type GearComposition } from "../types/gear";
-import type { FormData } from "../types";
+import { GEAR_SLOTS, emptyGearStats, type GearCatalog, type GearChoice, type GearLoadout, type GearComposition, type GearStats, type GearAttributePanel } from "../types/gear";
+import type { FormData, PlayerConfigDTO } from "../types";
 import { toCalculateRequest } from "../utils/normalize";
 export const slotNames = { tou: "头部", yi: "上衣", yao: "腰带", shou: "护手", ku: "裤子", xie: "鞋子", wuqi: "武器", anqi: "暗器", xianglian: "项链", yaozhui: "腰坠", jie1: "戒指一", jie2: "戒指二" };
 export const sourceNames = { mingjian: "名剑币", weiwang: "威望", baowu: "宝物堆" };
 export const greenNames = { pofang: "破防", huixin: "会心", jiasu: "加速", yujin: "御劲" };
-export const statNames = { zhushuxing: "主属性", gongji: "攻击", qixue: "气血", huixin: "会心", huixiao: "会效", pofang: "破防", jiasu: "加速", yujin: "御劲", huajin: "化劲", wuqi_shanghai: "武器伤害" };
+export const statNames = { zhushuxing: "主属性", gongji: "攻击", qixue: "气血", huixin: "会心", huixiao: "会效", pofang: "破防", jiasu: "加速", yujin: "御劲", huajin: "化劲", wuqi_shanghai: "武器伤害", tizhi: "体质", liliang: "力道", shenfa: "身法", gengu: "根骨", yuanqi: "元气" };
+export const MOWEN_ATTRIBUTE_RULES = "jx3-130-mowen-20260814";
+export const supportsAttributeRules = (loadout: Pick<GearLoadout, "school" | "value_set">) => loadout.school === "mowen" && loadout.value_set === "live-130";
+const optionalStats = new Set(["tizhi", "liliang", "shenfa", "gengu", "yuanqi"]);
+const points = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 0xffffffff;
+function validStats(value: unknown): value is GearStats {
+  if (!value || typeof value !== "object") return false;
+  const stats = value as Record<string, unknown>;
+  return Object.keys(emptyGearStats()).every((key) => (optionalStats.has(key) && stats[key] === undefined) || points(stats[key]));
+}
+function validPanel(value: unknown): value is GearAttributePanel {
+  if (!value || typeof value !== "object") return false;
+  const p = value as Record<string, unknown>;
+  return typeof p.rule_id === "string" && typeof p.source === "string" && typeof p.verified_in_game === "boolean"
+    && ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "gongji_base", "gongji_extra", "gongji", "huixin", "pofang", "qixue"].every((key) => points(p[key]));
+}
 export const choiceKey = (c: GearChoice) => `${c.slot}:${c.source}:${c.tier}:${c.variant}`;
+/** FormData 不存 null；缺失转化值不能归零，否则会关闭旧版主属性转攻击。 */
+export function gearPlayerForm(player: PlayerConfigDTO): Record<string, number | string> {
+  return Object.fromEntries(Object.entries(player).filter(([, value]) => value != null));
+}
 export function initialLoadout(catalog: GearCatalog, school: string): GearLoadout | null {
   const choices = GEAR_SLOTS.map((slot) => catalog.templates.find((t) => t.school === school && t.choice.slot === slot)?.choice);
   if (choices.some((c) => !c)) return null;
@@ -18,7 +37,7 @@ export function isGearLoadout(x: unknown): x is GearLoadout {
   if (!x || typeof x !== "object") return false;
   const v = x as Partial<GearLoadout>;
   return typeof v.school === "string" && typeof v.revision === "string" && typeof v.value_set === "string"
-    && !!v.base && Object.keys(emptyGearStats()).every((k) => Number.isInteger(v.base![k as keyof typeof v.base]) && v.base![k as keyof typeof v.base] >= 0)
+    && validStats(v.base) && (v.attribute_rules == null || typeof v.attribute_rules === "string")
     && Array.isArray(v.choices) && v.choices.length === 12 && new Set(v.choices.map((c) => c?.slot)).size === 12
     && v.choices.every((c) => c && GEAR_SLOTS.includes(c.slot) && ["mingjian", "weiwang", "baowu"].includes(c.source) && ["base", "upgraded"].includes(c.tier) && [0, 1, 2].includes(c.variant));
 }
@@ -29,10 +48,11 @@ export function isGearComposition(x: unknown): x is GearComposition {
   const numeric = (v: unknown) => typeof v === "number" && Number.isFinite(v);
   const composed = value.composed;
   return !!composed && isGearLoadout(composed.loadout) && !!composed.profile && typeof composed.profile.id === "string"
-    && !!composed.stats && Object.keys(emptyGearStats()).every((k) => numeric(composed.stats[k as keyof typeof composed.stats]))
+    && validStats(composed.stats) && (composed.panel == null || validPanel(composed.panel))
     && Array.isArray(composed.active_bonuses) && composed.active_bonuses.every((b) => b && typeof b.set === "string" && numeric(b.pieces) && numeric(b.threshold) && ["base", "upgraded"].includes(b.tier))
     && Array.isArray(composed.cooldowns) && composed.cooldowns.every((c) => c && numeric(c.skill_id) && numeric(c.seconds))
     && Array.isArray(composed.warnings) && composed.warnings.every((v) => typeof v === "string")
     && !!value.player && typeof value.player.jcsx === "string"
-    && ["jichu_shuxing", "jichu_gongji", "huixin_dengji", "huixin_xiaoguo", "pofang_dengji", "wuqi_shanghai"].every((k) => numeric(value.player[k as keyof typeof value.player]));
+    && ["jichu_shuxing", "jichu_gongji", "huixin_dengji", "huixin_xiaoguo", "pofang_dengji", "wuqi_shanghai"].every((k) => numeric(value.player[k as keyof typeof value.player]))
+    && (value.player.zhuanhua_gongji == null || points(value.player.zhuanhua_gongji));
 }

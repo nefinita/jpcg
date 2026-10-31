@@ -18,17 +18,7 @@ pub fn save_config(
     coefficient: CoefficientConfigDTO,
     value_set: Option<String>,
 ) {
-    let player_core = crate::type_set::player::PlayerConfig::new(
-        player.jcsx,
-        player.jichu_shuxing,
-        player.jichu_gongji,
-        player.huixin_dengji,
-        player.huixin_xiaoguo,
-        player.pofang_dengji,
-        player.wuqi_shanghai,
-    );
-    let mut player_core = player_core;
-    player_core.jiasu_dengji = player.jiasu_dengji;
+    let player_core = crate::type_set::player::PlayerConfig::from(player);
     let hostile_core = crate::type_set::hostilepile::HostilepileConfig {
         waigong_fangyu: hostilepile.waigong_fangyu,
         neigong_fangyu: hostilepile.neigong_fangyu,
@@ -82,16 +72,7 @@ pub fn save_config(
 pub fn load_config() -> jpcg_api::ConfigDataDTO {
     let saved = store::load_save_config();
     jpcg_api::ConfigDataDTO {
-        player: PlayerConfigDTO {
-            jcsx: saved.player.jcsx,
-            jichu_shuxing: saved.player.jichu_shuxing,
-            jichu_gongji: saved.player.jichu_gongji,
-            huixin_dengji: saved.player.huixin_dengji,
-            huixin_xiaoguo: saved.player.huixin_xiaoguo,
-            pofang_dengji: saved.player.pofang_dengji,
-            wuqi_shanghai: saved.player.wuqi_shanghai,
-            jiasu_dengji: saved.player.jiasu_dengji,
-        },
+        player: saved.player.into(),
         hostile: HostileConfigDTO {
             waigong_fangyu: saved.hostilepile.waigong_fangyu,
             neigong_fangyu: saved.hostilepile.neigong_fangyu,

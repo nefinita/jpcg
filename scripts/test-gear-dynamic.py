@@ -12,7 +12,8 @@ root = Path(__file__).resolve().parent.parent
 if len(sys.argv) == 1:
     for case in ("root", "shuxing", "missing"):
         subprocess.run([sys.executable, __file__, case], check=True)
-    print("PASS gear dynamic: catalog, composition, TOML, strict path errors")
+    subprocess.run([sys.executable, str(root / "scripts/test-attributes-dynamic.py")], check=True)
+    print("PASS gear dynamic: catalog, composition, TOML, strict path errors, attribute conversion")
     sys.exit(0)
 case = sys.argv[1]
 os.environ["JPCG_DATA_DIR"] = str(root / "data" / ("shuxing" if case == "shuxing" else "absent")) if case != "root" else str(root / "data")

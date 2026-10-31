@@ -8,6 +8,7 @@ import { defaultComboDraft, defaultCockpit } from "./state/cockpit";
 import { STORAGE_KEYS, DEFAULT_COEFFICIENT } from "./utils/constants";
 import type { GearComposition, GearLoadout } from "./types/gear";
 import type { SkillResultDTO } from "./types";
+import { MOWEN_ATTRIBUTE_RULES } from "./state/gear";
 vi.mock("./api/commands");
 vi.mock("./components/ForumPage", () => ({ default: () => <div>论坛</div> }));
 vi.mock("./components/ComboPage", () => ({ default: ({ draft, onDraftChange }: any) => <button onClick={() => onDraftChange((previous: any) => ({ ...previous, sequence: [...previous.sequence, previous.sequence[0]] }))}>追加连招</button> }));
@@ -108,4 +109,23 @@ it("实际解析回退到其他值集时不提交配装计算", async () => {
   await render(); await wait(); expect(api.composeGear).not.toHaveBeenCalled();
   await click("使用模板数值集 live-130"); expect(host.textContent).toContain("模板对应数值集不可用");
   expect(api.calculateDamage).not.toHaveBeenCalled();
+});
+
+it("规则选择后将宿主换算攻击与加速送到计算链，重启保留选择且不改手动值", async () => {
+  const originalManual = saved().form.player;
+  vi.mocked(api.composeGear).mockImplementation(async (loadout) => ({
+    ...fixture.cases[0], composed: { ...fixture.cases[0].composed, loadout },
+    player: { ...fixture.cases[0].player, jiasu_dengji: 135, ...(loadout.attribute_rules ? { zhuanhua_gongji: 2007 } : {}) },
+  }));
+  await render(); await wait();
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!;
+  await act(async () => { select.value = MOWEN_ATTRIBUTE_RULES; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await wait();
+  expect(vi.mocked(api.composeGear).mock.lastCall?.[0].attribute_rules).toBe(MOWEN_ATTRIBUTE_RULES);
+  expect(vi.mocked(api.calculateDamage).mock.lastCall?.[0].player).toMatchObject({ zhuanhua_gongji: 2007, jiasu_dengji: 135 });
+  expect(saved().form.player).toEqual(originalManual);
+  expect(saved().loadouts.mowen.attribute_rules).toBe(MOWEN_ATTRIBUTE_RULES);
+  await act(async () => root.unmount()); root = createRoot(host); await render(); await wait();
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!.value).toBe(MOWEN_ATTRIBUTE_RULES);
+  expect(saved().form.player).toEqual(originalManual);
 });

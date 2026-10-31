@@ -49,7 +49,7 @@ let player_dto = jpcg_gear::player(&composed);
 let response = jpcg_gear::call(&catalog, json_request);
 ```
 
-`Loadout` 的 `school/revision/value_set/base/choices` 全部随 TOML 保存；`base` 必须是**裸装基础值**，合成时不读取计算配置已有的 player 点数，避免装备重复相加。导出用 `toml::to_string_pretty(&composed.loadout)`，重新解析即可复现。`Composed` 返回 profile、完整 stats、各套装阈值及档位、未应用 CD 元数据与 warnings。player 转换只写现有 DTO 支持的伤害属性；气血/御劲/化劲/加速仍保留在 Composed 中，供驾驶台展示或约束。
+`Loadout` 的 `school/revision/value_set/base/choices` 全部随 TOML 保存；`base` 必须是**裸装基础值**，合成时不读取计算配置已有的 player 点数，避免装备重复相加。导出用 `toml::to_string_pretty(&composed.loadout)`，重新解析即可复现。`Composed` 返回 profile、完整 stats、各套装阈值及档位、未应用 CD 元数据与 warnings。player 转换传递伤害属性与加速等级；气血/御劲/化劲保留在 Composed 中供驾驶台展示或约束。启用 #98 历史规则时还返回派生 panel，并传递已转换的心法额外攻击，详见下方说明。
 
 防具仅头/衣/腰/手/鞋计数，裤子/武器/暗器不能声明防具套装。2 件奖励一次、4 件另附 CD，两者同时生效；跨来源 2+2 可叠；饰品 2/3 件奖励同时生效。
 
@@ -103,3 +103,7 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 - `make build-modules` / `modules-dir` 包含第五个 gear 模块；发布资产与 deploy-gen 模块清单同步加入 gear。Tauri bundle 资源同时包含 gear 四个模板文件，首次安装即可读取。此改动仅准备构建/打包，不发布或部署。
 - 核查动态壳不链接引擎：`cargo tree -p jpcg_app --no-default-features --features dynamic -e normal`；验证实际 bridge：先 `cargo build -p jpcg_gear`，再 `cargo test -p jpcg_gear --no-default-features --test dynamic_bridge`。`python3 scripts/test-gear-dynamic.py` 验证 C ABI、目录、错误及 TOML 往返。
 - 前端新安装默认配装模式；#95 的 v1 存储迁移后仍保留手动模式。配装按心法保存、选项只来自校验后的目录；数值集不匹配时不计算。CD/加速仅展示已有元数据，连招仍调用现有接口，不新增 #92 规则。
+
+## #98 原始属性换算
+
+`Loadout.attribute_rules="jx3-130-mowen-20260814"` 显式开启历史130级莫问阴性规则。`Stats` 新增体质及四种具名基础属性；输入必须为转换前原始点数。派生气血、会心、基础/额外攻击通过 `Composed.panel` 返回，原始合计仍保留。旧存档和默认配装维持旧语义。此规则尚未经真实游戏面板验证，不能称为当前游戏完全复刻；synthetic-v1仍为样例。输入契约、公式、来源、取整、模块兼容及未覆盖范围见 [属性引擎说明](../../docs/attribute-engine.md)。
