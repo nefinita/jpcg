@@ -213,3 +213,91 @@ it("当前文件读取失败由导入错误提示处理", async () => {
   expect(api.importGear).not.toHaveBeenCalled();
   expect(selectedRingVariant()).toBe(1);
 });
+
+it.each(["读取文件", "宿主解析"])("旧值集响应不能取消后选导入（%s 阶段）", async (stage) => {
+  const older = deferred<Awaited<ReturnType<typeof api.resolveValueSet>>>();
+  const fileRead = deferred<string>();
+  const pendingImport = deferred<GearComposition>();
+  await render(); await wait();
+  vi.mocked(api.resolveValueSet).mockReturnValueOnce(older.promise);
+  const valueSelect = host.querySelectorAll<HTMLSelectElement>("select")[1];
+  await act(async () => {
+    valueSelect.value = "";
+    valueSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport(stage === "读取文件" ? fileRead.promise : "newer import");
+  await act(async () => older.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
+  if (stage === "读取文件") await act(async () => fileRead.resolve("newer import"));
+  expect(api.importGear).toHaveBeenCalledWith("newer import");
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(selectedRingVariant()).toBe(2);
+});
+
+it("启动时旧心法元数据响应不能取消后选导入", async () => {
+  const older = deferred<Awaited<ReturnType<typeof api.loadProfessionConfig>>>();
+  const pendingImport = deferred<GearComposition>();
+  const state = saved(); state.manualReady = false;
+  localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
+  vi.mocked(api.loadProfessionConfig).mockReturnValueOnce(older.promise);
+  await render(); await wait();
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport("newer import");
+  await act(async () => older.resolve({ profession: "mowen", xinfa_name: "莫问", xinfa_nom: "gengu", atk_up: 0, pofang_up: 0, huixin_up: 0 }));
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(selectedRingVariant()).toBe(2);
+});
+
+it("导入之后的真实数值集选择仍取消旧导入", async () => {
+  const pendingImport = deferred<GearComposition>();
+  await render(); await wait();
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport("old import");
+  const valueSelect = host.querySelectorAll<HTMLSelectElement>("select")[1];
+  await act(async () => {
+    valueSelect.value = "";
+    valueSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(saved().form.value_set).toBeNull();
+  expect(selectedRingVariant()).toBe(1);
+});
+
+it("首次启动的自动值集匹配不能取消后选导入", async () => {
+  localStorage.clear();
+  const startup = deferred<Awaited<ReturnType<typeof api.resolveValueSet>>>();
+  const pendingImport = deferred<GearComposition>();
+  vi.mocked(api.resolveValueSet).mockReturnValueOnce(startup.promise);
+  await render(); await wait();
+  vi.mocked(api.importGear).mockReturnValueOnce(pendingImport.promise);
+  await selectImport("newer import");
+  expect(api.importGear).toHaveBeenCalledWith("newer import");
+  await act(async () => startup.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
+  await act(async () => pendingImport.resolve(fixture.cases[1]));
+  expect(selectedRingVariant()).toBe(2);
+});
+
+
+
+it("无用户操作时首次启动仍自动匹配模板值集", async () => {
+  localStorage.clear();
+  vi.mocked(api.listValueSets).mockResolvedValue([{ id: "other", name: "其他默认", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }]);
+  await render(); await wait();
+  expect(saved().form.value_set).toBe("live-130");
+  expect(api.composeGear).toHaveBeenCalled();
+});
+
+it("已启动的自动匹配迟到时不覆盖较新的导入", async () => {
+  localStorage.clear();
+  const automatic = deferred<Awaited<ReturnType<typeof api.resolveValueSet>>>();
+  vi.mocked(api.resolveValueSet)
+    .mockResolvedValueOnce({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT })
+    .mockReturnValueOnce(automatic.promise);
+  await render(); await wait();
+  expect(api.resolveValueSet).toHaveBeenCalledTimes(2);
+  vi.mocked(api.importGear).mockResolvedValueOnce(fixture.cases[1]);
+  await selectImport("newer import");
+  expect(selectedRingVariant()).toBe(2);
+  await act(async () => automatic.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
+  expect(selectedRingVariant()).toBe(2);
+});

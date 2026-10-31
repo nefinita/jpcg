@@ -6,7 +6,7 @@ import * as api from "./api/commands";
 import ActivityBar from "./components/ActivityBar";
 import ThemeToggle from "./components/ThemeToggle";
 import { GITHUB_ISSUES_URL, STORAGE_KEYS } from "./utils/constants";
-import ConfigPanel from "./components/ConfigPanel";
+import ConfigPanel, { type FormChangeOptions } from "./components/ConfigPanel";
 import ResultTable from "./components/ResultTable";
 import ForumPage from "./components/ForumPage";
 import ComboPage from "./components/ComboPage";
@@ -40,6 +40,7 @@ export default function App() {
   const [restoreRevision, setRestoreRevision] = useState(0);
   const requestRevision = useRef(0);
   const actionRevision = useRef(0);
+  const startupAction = useRef(actionRevision.current);
   const [calculating, setCalculating] = useState(false);
   const [status, setStatus] = useState("就绪");
   const [catalog, setCatalog] = useState<GearCatalog | null>(null);
@@ -59,9 +60,10 @@ export default function App() {
   // 否则首次加载失败会被永久当成已初始化，下次启动跳过重新加载。
   const setFormData = useCallback((
     update: SetStateAction<FormData>,
-    options?: { ready?: boolean },
+    options?: FormChangeOptions,
   ) => {
-    ++actionRevision.current;
+    // 旧选择的异步元数据回填不是新用户意图，不能取消后选的导入。
+    if (options?.source !== "metadata") ++actionRevision.current;
     setCockpit((previous) => ({ ...previous,
       manualReady: options?.ready ?? true,
       form: typeof update === "function" ? update(previous.form) : update }));
@@ -142,7 +144,7 @@ export default function App() {
     setRestoreRevision((value) => value + 1); setStatus("已恢复钉住时的配装、属性与结果");
   };
   const adoptValueSet = async (nextLoadout?: GearLoadout, action = ++actionRevision.current) => {
-    const selected = nextLoadout ?? loadout; if (!selected) return;
+    const selected = nextLoadout ?? loadout; if (!selected || action !== actionRevision.current) return;
     try {
       const vs = await api.resolveValueSet(selected.value_set);
       if (action !== actionRevision.current) return;
@@ -164,7 +166,8 @@ export default function App() {
   useEffect(() => {
     if (!freshCockpit.current || !gearMode || !loadout || !contextReady) return;
     freshCockpit.current = false;
-    void adoptValueSet();
+    // 自动初始化沿用启动版本，不能抢占启动后发生的用户操作。
+    void adoptValueSet(loadout, startupAction.current);
   }, [gearMode, loadout, contextReady]);
   const changeLoadout = (next: GearLoadout) => { ++actionRevision.current; setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } })); };
   const exportLoadout = async () => {
