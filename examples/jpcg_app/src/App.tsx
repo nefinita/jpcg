@@ -54,9 +54,16 @@ export default function App() {
   const loadout = cockpit.loadouts[formData.xinfa];
   const results = cockpit.calculation?.results ?? null;
   const gearMode = cockpit.mode === "gear";
-  const setFormData = useCallback((update: SetStateAction<FormData>) => {
+  // manualReady 表示「持久化表单已是有效快照」：只有用户编辑/已加载的存档才算，
+  // 初始化的占位写入（首次挂载时先同步旧值、再异步拉取心法属性）不能提前置位，
+  // 否则首次加载失败会被永久当成已初始化，下次启动跳过重新加载。
+  const setFormData = useCallback((
+    update: SetStateAction<FormData>,
+    options?: { ready?: boolean },
+  ) => {
     ++actionRevision.current;
-    setCockpit((previous) => ({ ...previous, manualReady: true,
+    setCockpit((previous) => ({ ...previous,
+      manualReady: options?.ready ?? true,
       form: typeof update === "function" ? update(previous.form) : update }));
   }, [setCockpit]);
 

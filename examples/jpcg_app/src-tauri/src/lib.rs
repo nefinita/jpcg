@@ -28,6 +28,8 @@ pub fn run() {
             commands::optimize::compute_derivatives,
             commands::data::load_skill_pool,
             commands::combo::calculate_combo_cmd,
+            commands::combo::load_combat_bundle,
+            commands::combo::calculate_timeline_cmd,
             commands::combo::save_combo_preset,
             commands::combo::list_combo_presets,
             commands::combo::load_combo_preset,

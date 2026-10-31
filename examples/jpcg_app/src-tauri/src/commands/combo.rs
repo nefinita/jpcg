@@ -150,3 +150,38 @@ fn import_config_impl(toml_str: String) -> Result<(), String> {
     crate::commands::ffi_bridge::call_combo::<_, serde_json::Value>("import_config", &req)
         .map(|_| ())
 }
+
+// ============ #92 时序引擎（时间轴模拟） ============
+
+/// 读取某门派的战斗时序 overlay + 技能池（已套 overlay）
+#[tauri::command]
+pub fn load_combat_bundle(profession: String) -> Result<CombatBundleDTO, String> {
+    load_combat_bundle_impl(profession)
+}
+
+#[cfg(feature = "static")]
+fn load_combat_bundle_impl(profession: String) -> Result<CombatBundleDTO, String> {
+    jpcg_combo::timeline_host::load_combat_bundle(profession)
+}
+
+#[cfg(feature = "dynamic")]
+fn load_combat_bundle_impl(profession: String) -> Result<CombatBundleDTO, String> {
+    let req = serde_json::json!({ "profession": profession });
+    crate::commands::ffi_bridge::call_combo("load_combat_with_skills", &req)
+}
+
+/// 时间轴模拟（窗口伤害 / DPS / 事件序列）
+#[tauri::command]
+pub fn calculate_timeline_cmd(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    calculate_timeline_impl(req)
+}
+
+#[cfg(feature = "static")]
+fn calculate_timeline_impl(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    jpcg_combo::timeline_host::calculate_timeline(req)
+}
+
+#[cfg(feature = "dynamic")]
+fn calculate_timeline_impl(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    crate::commands::ffi_bridge::call_combo("calculate_timeline", &req)
+}

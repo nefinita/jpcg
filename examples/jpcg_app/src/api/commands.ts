@@ -18,6 +18,9 @@ import type {
   HostileConfigDTO,
   XinfaConfigDTO,
   ValueSetDTO,
+  CombatBundleDTO,
+  TimelineRequestDTO,
+  TimelineResultDTO,
 } from "../types";
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -215,6 +218,16 @@ export async function calculateCombo(
   });
 }
 
+/** 读取某门派的战斗时序 overlay + 技能池（#92 时间轴预览） */
+export async function loadCombatBundle(profession: string): Promise<CombatBundleDTO> {
+  return invoke("load_combat_bundle", { profession });
+}
+
+/** 时间轴模拟（窗口伤害 / DPS / 事件序列） */
+export async function calculateTimeline(req: TimelineRequestDTO): Promise<TimelineResultDTO> {
+  return invoke("calculate_timeline_cmd", { req });
+}
+
 export async function saveComboPreset(name: string, steps: ComboStepDTO[]): Promise<void> {
   return invoke("save_combo_preset", { name, steps });
 }
@@ -365,6 +378,44 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         { skill_name: "破·0点能量", skill_id: 38014, sub_id: 38093, base_damage1: 20, base_damage2: 20, atk_xishu: 8.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
         { skill_name: "破·50点能量", skill_id: 38014, sub_id: 38093, base_damage1: 20, base_damage2: 20, atk_xishu: 8.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
       ];
+    case "load_combat_bundle": {
+      const profession = String(args?.profession ?? "");
+      return {
+        skills: [],
+        combat: {
+          meta: { profession, version: "mock", note: "mock" },
+          form: [],
+          skill_combat: [],
+          buff: [],
+          miji: [],
+          qixue: [],
+        },
+      } as CombatBundleDTO;
+    }
+    case "calculate_timeline_cmd": {
+      const req = args?.req as TimelineRequestDTO | undefined;
+      const actions = req?.actions ?? [];
+      const events: TimelineResultDTO["events"] = [];
+      let t = 0;
+      let total = 0;
+      for (const a of actions) {
+        if (a.kind !== "cast") continue;
+        const skill = req?.skills?.find((s) => s.skill_id === a.skill_id && (s.sub_id ?? 0) === a.sub_id);
+        const damage = Math.floor(80000 + Math.random() * 20000);
+        total += damage;
+        events.push({
+          time: t,
+          kind: { kind: "cast", skill_name: skill?.skill_name ?? "技能", damage, hit_time: t + (skill?.cast_time ?? 1.5) },
+        });
+        t += skill?.cast_time ?? 1.5;
+      }
+      return {
+        events,
+        total_damage: total,
+        window_dps: t > 0 ? total / t : 0,
+        skipped_actions: 0,
+      } as TimelineResultDTO;
+    }
     case "calculate_combo_cmd": {
       const steps = (args?.steps as ComboStepDTO[]) || [];
       let cum = 0;

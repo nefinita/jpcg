@@ -244,6 +244,8 @@ pub fn player(composed: &Composed) -> jpcg_api::PlayerConfigDTO {
         huixin_xiaoguo: stats.huixiao,
         pofang_dengji: stats.pofang,
         wuqi_shanghai: stats.wuqi_shanghai,
+        // 加速等级由时序/战斗数据侧提供，配装合成不涉及
+        jiasu_dengji: 0,
     }
 }
 fn main_name(stat: MainStat) -> &'static str {
