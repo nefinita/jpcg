@@ -10,6 +10,11 @@ use crate::type_set::{
     player::PlayerConfig, skilltype::Skilltype, xinfa::XinfaConfig,
 };
 
+/// 动态模块能力探测。ABI 1 的旧模块忽略未知 DTO 字段，调用方应在发送已换算攻击前检查。
+pub fn player_attribute_capabilities() -> serde_json::Value {
+    serde_json::json!({"supported": ["converted_attack_v1"]})
+}
+
 /// 将 DTO 计算请求转换为 core 领域类型
 pub(crate) fn into_core(
     req: CalculateRequest,

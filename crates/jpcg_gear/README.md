@@ -106,4 +106,4 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 
 ## #98 原始属性换算
 
-`Loadout.attribute_rules="jx3-130-mowen-20260814"` 显式开启历史130级莫问阴性规则。`Stats` 新增体质及四种具名基础属性；输入必须为转换前原始点数。派生气血、会心、基础/额外攻击通过 `Composed.panel` 返回，原始合计仍保留。旧存档和默认配装维持旧语义。此规则尚未经真实游戏面板验证，不能称为当前游戏完全复刻；synthetic-v1仍为样例。输入契约、公式、来源、取整、模块兼容及未覆盖范围见 [属性引擎说明](../../docs/attribute-engine.md)。
+`Loadout.attribute_rules="jx3-130-mowen-20260814"` 显式开启历史130级莫问阴性规则；另支持同日的 `aoxue/fenshan/huajian` 规则，分别对应心法10026/10390/10021。`Stats` 新增体质、四种具名基础属性及额外气血上限；输入必须为转换前原始点数。派生气血、会心、基础/额外攻击通过 `Composed.panel` 返回，原始合计仍保留。旧存档和默认配装维持旧语义。此规则尚未经真实游戏面板验证，不能称为当前游戏完全复刻；synthetic-v1仍为样例。输入契约、公式、来源、取整、模块兼容及未覆盖范围见 [属性引擎说明](../../docs/attribute-engine.md)。

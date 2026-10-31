@@ -1,15 +1,24 @@
 # 装备属性换算引擎（#98）
 
-本实现先补齐「体质 → 气血」与「基础属性 → 会心」的可验证链路。它是**显式选择的历史 130 级莫问规则**，不是全部心法、当前版本或所有装备系统的完全复刻。`data/gear` 的 `synthetic-v1` 仍是人为样例；没有新增真实装备库，也没有修改现有手填金标准。
+本实现先补齐「体质 → 气血」与「基础属性 → 会心」的可验证链路。它是**显式选择的历史130级莫问、傲血、分山、花间规则**，不是全部心法、当前版本或所有装备系统的完全复刻。`data/gear` 的 `synthetic-v1` 仍是人为样例；没有新增真实装备库，也没有修改现有手填金标准。
 
 ## 规则与来源
 
-规则 ID：`jx3-130-mowen-20260814`。只接受 `school=mowen`、根骨、内功攻击/破防、`value_set=live-130`；输出在该规则内明确为**阴性**面板。其他心法、体验服、未知 ID 均报错，不套用占位系数。没有自动选择“最新”版本。
+只接受 `value_set=live-130`，并严格校验心法ID、主属性、内/外功类型；派生面板明确返回 `damage_kind`。没有自动选择“最新”版本，其他心法、体验服、未知ID报错。
 
-独立实现依据为 IcyTide/Generator 的固定提交 [`21f472e211581ac1c1a7fa5ea2ff9199df6151cb`](https://github.com/IcyTide/Generator/commit/21f472e211581ac1c1a7fa5ea2ff9199df6151cb)（2026-08-14），与仓库莫问技能数据的修改日期相符：
+| 规则ID（统一前缀 `jx3-130-`、后缀 `-20260814`） | 仓库心法ID | 主属性 | 通道 | 额外攻击/1024 | 额外会心/1024 | 额外破防/1024 |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| mowen | mowen | 根骨 | lunar 阴性 | 2007 | 410 | 0 |
+| aoxue | 10026 | 力道 | physical 外功 | 1843 | 0 | 287 |
+| fenshan | 10390 | 身法 | physical 外功 | 1925 | 0 | 0 |
+| huajian | 10021 | 元气 | neutral 混元 | 2079 | 0 | 205 |
+
+表中额外转换均以对应主属性为输入，逐项单独取整。没有新增其他心法的真实装备库；测试中明确使用合成目录验证接入。
+
+独立实现依据为 IcyTide/Generator 的固定提交 [`21f472e211581ac1c1a7fa5ea2ff9199df6151cb`](https://github.com/IcyTide/Generator/commit/21f472e211581ac1c1a7fa5ea2ff9199df6151cb)（2026-08-14），与上述四心法技能数据的修改日期相符：
 
 - [`base/constant.py`](https://github.com/IcyTide/Generator/blob/21f472e211581ac1c1a7fa5ea2ff9199df6151cb/base/constant.py)：LEVEL=130；体质转气血10、根骨转内功会心0.9、元气转内功攻击0.181及破防0.3。会心/破防/会效分母与 `live-130` 相符；这不等于证明整个赛季内容一致。
-- [`assets/json/belongs.json` 的 10447/10447](https://github.com/IcyTide/Generator/blob/21f472e211581ac1c1a7fa5ea2ff9199df6151cb/assets/json/belongs.json#L7184)：莫问根骨转阴性攻击2007/1024、转阴性会心410/1024、气血加成307/1024；无额外破防转换。
+- [`assets/json/belongs.json` 的 10447/10447](https://github.com/IcyTide/Generator/blob/21f472e211581ac1c1a7fa5ea2ff9199df6151cb/assets/json/belongs.json#L7184)：莫问根骨转阴性攻击2007/1024、转阴性会心410/1024、气血加成307/1024；无额外破防转换。[10026傲血](https://github.com/IcyTide/Generator/blob/21f472e211581ac1c1a7fa5ea2ff9199df6151cb/assets/json/belongs.json#L2643)、[10390分山](https://github.com/IcyTide/Generator/blob/21f472e211581ac1c1a7fa5ea2ff9199df6151cb/assets/json/belongs.json#L6808)、[10021花间](https://github.com/IcyTide/Generator/blob/21f472e211581ac1c1a7fa5ea2ff9199df6151cb/assets/json/belongs.json#L2282)分别提供表中转换常数，气血加成同为307/1024。
 - [`base/attribute.py`](https://github.com/IcyTide/Generator/blob/21f472e211581ac1c1a7fa5ea2ff9199df6151cb/base/attribute.py)：基础与额外转换分开截断，攻击增益先作用于基础攻击，之后加心法额外攻击；气血基础阶段先计体质再乘心法增益。
 
 该来源是可执行的社区计算器模型，**不是官方游戏面板实测**。未发现该提交的许可证；本仓库不复制其代码、不批量再分发其数据，仅独立表达核对过的公式、必要常数及来源链接。上游当前 master 的等级和数值已变化，禁止混用。
@@ -18,7 +27,7 @@
 
 `Loadout.attribute_rules` 可选；缺失保持旧语义，旧存档不自动迁移为新计算口径。驾驶台的规则选择与配装一起保存/导入/导出，默认仍是旧模式。
 
-`Stats` 新增 `tizhi/liliang/shenfa/gengu/yuanqi`，缺失为0。旧 `zhushuxing` 是主属性**增量别名**；莫问 `G = gengu + zhushuxing`，各来源只加一次。不要把同一份根骨同时填到两栏。力道/身法保留供以后扩展，但不影响莫问的阴性输出。
+`Stats` 新增 `tizhi/liliang/shenfa/gengu/yuanqi`，缺失为0。旧 `zhushuxing` 是主属性**增量别名**；莫问 `G = gengu + zhushuxing`，各来源只加一次。不要把同一份根骨同时填到两栏。力道/身法不影响莫问的阴性输出，但分别参与外功基础攻击/破防、会心转换。
 
 `base`、模板和套装属性都必须是**基础属性及心法转换前的平铺点数**。脱装后的最终游戏面板通常已含转换，不能直接用来填这些原始值。系统不自动加44点基础属性、心法固有攻击6518、固有会心3962等裸装数值，避免与输入双算。需要完整裸装值时必须由可核实的数据显式提供。
 
@@ -32,12 +41,16 @@
 面板攻击 = 基础攻击 + 心法额外攻击
 会心等级 = huixin + floor(G × 9 / 10) + floor(G × 410 / 1024)
 破防等级 = pofang + floor(Y × 3 / 10)
-气血 = floor((qixue + T × 10) × 1331 / 1024)
+气血 = floor((qixue + T × 10) × 1331 / 1024) + qixue_additional
 ```
+
+外功通用转换为 `floor(力道×163/1000)` 基础攻击、`floor(力道×3/10)` 破防、`floor(身法×9/10)` 会心；内功沿用上面的元气攻击/破防及根骨会心。主属性增量别名先加到对应的具名属性，再进行所有通用及心法转换，避免身法/元气等新类型漏算。
+
+新增 `qixue_additional` 表达**额外气血上限**：在上面的气血心法增益截断之后相加。`panel.qixue_base` 保留该增益后的基础阶段，最终 `panel.qixue = panel.qixue_base + qixue_additional`。例如基础气血1、额外气血10，结果为11而不是14。该字段与所有新具名基础属性一样，缺失为0。
 
 每个转换项单独截断，不合并系数。中间乘法使用u64，输入求和与最终u32越界返回错误，不静默饱和。气血、攻击、会心、破防都给出零输入与临界值测试；例如根骨1时会心是0+0=0，合并系数会错误产生1。
 
-未选规则时若输入非零体质或具名基础属性，拒绝计算，防止数据被旧适配器静默丢弃。旧模式仍保留主属性→攻击的原有浮点口径，并显示未实现体质/基础属性会心转换的说明。
+未选规则时若输入非零体质、具名基础属性或额外气血上限，拒绝计算，防止数据被旧适配器静默丢弃。旧模式仍保留主属性→攻击的原有浮点口径，并显示未实现体质/基础属性会心转换的说明。
 
 ## 接入与兼容
 
@@ -47,7 +60,8 @@
 - core 单技能、combo、时间轴、配置保存/加载均使用同一 DTO 转换，防止加速或转换标记丢失。前端请求归一化也保留这些字段。后端仍可读取已转换的配置快照；手动表单拒绝把这种缺少原始五维数据的快照载入编辑，提示改为导入原始配装 TOML，避免编辑主属性后使用过期转换结果。
 - 玩家气血属于自身面板，**不会覆盖敌人的 target_hp/max_hp/current_hp**。配装约束在启用规则时使用派生点数（攻击、会心、破防、气血、根骨及主属性），其余属性仍直接传递；Pareto 生存比较也使用派生气血。旧模式的约束行为不变。
 - 旧属性求导只会改变 DTO 主属性，不能重新计算已经转换的会心/额外攻击。因此携带转换标记的请求明确报错、要求重新合成配装；未伪造主属性零收益。
-- C ABI仍是 JSON 协议；新增字段向旧存档兼容。运行新配装规则时必须配套更新 app/gear/core/combo 模块；旧动态库会忽略未知字段，**混用旧 core/combo 不受支持**。
+- C ABI仍为JSON协议、ABI=1。新core/combo提供 `player_attribute_capabilities` 能力查询；app动态桥接仅在请求/导入或存档含非空转换标记（包括0）时要求 `converted_attack_v1`，旧DLL无法确认能力便明确拒绝，避免旧库忽略字段而重复转换。未启用新规则的旧请求仍可使用旧库。外部FFI调用方也必须查询此能力。
+- 直接Rust偏导针对固定DTO进行连续近似，标记存在时主属性偏导为0，与正向计算一致；这不表示完整配装主属性收益为0。用户host继续要求重合成。
 
 ## 核验与剩余范围
 
@@ -55,17 +69,40 @@
 
 可运行 `python3 scripts/test-attributes-dynamic.py` 测试实际 gear 动态库；附加 `--reference-dir /path/to/trusted/Generator --samples 10000` 时要求该目录为上述固定提交的干净 checkout，直接对比 Rust 合成面板与实际上游执行结果。脚本不下载或再分发上游代码。
 
-开发时在临时目录实际执行固定提交的上游 `BaseAttribute`，与独立公式对照：4组典型输入及10,000组固定种子随机输入（每项0..1,000,000）零差异。并对0..1,000,000范围比较0.181/0.163/0.9/0.3浮点截断与整数分数，以及元气u32边界。该实验不等于全u32域或真实游戏一致性的证明。
+开发时在临时目录实际执行固定提交的上游 `BaseAttribute`，与实际 Rust 动态库对照：四心法各10,000组固定种子随机输入（每项0..1,000,000，含主属性别名及额外气血），共40,000组零差异。另核对典型输入，并对0..1,000,000范围比较0.181/0.163/0.9/0.3浮点截断与整数分数，以及元气u32边界。该实验不等于全u32域或真实游戏一致性的证明。
 
-仍需维护者提供/确认：真实游戏版本与面板前后对照、其他心法和伤害类型、真实裸装/装备/套装数值、强化/镶嵌/附魔/特效、混档套装语义，以及体质/气血/基础属性战斗增益的完整叠加规则。本实现不改 #92 的战斗调度或套装CD，不能将体质增加解释成对外输出伤害的无条件增加。issue #98 应保持开放，直到这些范围有独立基准支撑。
+仍需维护者提供/确认：真实游戏版本与面板前后对照、其余心法和伤害类型、真实裸装/装备/套装数值、强化/镶嵌/附魔/特效、混档套装语义，以及体质/气血/基础属性战斗增益的完整叠加规则。本实现不改 #92 的战斗调度或套装CD，不能将体质增加解释成对外输出伤害的无条件增加。issue #98 应保持开放，直到这些范围有独立基准支撑。
 
 ### 2026-10-31 云环境验证记录
 
-- `cargo test --locked --workspace --exclude jpcg_app`：140项通过（子进程重复执行不重复计数），含9项既有金标准。
-- `cargo clippy --locked --workspace --exclude jpcg_app --all-targets`：通过，保留仓库既有告警。
-- 前端 `npm test`：79项通过；`npm run build`：TypeScript + Vite通过。
-- `cargo build --locked -p jpcg_core -p jpcg_combo -p jpcg_gear`、gear的 `--no-default-features --test dynamic_bridge`：通过。
-- `scripts/test-gear-dynamic.py`（含新属性动态回归）、`scripts/test-values-dynamic.py`：通过。
-- `scripts/test-attributes-dynamic.py --reference-dir <固定提交checkout> --samples 10000`：实际 Rust动态库与上游10,000组随机样例零差异，seed=98。
-- `cargo fmt --all -- --check`、`git diff --check`：通过。
-- `make check-all` 在桌面依赖检查处失败：环境缺少 `glib-2.0.pc`（要求GLib≥2.70）。未验证原生桌面构建/GUI，不能将上述引擎与前端结果当作完整桌面检查通过。
+- `make check-all`：全部通过，包含完整 workspace 的 fmt/clippy、五个模块库、桌面动态/静态构建、全量测试与前端 test/build；保留仓库既有告警。
+- `cargo test --workspace`：149项通过（子进程重复执行不重复计数），含9项既有金标准；桌面动态模式另有4项测试通过。
+- 前端 `npm test`：83项通过；`npm run build`：TypeScript + Vite通过。
+- `cargo check --locked -p jpcg_gear --no-default-features`：通过，模型模式不编入属性计算引擎。
+- `scripts/test-gear-dynamic.py`（含四心法属性动态回归）、`scripts/test-values-dynamic.py`：通过。
+- `scripts/test-attributes-dynamic.py --reference-dir <固定提交checkout> --samples 10000`：实际 Rust动态库与上游四心法共40,000组随机样例零差异，seed=98。
+- `cargo test --locked -p jpcg_core -- golden`、`cargo fmt --all -- --check`、`git diff --check`：通过。
+- 云环境原缺GLib开发依赖；现将Debian官方GLib/GTK/WebKit等包解包到工作区，配置编译搜索路径后完成桌面验证，无需修改系统目录。未实际启动GUI或验证Windows/macOS，不能将构建测试等同于交互与跨平台验证。
+
+## 扩展研究与证据边界
+
+另核查了有BSD-3-Clause许可证的 [jx3dps-online-public固定提交230eac4](https://github.com/jx3dps-online/jx3dps-online-public/tree/230eac473429502908b2307e8571df547a9c034b)；它独立印证基础/心法额外转换及额外气血分阶段的结构，但其LEVEL=50，**未导入其常量**。本实现仍为独立实现，没有复制该项目代码。
+
+[分山模拟器固定提交c9d3dec](https://github.com/LinXin-CMU/jx3-combat-sim/tree/c9d3dec9aae58c8c3c3ec0a7bde728d85a269709)的原创代码有MIT许可，但第三方声明将游戏数据排除；只核查其1925/1024分山攻击转换作为交叉证据，没有复制其数据。其气血模型与上述快照不同，不能当成完整面板的独立oracle。2021年的j3pz模型已过期，未作为130级数值依据。
+
+搜索未找到同时包含游戏版本、原始装备/裸装点数、完整增益状态和最终面板截图的130级公开夹具。来源代码执行一致性不能提升为 `verified_in_game=true`。
+
+当前仅覆盖选定心法的未增益攻击、会心、破防及气血转换，不覆盖完整防御/招架/化劲/御劲转换、PVE系数或武器外功副通道。core现有 `buff.pofang_pct` 是最终破防率点加法，不是基础破防等级百分比增益；以后实现后者时必须分离基础与心法额外破防。会心超过100%、极端伤害累加溢出、旧连招未应用部分override等既有战斗问题也尚未作为本规则的一致性声明。
+
+### 四心法固定输入对照（上游模型，非游戏截图）
+
+五维均1001、别名主属性0，原始攻击10000、会心20000、破防30000、基础气血100000、额外气血123：
+
+| 心法 | 基础攻击 | 心法额外攻击 | 会心等级 | 破防等级 | 最终气血 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 莫问 | 10181 | 1961 | 21300 | 30300 | 143114 |
+| 傲血 | 10163 | 1801 | 20900 | 30580 | 143114 |
+| 分山 | 10163 | 1881 | 20900 | 30300 | 143114 |
+| 花间 | 10181 | 2032 | 20900 | 30500 | 143114 |
+
+若要新增真实游戏基准，至少同时记录：游戏构建/赛季、心法与属性通道、原始裸装与装备词条（明确基础气血/额外气血）、强化镶嵌附魔、所有增益与开关、同一次状态下的五维及最终面板截图。仅给最终裸装面板不能唯一反推出转换前输入。核验前继续保持 `verified_in_game=false`。

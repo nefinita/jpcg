@@ -69,7 +69,11 @@ fn effective_value(composed: &Composed, name: &str) -> Result<u32, String> {
             "gongji" => return Ok(p.gongji),
             "huixin" => return Ok(p.huixin),
             "pofang" => return Ok(p.pofang),
-            "zhushuxing" | "gengu" => return Ok(p.gengu),
+            "zhushuxing" => return Ok(p.main_value(composed.profile.zhushuxing)),
+            "gengu" => return Ok(p.gengu),
+            "liliang" => return Ok(p.liliang),
+            "shenfa" => return Ok(p.shenfa),
+            "yuanqi" => return Ok(p.yuanqi),
             _ => (),
         }
     }
@@ -263,10 +267,9 @@ pub fn player(composed: &Composed) -> jpcg_api::PlayerConfigDTO {
     let stats = &composed.stats;
     jpcg_api::PlayerConfigDTO {
         jcsx: main_name(composed.profile.zhushuxing).into(),
-        jichu_shuxing: composed
-            .panel
-            .as_ref()
-            .map_or(stats.zhushuxing, |p| p.gengu),
+        jichu_shuxing: composed.panel.as_ref().map_or(stats.zhushuxing, |p| {
+            p.main_value(composed.profile.zhushuxing)
+        }),
         jichu_gongji: composed
             .panel
             .as_ref()

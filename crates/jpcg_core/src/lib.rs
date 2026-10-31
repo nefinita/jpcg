@@ -118,6 +118,8 @@ pub mod derivatives {
         player::PlayerConfig, skilltype::Skilltype, xinfa::XinfaConfig,
     };
 
+    /// 固定面板偏导；已换算输入的转换结果视为常量，不能用来估算配装主属性收益。
+    /// 装备敏感度应重新合成原属性后比较；host::calc::compute_derivatives 对此输入报错。
     pub fn compute_derivatives(
         player: &PlayerConfig,
         hostile: &HostilepileConfig,

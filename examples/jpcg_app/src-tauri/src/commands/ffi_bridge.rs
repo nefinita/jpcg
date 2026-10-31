@@ -10,6 +10,9 @@ use std::os::raw::{c_char, c_void};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+#[path = "attribute_capabilities.rs"]
+mod attribute_capabilities;
+
 use jpcg_api::HostEventsTable;
 use libloading::{Library, Symbol};
 use serde::Serialize;
@@ -239,8 +242,24 @@ pub fn call_combo_no_args<R: DeserializeOwned>(method: &str) -> Result<R, String
     call_combo_json(method, "{}")
 }
 
+/// 配置格式与 core 存储一致：saved_config.toml 位于 CWD，不在 exe 目录。
+fn saved_config_for_guard(method: &str) -> Result<Option<String>, String> {
+    if !matches!(method, "load_config" | "export_config") {
+        return Ok(None);
+    }
+    match std::fs::read_to_string("saved_config.toml") {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("无法检查保存配置的属性格式: {e}")),
+    }
+}
+
 /// 调用连招引擎业务方法（原始 JSON 请求体）
 pub fn call_combo_json<R: DeserializeOwned>(method: &str, req_json: &str) -> Result<R, String> {
+    let saved = saved_config_for_guard(method)?;
+    attribute_capabilities::guard(method, req_json, saved.as_deref(), || {
+        call_combo_json("player_attribute_capabilities", "{}")
+    })?;
     let combo = combo()?;
     let method_c = CString::new(method).map_err(|e| e.to_string())?;
     let req_c = CString::new(req_json).map_err(|e| e.to_string())?;
@@ -266,6 +285,10 @@ pub fn call_combo_json<R: DeserializeOwned>(method: &str, req_json: &str) -> Res
 
 /// 调用 core 业务方法（原始 JSON 请求体）
 pub fn call_json<R: DeserializeOwned>(method: &str, req_json: &str) -> Result<R, String> {
+    let saved = saved_config_for_guard(method)?;
+    attribute_capabilities::guard(method, req_json, saved.as_deref(), || {
+        call_json("player_attribute_capabilities", "{}")
+    })?;
     let core = core()?;
     let method_c = CString::new(method).map_err(|e| e.to_string())?;
     let req_c = CString::new(req_json).map_err(|e| e.to_string())?;

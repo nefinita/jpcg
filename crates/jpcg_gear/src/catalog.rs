@@ -331,7 +331,7 @@ impl Catalog {
             Some(rule_id) => {
                 let panel =
                     crate::attributes::convert(&stats, &profile, &loadout.value_set, rule_id)?;
-                warnings.push("属性换算使用 2026-08-14 的130级莫问来源快照，尚未经真实游戏面板验证；不含战斗体质/气血增益、强化、镶嵌、附魔及装备特效规则".into());
+                warnings.push("属性换算使用 2026-08-14 的130级心法来源快照，尚未经真实游戏面板验证；不含战斗体质/气血增益、强化、镶嵌、附魔及装备特效规则".into());
                 Some(panel)
             }
             None => {

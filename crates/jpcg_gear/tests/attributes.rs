@@ -263,3 +263,163 @@ fn converted_constraints_cannot_pass_a_critical_cap_using_raw_rating() {
             .is_some()
     );
 }
+
+#[test]
+fn three_more_school_snapshots_cover_all_primary_attributes() {
+    use jpcg_gear::attributes::{AOXUE_130, FENSHAN_130, HUAJIAN_130};
+    // Expected values executed independently in pinned upstream BaseAttribute.
+    for (id, main, damage, rule, expected) in [
+        (
+            "10026",
+            MainStat::Liliang,
+            DamageType::Waigong,
+            AOXUE_130,
+            [10163, 1801, 20900, 30580],
+        ),
+        (
+            "10390",
+            MainStat::Shenfa,
+            DamageType::Waigong,
+            FENSHAN_130,
+            [10163, 1881, 20900, 30300],
+        ),
+        (
+            "10021",
+            MainStat::Yuanqi,
+            DamageType::Neigong,
+            HUAJIAN_130,
+            [10181, 2032, 20900, 30500],
+        ),
+    ] {
+        let profile = School {
+            id: id.into(),
+            zhushuxing: main,
+            gongji_type: damage,
+            pofang_type: damage,
+        };
+        let stats = Stats {
+            tizhi: 1001,
+            liliang: 1001,
+            shenfa: 1001,
+            gengu: 1001,
+            yuanqi: 1001,
+            gongji: 10000,
+            huixin: 20000,
+            pofang: 30000,
+            qixue: 100000,
+            qixue_additional: 123,
+            ..Default::default()
+        };
+        let p = convert(&stats, &profile, "live-130", rule).unwrap();
+        assert_eq!(
+            [p.gongji_base, p.gongji_extra, p.huixin, p.pofang],
+            expected,
+            "{id}"
+        );
+        assert_eq!(
+            (p.qixue_base, p.qixue_additional, p.qixue),
+            (142991, 123, 143114)
+        );
+        assert_eq!(p.main_value(main), 1001);
+        assert_eq!(
+            p.damage_kind,
+            if damage == DamageType::Waigong {
+                "physical"
+            } else {
+                "neutral"
+            }
+        );
+        // Same final main value supplied wholly through legacy alias must match named attribute.
+        let mut aliased = stats.clone();
+        match main {
+            MainStat::Liliang => aliased.liliang = 0,
+            MainStat::Shenfa => aliased.shenfa = 0,
+            MainStat::Yuanqi => aliased.yuanqi = 0,
+            _ => unreachable!(),
+        }
+        aliased.zhushuxing = 1001;
+        assert_eq!(convert(&aliased, &profile, "live-130", rule).unwrap(), p);
+        for v in [1, 3] {
+            let tiny = Stats {
+                liliang: v,
+                shenfa: v,
+                gengu: v,
+                yuanqi: v,
+                tizhi: v,
+                ..Default::default()
+            };
+            let p = convert(&tiny, &profile, "live-130", rule).unwrap();
+            assert_eq!(p.huixin, if v == 1 { 0 } else { 2 });
+            assert_eq!(p.pofang, 0);
+            assert_eq!(
+                p.gongji,
+                if id == "10021" {
+                    if v == 1 { 2 } else { 6 }
+                } else if v == 1 {
+                    1
+                } else {
+                    5
+                }
+            );
+        }
+        let mut wrong = profile.clone();
+        wrong.zhushuxing = MainStat::Gengu;
+        assert!(convert(&stats, &wrong, "live-130", rule).is_err());
+    }
+}
+
+#[test]
+fn extra_health_is_added_after_base_multiplier_and_checked_for_overflow() {
+    let (c, mut l, _) = sample();
+    let stats = Stats {
+        qixue: 1,
+        qixue_additional: 10,
+        ..Default::default()
+    };
+    let p = convert(&stats, &c.schools[0], "live-130", MOWEN_130).unwrap();
+    assert_eq!((p.qixue_base, p.qixue), (1, 11)); // not floor(11*1331/1024)=14
+    let too_large = Stats {
+        qixue: 1,
+        qixue_additional: u32::MAX,
+        ..Default::default()
+    };
+    assert!(convert(&too_large, &c.schools[0], "live-130", MOWEN_130).is_err());
+    l.base.qixue_additional = 1;
+    assert!(c.compose(&l).unwrap_err().contains("attribute_rules"));
+}
+
+#[test]
+fn additional_school_compose_host_preserves_type_and_primary_attribute() {
+    use jpcg_gear::attributes::{AOXUE_130, FENSHAN_130, HUAJIAN_130};
+    for (id, main, damage, rule) in [
+        ("10026", MainStat::Liliang, DamageType::Waigong, AOXUE_130),
+        ("10390", MainStat::Shenfa, DamageType::Waigong, FENSHAN_130),
+        ("10021", MainStat::Yuanqi, DamageType::Neigong, HUAJIAN_130),
+    ] {
+        // Explicitly synthetic mechanics fixture, no new game equipment catalog.
+        let (mut c, mut l, _) = sample();
+        c.schools[0] = School {
+            id: id.into(),
+            zhushuxing: main,
+            gongji_type: damage,
+            pofang_type: damage,
+        };
+        for t in &mut c.templates {
+            t.school = id.into();
+        }
+        l.school = id.into();
+        l.attribute_rules = Some(rule.into());
+        l.base.qixue_additional = 123;
+        let out = host::compose(&c, &l).unwrap();
+        let p = out.composed.panel.as_ref().unwrap();
+        assert_eq!(out.player.jichu_shuxing, p.main_value(main));
+        assert!(out.player.jichu_shuxing > 0);
+        assert_eq!(out.player.huixin_dengji, p.huixin);
+        assert_eq!(out.player.pofang_dengji, p.pofang);
+        assert_eq!(out.player.zhuanhua_gongji, Some(p.gongji_extra));
+        let core = jpcg_core::type_set::player::PlayerConfig::from(out.player);
+        assert_eq!(core.atk_with_buff(999.0, 0.0).total(), p.gongji);
+        let back: Loadout = toml::from_str(&toml::to_string(&l).unwrap()).unwrap();
+        assert_eq!(c.compose(&back).unwrap().panel, out.composed.panel);
+    }
+}
