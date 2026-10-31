@@ -717,6 +717,7 @@ mod tests {
             wuqi_shanghai: 0,
             zuizhong_gongji: 0,
             jiasu_dengji: 0,
+            zhuanhua_gongji: None,
         }
     }
 

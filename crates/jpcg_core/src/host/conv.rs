@@ -213,6 +213,7 @@ pub fn toml_to_editor_data(toml_cfg: &TomlConfig) -> SkillEditorDataDTO {
             gcd_base: toml_cfg.xinfa.gcd_base,
         },
         version: toml_cfg.version.clone().map(VersionInfoDTO::from),
+        attributes: toml_cfg.attributes.clone(),
         skills: toml_cfg
             .skill
             .iter()

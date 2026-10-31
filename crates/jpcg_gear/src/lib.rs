@@ -1,4 +1,5 @@
 //! #90 配装模板、合成与有界优化。API 独立于 core/combo 共享 DTO，不包含 UI 或时序公式。
+pub mod attributes;
 #[cfg(feature = "engine")]
 mod catalog;
 #[cfg(feature = "engine")]

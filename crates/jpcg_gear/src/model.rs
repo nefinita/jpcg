@@ -77,8 +77,15 @@ impl Slot {
 #[serde(default, deny_unknown_fields)]
 pub struct Stats {
     pub zhushuxing: u32,
+    pub tizhi: u32,
+    pub liliang: u32,
+    pub shenfa: u32,
+    pub gengu: u32,
+    pub yuanqi: u32,
     pub gongji: u32,
     pub qixue: u32,
+    /// 额外气血上限：在基础气血/心法气血加成之后相加。
+    pub qixue_additional: u32,
     pub huixin: u32,
     pub huixiao: u32,
     pub pofang: u32,
@@ -93,8 +100,14 @@ impl Stats {
             .ok_or_else(|| format!("属性溢出: {}", stringify!($f)))?;)+ } }
         add!(
             zhushuxing,
+            tizhi,
+            liliang,
+            shenfa,
+            gengu,
+            yuanqi,
             gongji,
             qixue,
+            qixue_additional,
             huixin,
             huixiao,
             pofang,
@@ -108,8 +121,14 @@ impl Stats {
     pub fn value(&self, name: &str) -> Result<u32, String> {
         Ok(match name {
             "zhushuxing" => self.zhushuxing,
+            "tizhi" => self.tizhi,
+            "liliang" => self.liliang,
+            "shenfa" => self.shenfa,
+            "gengu" => self.gengu,
+            "yuanqi" => self.yuanqi,
             "gongji" => self.gongji,
             "qixue" => self.qixue,
+            "qixue_additional" => self.qixue_additional,
             "huixin" => self.huixin,
             "huixiao" => self.huixiao,
             "pofang" => self.pofang,
@@ -210,6 +229,9 @@ pub struct Loadout {
     /// 裸装基础点数，不能传入已经含装备的总面板。
     #[serde(default)]
     pub base: Stats,
+    /// 选择 profession-toml 从职业TOML读取；缺失保留旧语义，不自动迁移。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribute_rules: Option<String>,
     pub choices: Vec<Choice>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -224,6 +246,9 @@ pub struct Composed {
     pub loadout: Loadout,
     pub profile: School,
     pub stats: Stats,
+    /// 原始属性与派生面板分离，禁止将已经换算的结果再当作原始输入。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel: Option<crate::attributes::AttributePanel>,
     pub active_bonuses: Vec<ActiveBonus>,
     pub cooldowns: Vec<Cooldown>,
     pub warnings: Vec<String>,

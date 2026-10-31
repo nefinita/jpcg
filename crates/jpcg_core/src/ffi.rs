@@ -143,6 +143,9 @@ unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
 /// 业务方法分发：method + request_json → response_json
 fn dispatch(method: &str, request: &str) -> Result<String, String> {
     match method {
+        "player_attribute_capabilities" => {
+            Ok(crate::host::calc::player_attribute_capabilities().to_string())
+        }
         "calculate" => {
             let req: jpcg_api::CalculateRequest =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
@@ -454,6 +457,17 @@ mod ffi_tests {
 
     fn cstring(s: &str) -> CString {
         CString::new(s).unwrap()
+    }
+
+    #[test]
+    fn converted_attack_capability_is_available_through_ffi() {
+        let _g = ffi_guard();
+        let output = unsafe { call_owned("player_attribute_capabilities", "{}") }.unwrap();
+        let output: Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(
+            output["supported"],
+            serde_json::json!(["converted_attack_v1"])
+        );
     }
 
     #[test]

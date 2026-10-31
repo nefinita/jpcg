@@ -249,9 +249,14 @@ impl Catalog {
     /// 每次公开合成入口均验证目录，防止 JSON API 绕过文件加载校验。
     pub fn compose(&self, loadout: &Loadout) -> Result<Composed, String> {
         self.validate()?;
-        self.compose_validated(loadout)
+        let rules = crate::attributes::load_rules(loadout)?;
+        self.compose_validated(loadout, rules.as_ref())
     }
-    pub(crate) fn compose_validated(&self, loadout: &Loadout) -> Result<Composed, String> {
+    pub(crate) fn compose_validated(
+        &self,
+        loadout: &Loadout,
+        rules: Option<&jpcg_api::AttributeRules>,
+    ) -> Result<Composed, String> {
         if loadout.revision != self.version.revision || loadout.value_set != self.version.value_set
         {
             return Err("配装的 revision/value_set 与目录不一致".into());
@@ -327,10 +332,29 @@ impl Catalog {
         if !cooldowns.is_empty() {
             warnings.push("4件套CD仅返回元数据，当前计算引擎未应用".into());
         }
+        let panel = match loadout.attribute_rules.as_deref() {
+            Some(_) => {
+                let panel = crate::attributes::convert(
+                    &stats,
+                    &profile,
+                    &loadout.value_set,
+                    rules.ok_or("缺少职业换算规则")?,
+                )?;
+                warnings.push("属性换算读取当前职业TOML，尚未经真实游戏面板验证；系数需手动填写核实，不含完整战斗增益、强化、镶嵌、附魔及装备特效规则".into());
+                Some(panel)
+            }
+            None => {
+                crate::attributes::validate_legacy(&stats)?;
+                warnings
+                    .push("旧属性模式未换算体质及基础属性会心；可显式选择有来源的历史规则".into());
+                None
+            }
+        };
         Ok(Composed {
             loadout: loadout.clone(),
             profile,
             stats,
+            panel,
             active_bonuses,
             cooldowns,
             warnings,

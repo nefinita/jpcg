@@ -284,6 +284,13 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         addToast("没有已保存的配置", "warning");
         return;
       }
+      // 已换算快照缺少五维原始输入，不能作为可编辑手动属性继续换算。
+      // Some(0) 也属于明确的换算标记，不能按 truthiness 判断。
+      if (cfg.player.zhuanhua_gongji != null) {
+        void resolveCurrentValueSet(selectedValueSetRef.current, revision);
+        addToast("这是已换算的配装快照，不能载入手动属性编辑。请在配装模式导入原始配装 TOML；当前手动配置已保留。", "error");
+        return;
+      }
       ++xinfaRevisionRef.current;
       const requestedId = cfg.value_set ?? null;
       persistValueSet(requestedId);
@@ -299,6 +306,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
           huixin_xiaoguo: cfg.player.huixin_xiaoguo,
           pofang_dengji: cfg.player.pofang_dengji,
           wuqi_shanghai: cfg.player.wuqi_shanghai,
+          jiasu_dengji: cfg.player.jiasu_dengji ?? 0,
         },
         hostile: {
           waigong_fangyu: cfg.hostile.waigong_fangyu,

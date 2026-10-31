@@ -51,6 +51,9 @@ unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
 /// 业务方法分发：method + request_json → response_json
 fn dispatch(method: &str, request: &str) -> Result<String, String> {
     match method {
+        "player_attribute_capabilities" => {
+            Ok(jpcg_core::host::calc::player_attribute_capabilities().to_string())
+        }
         "calculate_combo" => {
             #[derive(serde::Deserialize)]
             struct ComboRequest {
@@ -292,6 +295,16 @@ mod tests {
             jpcg_combo_handle_free(handle);
         }
         s
+    }
+
+    #[test]
+    fn converted_attack_capability_is_available_through_ffi() {
+        let output = call("player_attribute_capabilities", "{}");
+        let output: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(
+            output["supported"],
+            serde_json::json!(["converted_attack_v1"])
+        );
     }
 
     #[test]

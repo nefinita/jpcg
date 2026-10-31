@@ -190,7 +190,9 @@ impl<'a> JpcgConfig<'a> {
     }
 
     /// 正向计算伤害 + 反向求导（链式法则）
-    /// 对 6 个玩家属性分别计算 ∂Q/∂attr，忽略中间 as u32 截断（连续近似）
+    /// 对 6 个玩家属性分别计算 ∂Q/∂attr，忽略中间 as u32 截断（连续近似）。
+    /// 已换算输入只对当前 DTO 求偏导：额外攻击/会心等视为固定，主属性偏导为 0。
+    /// 这不代表配装主属性收益；完整配装敏感度必须修改原属性并重新合成。
     pub fn q_cal_with_derivatives(&self) -> DamageResultWithDerivatives {
         // ---- forward：一次计算全程，复用各段中间结果，避免二次走链 ----
         let y = self.y_cal();
@@ -254,7 +256,12 @@ impl<'a> JpcgConfig<'a> {
         let d_jichu_gongji = dq_di2 * self.skilltype.atk_xishu * db_d_jg;
 
         // 2. jichu_shuxing: dB/d(js) = atk_up * (1+buff%)
-        let db_d_js = self.xinfa.atk_up * (1.0 + self.buff.base_atk_pct / 100.0);
+        let db_d_js = if self.player.zhuanhua_gongji.is_some() {
+            // 固定面板快照的主属性不会再参与攻击换算；与正向路径保持一致。
+            0.0
+        } else {
+            self.xinfa.atk_up * (1.0 + self.buff.base_atk_pct / 100.0)
+        };
         let d_jichu_shuxing = dq_di2 * self.skilltype.atk_xishu * db_d_js;
 
         // 3. huixin_dengji: 仅影响会心率
@@ -416,6 +423,7 @@ mod golden_tests {
             wuqi_shanghai: 0,
             zuizhong_gongji: 0,
             jiasu_dengji: 0,
+            zhuanhua_gongji: None,
         }
     }
 
@@ -753,5 +761,51 @@ mod golden_tests {
                 d_wq: 0.000000,
             },
         );
+    }
+}
+
+#[cfg(test)]
+mod converted_derivative_tests {
+    use super::*;
+
+    #[test]
+    fn frozen_converted_panel_derivatives_match_forward_path() {
+        let mut player = PlayerConfig {
+            jichu_gongji: 1000,
+            jichu_shuxing: 100,
+            zhuanhua_gongji: Some(200),
+            ..Default::default()
+        };
+        let hostile = HostilepileConfig::default();
+        let skill = Skilltype {
+            atk_xishu: 1.0,
+            ..Default::default()
+        };
+        let xinfa = XinfaConfig {
+            atk_up: 99.0,
+            ..Default::default()
+        };
+        let buff = BuffConfig {
+            base_atk_pct: 25.0,
+            ..Default::default()
+        };
+        let coeff = CoefficientConfig {
+            pvp_global_jianshang: 1.0,
+            ..Default::default()
+        };
+        let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
+        let derivative = calc.q_cal_with_derivatives();
+        assert_eq!(derivative.result.q_damage, calc.q_cal().q_damage);
+        assert_eq!(derivative.result.b, 1450);
+        // 既有零化劲目标仍有 102/1024 基础减伤，保留该数值口径。
+        assert_eq!(derivative.result.q_damage, 1305);
+        assert_eq!(derivative.derivatives.d_jichu_shuxing, 0.0);
+        assert_eq!(derivative.derivatives.d_jichu_gongji, 1.1254883);
+        player.jichu_shuxing += 4;
+        let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
+        assert_eq!(calc.q_cal().q_damage, 1305);
+        player.jichu_gongji += 4;
+        let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
+        assert_eq!(calc.q_cal().q_damage, 1310);
     }
 }

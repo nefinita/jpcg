@@ -409,6 +409,35 @@ describe("ConfigPanel 加载目标血量", () => {
   });
 });
 
+describe("ConfigPanel 加载属性换算模式", () => {
+  it.each([0, 2007])("拒绝将转化攻击为 %s 的配装快照载入手动编辑，保持当前表单和数值集", async (extra) => {
+    await mount();
+    await select(experience.id);
+    const before = await request();
+    const config = saved(live.id);
+    config.player = { ...config.player, zhuanhua_gongji: extra, jiasu_dengji: 135 };
+    vi.mocked(api.loadConfig).mockResolvedValue(config);
+    await click("加载");
+    expect(addToast).toHaveBeenCalledWith(expect.stringContaining("请在配装模式导入原始配装 TOML"), "error");
+    expect(await request()).toEqual(before);
+    expect(selection().value).toBe(experience.id);
+    expect(localStorage.getItem(STORAGE_KEYS.valueSet)).toBe(experience.id);
+    expect(api.resolveValueSet).toHaveBeenLastCalledWith(experience.id);
+  });
+
+  it.each([undefined, null])("手动存档标记为 %s 时保留加速，计算及再次保存都不丢失", async (extra) => {
+    const config = saved();
+    config.player = { ...config.player, zhuanhua_gongji: extra, jiasu_dengji: 135 };
+    vi.mocked(api.loadConfig).mockResolvedValue(config);
+    await mount(); await click("加载");
+    const player = toCalculateRequest(await request()).player;
+    expect(player.jiasu_dengji).toBe(135);
+    expect(player).not.toHaveProperty("zhuanhua_gongji");
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ player: expect.objectContaining({ jiasu_dengji: 135 }) }));
+  });
+});
+
 describe("ConfigPanel 心法配置请求顺序", () => {
   const config = (profession: string, atk_up: number) => ({
     profession, xinfa_name: profession, xinfa_nom: "lidao", atk_up, pofang_up: 2, huixin_up: 3,
