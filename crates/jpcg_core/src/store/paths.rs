@@ -112,6 +112,36 @@ pub fn data_dirs() -> Vec<PathBuf> {
         .collect()
 }
 
+/// 战斗时序 overlay 目录（data/combat）：`{门派}.toml` 手工数据（形态 / GCD 通道 / buff / 秘籍 / 奇穴）。
+/// 解析顺序与 [`data_dirs`] 一致：`JPCG_DATA_DIR`（兼容指向数据根或 shuxing/）→ 安装版用户目录 → 随包资源 → exe 同目录。
+#[allow(dead_code)]
+pub fn combat_dirs() -> Vec<PathBuf> {
+    if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
+        let p = PathBuf::from(dir);
+        let root = if p.join("shuxing").is_dir() {
+            p
+        } else if p.file_name().and_then(|n| n.to_str()) == Some("shuxing") {
+            match p.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => return Vec::new(),
+            }
+        } else {
+            p
+        };
+        let combat = root.join("combat");
+        return if combat.is_dir() {
+            vec![combat]
+        } else {
+            Vec::new()
+        };
+    }
+    read_root_candidates()
+        .into_iter()
+        .map(|r| r.join("combat"))
+        .filter(|d| d.is_dir())
+        .collect()
+}
+
 /// 数值集目录（data/values）：存放 index.toml 与各值集快照。
 /// 解析顺序与 [`data_dirs`] 一致，且兼容 `JPCG_DATA_DIR` 直接指向 `data/shuxing` 的既有用法。
 pub fn values_dir() -> Option<PathBuf> {
@@ -122,6 +152,19 @@ pub fn values_dir() -> Option<PathBuf> {
         .into_iter()
         .map(|r| r.join("values"))
         .find(|d| d.is_dir())
+}
+
+/// 配装目录与值集共享读取优先级；存在但损坏的高优先级目录由调用方报错，不能静默回退。
+pub fn gear_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("JPCG_DATA_DIR") {
+        let root = env_data_root(&PathBuf::from(dir))?;
+        let gear = root.join("gear");
+        return gear.is_dir().then_some(gear);
+    }
+    read_root_candidates()
+        .into_iter()
+        .map(|r| r.join("gear"))
+        .find(|p| p.is_dir())
 }
 
 /// 由 `JPCG_DATA_DIR` 的值解析 values 目录。

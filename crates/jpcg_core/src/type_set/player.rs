@@ -21,6 +21,7 @@ pub struct PlayerConfig {
     pub pofang_dengji: u32,   // 破防等级
     pub wuqi_shanghai: u32,   // 武器伤害（额外附加）
     pub zuizhong_gongji: u32, // 最终攻击力（外部计算填入，0=自动计算）
+    pub jiasu_dengji: u32,    // 加速等级（#92 时序引擎；0=无加速）
 }
 
 impl PlayerConfig {
@@ -44,6 +45,7 @@ impl PlayerConfig {
             pofang_dengji,
             wuqi_shanghai,
             zuizhong_gongji: 0,
+            jiasu_dengji: 0,
         }
     }
 
@@ -92,6 +94,16 @@ impl PlayerConfig {
     /// 使用可配置系数的会心率计算
     pub fn guo_huixin_with(&self, coeff: &CoefficientConfig) -> f32 {
         self.huixin_dengji as f32 / coeff.huixin_xishu
+    }
+
+    /// 计算加速率（小数；值集未启用加速系数时返回 0）
+    pub fn guo_jiasu(&self) -> f32 {
+        self.guo_jiasu_with(&CoefficientConfig::default())
+    }
+
+    /// 使用可配置系数计算加速率（小数）
+    pub fn guo_jiasu_with(&self, coeff: &CoefficientConfig) -> f32 {
+        crate::type_set::timing::jiasu_rate(self.jiasu_dengji, coeff.jiasu_xishu)
     }
 
     /// 计算最终攻击力（含心法加成 + 阵眼增益）

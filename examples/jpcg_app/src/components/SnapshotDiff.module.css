@@ -1,0 +1,6 @@
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-md); padding: var(--space-md); margin-bottom: var(--space-md); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface); }
+.bar p { margin-top: var(--space-xs); color: var(--text-secondary); font-size: 0.8rem; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.actions button { cursor: pointer; color: var(--text-primary); padding: var(--space-sm); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--glass-bg); }
+.actions button:disabled { cursor: default; opacity: 0.5; }
+.bar > div { min-width: 0; overflow-wrap: anywhere; }

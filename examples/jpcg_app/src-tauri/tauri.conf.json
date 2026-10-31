@@ -27,7 +27,11 @@
     "targets": "all",
     "resources": [
       "data/shuxing/*.toml",
-      "data/values/*.toml"
+      "data/values/*.toml",
+      "data/gear/templates.toml",
+      "data/gear/sets.toml",
+      "data/gear/schools.toml",
+      "data/gear/overrides.toml"
     ],
     "externalBin": [
       "binaries/jpcg_updater"

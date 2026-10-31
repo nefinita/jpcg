@@ -1,7 +1,7 @@
 # ============================================================================
 # JPCG cargo 别名（双构建模式）
 # 用法：cargo <alias> [其它参数]
-# 与 Makefile 的 build-* 目标保持一致（模块库固定为 4 个：core/combo/update/const）
+# 与 Makefile 的 build-* 目标保持一致（模块库固定为 5 个：core/combo/update/const/gear）
 # ============================================================================
 
 [alias]
@@ -13,7 +13,7 @@ build-app-static = "build -p jpcg_app"
 build-app-dynamic = "build -p jpcg_app --no-default-features --features dynamic"
 
 # 模块库（各 crate 独立 cdylib，供动态模式/跨语言使用）
-build-modules = "build -p jpcg_core -p jpcg_combo -p jpcg_update -p jpcg_const"
+build-modules = "build -p jpcg_core -p jpcg_combo -p jpcg_update -p jpcg_const -p jpcg_gear"
 
 # 模块测试
 test-core = "test -p jpcg_core"

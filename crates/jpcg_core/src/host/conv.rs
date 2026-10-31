@@ -118,6 +118,17 @@ impl From<SkillEditorItemDTO> for Skilltype {
             dot_interval: dto.dot_interval,
             dot_duration: dto.dot_duration,
             dot_up: dto.dot_up,
+            // ---- #92 时序字段 ----
+            cast_time: dto.cast_time,
+            gcd_kind: dto.gcd_kind,
+            cooldown: dto.cooldown,
+            charges: dto.charges,
+            recharge: dto.recharge,
+            cd_haste: dto.cd_haste,
+            channel: dto.channel,
+            buff_id: dto.buff_id,
+            gcd_base: dto.gcd_base,
+            gcd_group: dto.gcd_group,
         }
     }
 }
@@ -153,6 +164,16 @@ impl From<Skilltype> for SkillEditorItemDTO {
             dot_interval: core.dot_interval,
             dot_duration: core.dot_duration,
             dot_up: core.dot_up,
+            cast_time: core.cast_time,
+            gcd_kind: core.gcd_kind,
+            cooldown: core.cooldown,
+            charges: core.charges,
+            recharge: core.recharge,
+            cd_haste: core.cd_haste,
+            channel: core.channel,
+            buff_id: core.buff_id,
+            gcd_base: core.gcd_base,
+            gcd_group: core.gcd_group,
         }
     }
 }
@@ -189,6 +210,7 @@ pub fn toml_to_editor_data(toml_cfg: &TomlConfig) -> SkillEditorDataDTO {
             atk_up: toml_cfg.xinfa.atk_up,
             pofang_up: toml_cfg.xinfa.pofang_up,
             huixin_up: toml_cfg.xinfa.huixin_up,
+            gcd_base: toml_cfg.xinfa.gcd_base,
         },
         version: toml_cfg.version.clone().map(VersionInfoDTO::from),
         skills: toml_cfg
@@ -242,7 +264,7 @@ impl From<ComboStepDTO> for ComboStep {
 }
 
 /// Skilltype → 技能池条目（预设加载时用快照还原完整属性）
-fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
+pub(crate) fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
     SkillPoolItemDTO {
         skill_name: s.skill_name.clone(),
         skill_id: s.skill_id,
@@ -264,6 +286,16 @@ fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
         zhenshishanghai: s.zhenshishanghai,
         has_critical_strike: s.has_critical_strike,
         lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
+        cast_time: s.cast_time,
+        gcd_kind: s.gcd_kind,
+        cooldown: s.cooldown,
+        charges: s.charges,
+        recharge: s.recharge,
+        cd_haste: s.cd_haste,
+        channel: s.channel,
+        buff_id: s.buff_id.clone(),
+        gcd_base: s.gcd_base,
+        gcd_group: s.gcd_group,
     }
 }
 

@@ -10,3 +10,7 @@ pub mod skill_editor;
 pub mod types;
 pub mod update;
 pub mod version;
+
+pub mod gear;
+#[cfg(feature = "dynamic")]
+pub mod gear_bridge;
