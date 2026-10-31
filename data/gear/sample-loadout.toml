@@ -1,0 +1,82 @@
+school = "mowen"
+revision = "synthetic-v1"
+value_set = "live-130"
+[base]
+zhushuxing = 10000
+gongji = 40000
+huixin = 20000
+huixiao = 1000
+pofang = 30000
+qixue = 100000
+
+[[choices]]
+slot = "tou"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "yi"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "yao"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "shou"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "ku"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "xie"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "wuqi"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "anqi"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[choices]]
+slot = "xianglian"
+source = "weiwang"
+tier = "base"
+variant = 1
+
+[[choices]]
+slot = "yaozhui"
+source = "weiwang"
+tier = "base"
+variant = 1
+
+[[choices]]
+slot = "jie1"
+source = "weiwang"
+tier = "base"
+variant = 1
+
+[[choices]]
+slot = "jie2"
+source = "weiwang"
+tier = "base"
+variant = 1

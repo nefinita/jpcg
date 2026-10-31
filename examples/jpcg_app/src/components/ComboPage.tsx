@@ -1,38 +1,59 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction, type Dispatch } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
-  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData,
+  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData, TimelineResultDTO,
 } from "../types";
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
 import { IconGear, IconClose, IconSave, IconTrash, IconStar } from "./icons";
+import { usePersistentState, readPreference, writePreference } from "../hooks/usePersistentState";
+import { STORAGE_KEYS } from "../utils/constants";
+import { comboDraftSchema, defaultComboDraft, type ComboDraft } from "../state/cockpit";
+import { formatTimelineEvent } from "./timelineFormat";
 import styles from "./ComboPage.module.css";
 
 interface Props {
   xinfaName?: string;
   formData?: FormData | null;
+  draft?: ComboDraft;
+  onDraftChange?: Dispatch<SetStateAction<ComboDraft>>;
+  configurationOnly?: boolean;
 }
 
-export default function ComboPage({ xinfaName, formData }: Props) {
+export default function ComboPage({ xinfaName, formData, draft: controlledDraft, onDraftChange, configurationOnly = false }: Props) {
   const [skillPool, setSkillPool] = useState<SkillPoolItemDTO[]>([]);
-  const [sequence, setSequence] = useState<ComboStepDTO[]>([]);
+  const [localDraft, setLocalDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(xinfaName ?? "mowen")}`, defaultComboDraft, comboDraftSchema);
+  const draft = controlledDraft ?? localDraft;
+  const setDraft = onDraftChange ?? setLocalDraft;
+  const setDraftField = useCallback(<K extends keyof ComboDraft,>(key: K, update: SetStateAction<ComboDraft[K]>) => {
+    setDraft((previous) => ({ ...previous, [key]: typeof update === "function"
+      ? (update as (value: ComboDraft[K]) => ComboDraft[K])(previous[key]) : update }));
+  }, [setDraft]);
+  const { sequence, presetName, poolQuery } = draft;
+  const collapsedGroups = useMemo(() => new Set(draft.collapsedGroups), [draft.collapsedGroups]);
+  const setSequence = useCallback((update: SetStateAction<ComboStepDTO[]>) => setDraftField("sequence", update), [setDraftField]);
+  const setPresetName = useCallback((value: string) => setDraftField("presetName", value), [setDraftField]);
+  const setPoolQuery = useCallback((value: string) => setDraftField("poolQuery", value), [setDraftField]);
+  const setCollapsedGroups = useCallback((update: SetStateAction<Set<string>>) => {
+    setDraftField("collapsedGroups", (previous) => [...(typeof update === "function" ? update(new Set(previous)) : update)]);
+  }, [setDraftField]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [presets, setPresets] = useState<string[]>([]);
   const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
+  const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
   const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
-  const [presetName, setPresetName] = useState("");
-  const [poolQuery, setPoolQuery] = useState("");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    let cancelled = false;
+    setSkillPool([]);
     if (xinfaName) {
-      api.loadSkillPool(xinfaName).then(setSkillPool).catch(() => {});
+      api.loadSkillPool(xinfaName).then((pool) => { if (!cancelled) setSkillPool(pool); }).catch(() => {});
     }
-    api.listComboPresets().then(setPresets).catch(() => {});
-    const stored = localStorage.getItem("jpcg_favorites");
+    api.listComboPresets().then((names) => { if (!cancelled) setPresets(names); }).catch(() => {});
+    const stored = readPreference(STORAGE_KEYS.favorites);
     if (stored) {
       try {
         const raw = JSON.parse(stored);
@@ -43,12 +64,21 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         setFavorites(favs);
       } catch {}
     }
+    return () => { cancelled = true; };
   }, [xinfaName]);
 
   const saveFavorites = useCallback((favs: Set<string>) => {
     setFavorites(favs);
-    localStorage.setItem("jpcg_favorites", JSON.stringify([...favs]));
+    writePreference(STORAGE_KEYS.favorites, JSON.stringify([...favs]));
   }, []);
+
+  const calculationRevision = useRef(0);
+  useEffect(() => {
+    ++calculationRevision.current;
+    setComboResult(null);
+    setComputing(false);
+    return () => { ++calculationRevision.current; };
+  }, [sequence, formData]);
 
   const pool = skillPool;
 
@@ -57,16 +87,16 @@ export default function ComboPage({ xinfaName, formData }: Props) {
 
   const addToSequence = useCallback((skill: SkillPoolItemDTO) => {
     setSequence((prev) => [...prev, { skill, overrides: null }]);
-  }, []);
+  }, [setSequence]);
 
   const removeFromSequence = useCallback((index: number) => {
     setSequence((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  }, [setSequence]);
 
   const clearSequence = useCallback(() => {
     setSequence([]);
     setComboResult(null);
-  }, []);
+  }, [setSequence]);
 
   const toggleFavorite = useCallback((s: SkillPoolItemDTO) => {
     const key = `${s.skill_id}-${s.sub_id ?? 0}`;
@@ -79,18 +109,19 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     const [removed] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, removed);
     setSequence(items);
-  }, [sequence]);
+  }, [sequence, setSequence]);
 
   const updateOverride = useCallback((index: number, overrides: StepOverrideDTO) => {
     setSequence((prev) => prev.map((s, i) => i === index ? { ...s, overrides } : s));
-  }, []);
+  }, [setSequence]);
 
   const resetOverride = useCallback((index: number) => {
     setSequence((prev) => prev.map((s, i) => i === index ? { ...s, overrides: null } : s));
-  }, []);
+  }, [setSequence]);
 
   const handleCalculate = useCallback(async () => {
     if (sequence.length === 0 || !formData) return;
+    const revision = ++calculationRevision.current;
     setComputing(true);
     try {
       const data = formData;
@@ -104,7 +135,42 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         req.coefficient,
         req.value_set,
       );
-      setComboResult(result);
+      if (revision === calculationRevision.current) setComboResult(result);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (revision === calculationRevision.current) setComputing(false);
+    }
+  }, [sequence, formData]);
+
+  // #92 时间轴预览：读门派 combat overlay → DTO 请求 → 时序引擎（窗口伤害 / DPS / 事件）
+  const handleTimeline = useCallback(async () => {
+    if (sequence.length === 0 || !formData) return;
+    setComputing(true);
+    try {
+      const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
+      const req = toCalculateRequest(formData);
+      const result = await api.calculateTimeline({
+        skills: bundle.skills,
+        forms: bundle.combat.form,
+        timed_buffs: bundle.combat.buff,
+        actions: sequence.map((s) => ({
+          kind: "cast" as const,
+          skill_id: s.skill.skill_id,
+          sub_id: s.skill.sub_id ?? 0,
+          // 同一 (skill_id, sub_id) 可能对应多个变体（入月·N 层），必须带名字消歧
+          skill_name: s.skill.skill_name,
+        })),
+        window: 300,
+        player: req.player,
+        hostile: req.hostile,
+        xinfa: req.xinfa_config,
+        buff: req.buff,
+        coeff: req.coefficient,
+        value_set: req.value_set ?? null,
+        combat: bundle.combat,
+      });
+      setTimelineResult(result);
     } catch (err) {
       console.error(err);
     } finally {
@@ -116,22 +182,25 @@ export default function ComboPage({ xinfaName, formData }: Props) {
     if (!presetName.trim()) return;
     try {
       await api.saveComboPreset(presetName.trim(), sequence);
-      setPresetName("");
+      setDraftField("selectedPreset", presetName.trim());
       setSaveDialog(false);
       setPresets(await api.listComboPresets());
     } catch (err) {
       console.error(err);
     }
-  }, [presetName, sequence]);
+  }, [presetName, sequence, setDraftField]);
 
   const handleLoadPreset = useCallback(async (name: string) => {
     try {
       const preset = await api.loadComboPreset(name);
       setSequence(preset.steps);
+      setPresetName(name);
+      setDraftField("selectedPreset", name);
+      setComboResult(null);
     } catch (err) {
       console.error(err);
     }
-  }, []);
+  }, [setSequence, setPresetName, setDraftField]);
 
   const handleDeletePreset = useCallback(async (name: string) => {
     try {
@@ -178,12 +247,12 @@ export default function ComboPage({ xinfaName, formData }: Props) {
       if (next.has(name)) next.delete(name); else next.add(name);
       return next;
     });
-  }, []);
+  }, [setCollapsedGroups]);
 
-  const expandAll = useCallback(() => setCollapsedGroups(new Set()), []);
+  const expandAll = useCallback(() => setCollapsedGroups(new Set()), [setCollapsedGroups]);
   const collapseAll = useCallback(() => {
     setCollapsedGroups(new Set(groups.filter(([, items]) => items.length > 1).map(([name]) => name)));
-  }, [groups]);
+  }, [groups, setCollapsedGroups]);
 
   // 需先同步面板属性（未计算过时 formData 为 null，全 0 提交会让追加真伤恒为 0）
   const noForm = !formData;
@@ -197,10 +266,16 @@ export default function ComboPage({ xinfaName, formData }: Props) {
         <div className={styles.headerActions}>
           {sequence.length > 0 && (
             <>
-              <button className={styles.primaryBtn} onClick={handleCalculate} disabled={computing || noForm}
-                title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
-                {computing ? "计算中..." : "计算连招"}
-              </button>
+              {!configurationOnly && <>
+                <button className={styles.primaryBtn} onClick={handleCalculate} disabled={computing || noForm}
+                  title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
+                  {computing ? "计算中..." : "计算连招"}
+                </button>
+                <button className={styles.btn} onClick={handleTimeline} disabled={computing || noForm}
+                  title="按当前序列跑时间轴（GCD / 读条 / CD / 形态 / buff / dot）">
+                  {computing ? "计算中..." : "时间轴预览"}
+                </button>
+              </>}
               <button className={styles.btn} onClick={clearSequence}>清空</button>
             </>
           )}
@@ -209,9 +284,10 @@ export default function ComboPage({ xinfaName, formData }: Props) {
 
       {noForm && (
         <div className={styles.warnBanner}>
-          尚未同步面板属性：请先在「计算器」页输入属性并点击计算，再回来排轴（否则以 0 属性提交，追加真伤不会生效）。
+          {configurationOnly ? "请先在驾驶台完成配装或手动属性计算；连招草稿可继续编辑。" : "尚未同步面板属性：请先在「计算器」页输入属性并点击计算，再回来排轴（否则以 0 属性提交，追加真伤不会生效）。"}
         </div>
       )}
+      {configurationOnly && <p className={styles.zhenshiHint}>草稿自动保存；切回计算驾驶台查看连招伤害与击杀率。</p>}
       {!noForm && targetHp <= 0 && (
         <div className={styles.warnBanner}>
           目标血量 = 0：追加真伤（已损失生命值 × 系数）不会生效，请在计算器页设置目标血量。
@@ -270,15 +346,35 @@ export default function ComboPage({ xinfaName, formData }: Props) {
       )}
 
       {/* Combo result */}
-      {comboResult && (
+      {!configurationOnly && comboResult && (
         <ComboResultDisplay result={comboResult} />
+      )}
+
+      {/* #92 时间轴预览（实验） */}
+      {timelineResult && (
+        <section className={styles.section}>
+          <div className={styles.sectionTitle}>时间轴（实验）</div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
+            <span>窗口伤害 {Math.round(timelineResult.total_damage).toLocaleString()}</span>
+            <span>窗口 DPS {timelineResult.window_dps.toFixed(0)}</span>
+            <span>未执行动作 {timelineResult.skipped_actions}</span>
+            <span>事件 {timelineResult.events.length}</span>
+          </div>
+          <div style={{ maxHeight: 200, overflowY: "auto", fontSize: 12, fontFamily: "monospace" }}>
+            {timelineResult.events.slice(0, 200).map((e, i) => (
+              <div key={i}>
+                {e.time.toFixed(2)}s  {formatTimelineEvent(e)}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Preset management */}
       <section className={styles.section}>
         <div className={styles.presetBar}>
           <span className={styles.sectionTitle}>预设</span>
-          <select className={styles.presetSelect} defaultValue="" onChange={(e) => e.target.value && handleLoadPreset(e.target.value)}>
+          <select className={styles.presetSelect} value={presets.includes(draft.selectedPreset) ? draft.selectedPreset : ""} onChange={(e) => e.target.value && handleLoadPreset(e.target.value)}>
             <option value="" disabled>加载预设...</option>
             {presets.map((p) => (
               <option key={p} value={p}>{p}</option>
@@ -334,11 +430,11 @@ export default function ComboPage({ xinfaName, formData }: Props) {
                 </button>
                 {!collapsed && (
                   <div className={styles.poolGroupItems}>
-                    {items.map((s) => {
+                    {items.map((s, itemIndex) => {
                       const key = skillKey(s);
                       const fav = favorites.has(key);
                       return (
-                        <button key={key}
+                        <button key={`${key}-${itemIndex}`}
                           className={`${styles.skillChip} ${fav ? styles.favoriteChip : ""}`}
                           onClick={() => addToSequence(s)}
                           onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}

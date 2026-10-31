@@ -67,7 +67,7 @@ const APP_BINS: [(&str, &str, &str); 3] = [
 
 // 各平台 dll 文件名（三平台合并；客户端按扩展名取本平台）。
 // mac 仅 aarch64 单架构，故 dylib 无同名冲突
-const MODULES: [&str; 9] = [
+const MODULES: [&str; 12] = [
     "libjpcg_core.dylib",
     "libjpcg_update.dylib",
     "libjpcg_const.dylib",
@@ -77,6 +77,9 @@ const MODULES: [&str; 9] = [
     "jpcg_core.dll",
     "jpcg_update.dll",
     "jpcg_const.dll",
+    "libjpcg_gear.dylib",
+    "libjpcg_gear.so",
+    "jpcg_gear.dll",
 ];
 
 fn sha256_hex(path: &Path) -> String {

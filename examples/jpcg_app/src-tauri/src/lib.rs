@@ -6,6 +6,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::calculate::calculate_damage,
+            commands::gear::gear_catalog,
+            commands::gear::compose_gear,
+            commands::gear::export_gear,
+            commands::gear::import_gear,
             commands::config::save_config_cmd,
             commands::config::load_config_cmd,
             commands::config::list_professions_cmd,
@@ -24,6 +28,8 @@ pub fn run() {
             commands::optimize::compute_derivatives,
             commands::data::load_skill_pool,
             commands::combo::calculate_combo_cmd,
+            commands::combo::load_combat_bundle,
+            commands::combo::calculate_timeline_cmd,
             commands::combo::save_combo_preset,
             commands::combo::list_combo_presets,
             commands::combo::load_combo_preset,

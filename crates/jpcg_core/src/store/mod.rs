@@ -8,6 +8,7 @@
 //   profession — 门派列表扫描
 // ============================================================================
 
+pub mod combat;
 pub mod combo;
 pub mod config;
 pub mod paths;

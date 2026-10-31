@@ -1,0 +1,112 @@
+max_combinations = 64
+[constraints]
+sources = ["weiwang"]
+allow_upgraded = false
+[constraints.stats.huajin]
+min = 7
+[objective]
+kind = "expected"
+[objective.weights]
+"徵" = 1.0
+[config]
+value_set = "live-130"
+[config.player]
+jcsx = "根骨"
+[config.hostile]
+neigong_fangyu = 20000
+huajin_dengji = 30000
+yujin_dengji = 1000
+target_hp = 100000
+[config.xinfa_config]
+profession = "mowen"
+xinfa_nom = "根骨"
+xinfa_name = "莫问"
+atk_up = 1.96
+pofang_up = 2.0
+huixin_up = 0.0
+[config.buff]
+[config.coefficient]
+pvp_global_jianshang = 0.9
+[loadout]
+school = "mowen"
+revision = "synthetic-v1"
+value_set = "live-130"
+[loadout.base]
+zhushuxing = 10000
+gongji = 40000
+huixin = 20000
+huixiao = 1000
+pofang = 30000
+qixue = 100000
+
+[[loadout.choices]]
+slot = "tou"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "yi"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "yao"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "shou"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "ku"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "xie"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "wuqi"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "anqi"
+source = "weiwang"
+tier = "base"
+variant = 0
+
+[[loadout.choices]]
+slot = "xianglian"
+source = "weiwang"
+tier = "base"
+variant = 1
+
+[[loadout.choices]]
+slot = "yaozhui"
+source = "weiwang"
+tier = "base"
+variant = 1
+
+[[loadout.choices]]
+slot = "jie1"
+source = "weiwang"
+tier = "base"
+variant = 1
+
+[[loadout.choices]]
+slot = "jie2"
+source = "weiwang"
+tier = "base"
+variant = 1

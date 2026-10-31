@@ -7,15 +7,21 @@
 pub mod buff;
 /// 系数设置
 pub mod coefficient;
+/// 战斗时序数据层（形态 / GCD 通道 / 施放副作用 / 定时 buff / 秘籍 / 奇穴；#92）
+pub mod combat;
 /// 连招序列与预设
 pub mod combo;
 /// 敌对（木桩/目标）属性配置
 pub mod hostilepile;
 /// 根骨/力道/身法/元气 属性映射表（核心属性转换，当前预留占位）
 pub mod jcsx_set;
+/// 秘籍 / 奇穴（技能修正项；#92 时序引擎）
+pub mod modifier;
 /// 玩家属性配置
 pub mod player;
 /// 技能数据结构（包含技能各伤害系数）
 pub mod skilltype;
+/// 技能时间轴量化（帧率 / 加速换算；#92 时序引擎）
+pub mod timing;
 /// 心法配置
 pub mod xinfa;
