@@ -109,7 +109,9 @@ pub fn optimize_with(
     if req.max_combinations == 0 || req.max_combinations > 1_000_000 {
         return Err("max_combinations 必须为1..=1000000".into());
     }
-    let composed = catalog.compose_validated(&req.loadout)?;
+    // 一次搜索固定同一职业规则，避免中途改文件使候选口径漂移。
+    let rules = crate::attributes::load_rules(&req.loadout)?;
+    let composed = catalog.compose_validated(&req.loadout, rules.as_ref())?;
     let baseline_score = evaluate(&composed)?;
     if !baseline_score.is_finite() {
         return Err("目标值必须有限".into());
@@ -194,7 +196,7 @@ pub fn optimize_with(
             .zip(indices)
             .map(|(v, i)| v[i].clone())
             .collect();
-        let composed = catalog.compose_validated(&loadout)?;
+        let composed = catalog.compose_validated(&loadout, rules.as_ref())?;
         result.progress.visited += 1;
         let armor2 = composed
             .active_bonuses

@@ -96,6 +96,11 @@ pub mod skill_editor {
         store::load_config(profession)
     }
 
+    /// 从本心法 TOML 严格读取显式属性规则，不使用历史规则或默认系数兜底。
+    pub fn load_attribute_rules(profession: &str) -> Result<jpcg_api::AttributeRules, String> {
+        store::load_attribute_rules(profession)
+    }
+
     pub fn save_skills(
         profession: &str,
         xinfa: XinfaConfig,
@@ -106,6 +111,7 @@ pub mod skill_editor {
             xinfa,
             skill: skills,
             version,
+            attributes: None, // 旧 Rust 编辑器入口由 store 保留现有规则。
         };
         store::save_skill_toml(profession, config)
     }

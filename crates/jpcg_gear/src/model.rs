@@ -229,7 +229,7 @@ pub struct Loadout {
     /// 裸装基础点数，不能传入已经含装备的总面板。
     #[serde(default)]
     pub base: Stats,
-    /// 明确选择历史换算规则；缺失保留旧输入语义，不自动升级旧配装。
+    /// 选择 profession-toml 从职业TOML读取；缺失保留旧语义，不自动迁移。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attribute_rules: Option<String>,
     pub choices: Vec<Choice>,

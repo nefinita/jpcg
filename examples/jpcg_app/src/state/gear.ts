@@ -5,18 +5,8 @@ export const slotNames = { tou: "头部", yi: "上衣", yao: "腰带", shou: "�
 export const sourceNames = { mingjian: "名剑币", weiwang: "威望", baowu: "宝物堆" };
 export const greenNames = { pofang: "破防", huixin: "会心", jiasu: "加速", yujin: "御劲" };
 export const statNames = { zhushuxing: "主属性", gongji: "攻击", qixue: "气血", huixin: "会心", huixiao: "会效", pofang: "破防", jiasu: "加速", yujin: "御劲", huajin: "化劲", wuqi_shanghai: "武器伤害", tizhi: "体质", liliang: "力道", shenfa: "身法", gengu: "根骨", yuanqi: "元气", qixue_additional: "额外气血上限" };
-export const MOWEN_ATTRIBUTE_RULES = "jx3-130-mowen-20260814";
-const attributeRulesBySchool: Record<string, { id: string; name: string }> = {
-  mowen: { id: MOWEN_ATTRIBUTE_RULES, name: "莫问" },
-  "10026": { id: "jx3-130-aoxue-20260814", name: "傲血战意" },
-  "10390": { id: "jx3-130-fenshan-20260814", name: "分山劲" },
-  "10021": { id: "jx3-130-huajian-20260814", name: "花间游" },
-};
-/** 仅列出后端支持的固定历史规则；不生成装备模板或推测其他心法系数。 */
-export function attributeRuleFor(loadout: Pick<GearLoadout, "school" | "value_set">) {
-  return loadout.value_set === "live-130" ? attributeRulesBySchool[loadout.school] : undefined;
-}
-export const supportsAttributeRules = (loadout: Pick<GearLoadout, "school" | "value_set">) => !!attributeRuleFor(loadout);
+/** 由后端读取当前职业 TOML；前端不内置心法系数或推断规则是否已填写。 */
+export const PROFESSION_ATTRIBUTE_RULES = "profession-toml";
 const optionalStats = new Set(["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue_additional"]);
 const points = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 0xffffffff;
 function validStats(value: unknown): value is GearStats {
@@ -28,7 +18,9 @@ function validPanel(value: unknown): value is GearAttributePanel {
   if (!value || typeof value !== "object") return false;
   const p = value as Record<string, unknown>;
   return typeof p.rule_id === "string" && typeof p.source === "string" && typeof p.verified_in_game === "boolean"
-    && (p.damage_kind === undefined || ["physical", "neutral", "lunar"].includes(p.damage_kind as string))
+    && (p.damage_kind === undefined || ["physical", "solar", "lunar", "neutral", "poison"].includes(p.damage_kind as string))
+    && (p.level === undefined || (points(p.level) && p.level > 0))
+    && (p.value_set === undefined || typeof p.value_set === "string")
     && ["qixue_base", "qixue_additional"].every((key) => p[key] === undefined || points(p[key]))
     && ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "gongji_base", "gongji_extra", "gongji", "huixin", "pofang", "qixue"].every((key) => points(p[key]));
 }

@@ -106,4 +106,4 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 
 ## #98 原始属性换算
 
-`Loadout.attribute_rules="jx3-130-mowen-20260814"` 显式开启历史130级莫问阴性规则；另支持同日的 `aoxue/fenshan/huajian` 规则，分别对应心法10026/10390/10021。`Stats` 新增体质、四种具名基础属性及额外气血上限；输入必须为转换前原始点数。派生气血、会心、基础/额外攻击通过 `Composed.panel` 返回，原始合计仍保留。旧存档和默认配装维持旧语义。此规则尚未经真实游戏面板验证，不能称为当前游戏完全复刻；synthetic-v1仍为样例。输入契约、公式、来源、取整、模块兼容及未覆盖范围见 [属性引擎说明](../../docs/attribute-engine.md)。
+`Loadout.attribute_rules="profession-toml"` 显式从当前职业的 `data/shuxing/{职业ID}.toml` 读取 `[attributes]`。当前版本按50级对齐，但不自动填入未验证系数；职业版本、规则和所选值集等级必须一致。所有转换比例由文件提供，无四心法或130级常数白名单。`Stats` 新增五维及额外气血，输入必须为转换前原始点数；`Composed.panel` 返回派生面板与规则版本，旧手填继续保留原语义。历史130级规则ID需重新选择，不能使用缓存结果混算。录入示例、阶段、兼容与验证边界见 [属性引擎说明](../../docs/attribute-engine.md)。

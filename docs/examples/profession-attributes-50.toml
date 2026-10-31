@@ -1,0 +1,57 @@
+# 仅用于学习录入结构：所有系数均人为构造，不是50级游戏数据！
+# 按职业提供可验证系数后，将 [attributes] 和 [[attributes.conversions]] 写入
+# 对应 data/shuxing/{职业ID}.toml。该文件自身 [version].level 必须真实匹配。
+# 本示例不部署到 data/，不能作为真实职业配置使用。
+[version]
+level = 50
+season = 1
+modified = 20261031
+
+[xinfa]
+xinfa_name = "手工录入结构示例（非游戏职业）"
+xinfa_nom = "根骨"
+
+[attributes]
+id = "synthetic-50-example-v1"
+level = 50
+value_set = "cszj-exp-260908"
+source = "人为算术示例，非游戏数据；待替换为该职业已验证来源"
+main_stat = "gengu"
+damage_kind = "lunar"
+qixue_multiplier = { numerator = 3, denominator = 2 }
+
+[[attributes.conversions]]
+from = "tizhi"
+to = "qixue_base"
+numerator = 7
+denominator = 1
+
+[[attributes.conversions]]
+from = "gengu"
+to = "gongji_extra"
+numerator = 5
+denominator = 2
+
+[[attributes.conversions]]
+from = "gengu"
+to = "huixin"
+numerator = 9
+denominator = 10
+
+[[attributes.conversions]]
+from = "gengu"
+to = "huixin"
+numerator = 2
+denominator = 5
+
+[[attributes.conversions]]
+from = "yuanqi"
+to = "gongji_base"
+numerator = 1
+denominator = 5
+
+[[attributes.conversions]]
+from = "liliang"
+to = "pofang"
+numerator = 3
+denominator = 10

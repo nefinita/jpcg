@@ -32,6 +32,7 @@ pub fn save_skill_data(profession: String, data: SkillEditorDataDTO) -> Result<(
             xinfa,
             skill: skills,
             version,
+            attributes: data.attributes,
         },
     )
 }

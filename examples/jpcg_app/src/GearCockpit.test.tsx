@@ -8,7 +8,7 @@ import { defaultComboDraft, defaultCockpit } from "./state/cockpit";
 import { STORAGE_KEYS, DEFAULT_COEFFICIENT } from "./utils/constants";
 import type { GearComposition, GearLoadout } from "./types/gear";
 import type { SkillResultDTO } from "./types";
-import { MOWEN_ATTRIBUTE_RULES } from "./state/gear";
+import { PROFESSION_ATTRIBUTE_RULES, gearInputKey } from "./state/gear";
 vi.mock("./api/commands");
 vi.mock("./components/ForumPage", () => ({ default: () => <div>论坛</div> }));
 vi.mock("./components/ComboPage", () => ({ default: ({ draft, onDraftChange }: any) => <button onClick={() => onDraftChange((previous: any) => ({ ...previous, sequence: [...previous.sequence, previous.sequence[0]] }))}>追加连招</button> }));
@@ -119,13 +119,104 @@ it("规则选择后将宿主换算攻击与加速送到计算链，重启保留�
   }));
   await render(); await wait();
   const select = host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!;
-  await act(async () => { select.value = MOWEN_ATTRIBUTE_RULES; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await act(async () => { select.value = PROFESSION_ATTRIBUTE_RULES; select.dispatchEvent(new Event("change", { bubbles: true })); });
   await wait();
-  expect(vi.mocked(api.composeGear).mock.lastCall?.[0].attribute_rules).toBe(MOWEN_ATTRIBUTE_RULES);
+  expect(vi.mocked(api.composeGear).mock.lastCall?.[0].attribute_rules).toBe(PROFESSION_ATTRIBUTE_RULES);
   expect(vi.mocked(api.calculateDamage).mock.lastCall?.[0].player).toMatchObject({ zhuanhua_gongji: 2007, jiasu_dengji: 135 });
   expect(saved().form.player).toEqual(originalManual);
-  expect(saved().loadouts.mowen.attribute_rules).toBe(MOWEN_ATTRIBUTE_RULES);
+  expect(saved().loadouts.mowen.attribute_rules).toBe(PROFESSION_ATTRIBUTE_RULES);
   await act(async () => root.unmount()); root = createRoot(host); await render(); await wait();
-  expect(host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!.value).toBe(MOWEN_ATTRIBUTE_RULES);
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!.value).toBe(PROFESSION_ATTRIBUTE_RULES);
   expect(saved().form.player).toEqual(originalManual);
+});
+
+it("职业 TOML 缺少换算规则时显示宿主错误，不猜系数继续计算", async () => {
+  await render(); await wait();
+  const previousCalls = vi.mocked(api.calculateDamage).mock.calls.length;
+  const originalManual = saved().form.player;
+  vi.mocked(api.composeGear).mockRejectedValue(new Error("职业 TOML 缺少 [attributes]，请填写并验证50级规则"));
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!;
+  await act(async () => { select.value = PROFESSION_ATTRIBUTE_RULES; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await wait();
+  expect(host.textContent).toContain("职业 TOML 缺少 [attributes]");
+  expect(vi.mocked(api.calculateDamage).mock.calls).toHaveLength(previousCalls);
+  expect(saved().form.player).toEqual(originalManual);
+  expect(saved().loadouts.mowen.attribute_rules).toBe(PROFESSION_ATTRIBUTE_RULES);
+});
+
+it("历史规则即使有匹配缓存也不能继续驱动伤害或连招，保留输入等待重新选择", async () => {
+  const state = saved();
+  const loadout = { ...state.loadouts.mowen, attribute_rules: "jx3-130-mowen-20260814" };
+  state.loadouts.mowen = loadout;
+  state.calculation = { mode: "gear", form: state.form, manualForm: state.form, loadout,
+    composition: { ...fixture.cases[0], composed: { ...fixture.cases[0].composed, loadout } },
+    inputKey: gearInputKey(state.form, loadout), results: result(100) };
+  localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
+  const draft = defaultComboDraft();
+  draft.sequence = [{ skill: { skill_name: "缓存校验", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
+  localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 1, data: draft }));
+  await render(); await wait(); await wait();
+  expect(host.textContent).toContain("已保存规则已不受支持");
+  expect(api.composeGear).not.toHaveBeenCalled();
+  expect(api.calculateDamage).not.toHaveBeenCalled();
+  expect(api.calculateCombo).not.toHaveBeenCalled();
+  expect(saved().loadouts.mowen.attribute_rules).toBe("jx3-130-mowen-20260814");
+});
+
+function persistProfessionSnapshot() {
+  const state = saved();
+  const loadout = { ...state.loadouts.mowen, attribute_rules: PROFESSION_ATTRIBUTE_RULES };
+  const composition: GearComposition = { ...fixture.cases[0], composed: { ...fixture.cases[0].composed, loadout },
+    player: { ...fixture.cases[0].player, zhuanhua_gongji: 111 } };
+  state.loadouts.mowen = loadout;
+  state.calculation = { mode: "gear", form: { ...state.form, player: composition.player }, manualForm: state.form, loadout,
+    composition, inputKey: gearInputKey(state.form, loadout), results: result(100) };
+  localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
+  const draft = defaultComboDraft();
+  draft.sequence = [{ skill: { skill_name: "职业规则缓存校验", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
+  localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 1, data: draft }));
+  return composition;
+}
+
+it("重启的职业规则缓存需重新合成；手动重读立即停用旧结果，失败后不再驱动连招", async () => {
+  const old = persistProfessionSnapshot();
+  let resolveComposition!: (value: GearComposition) => void;
+  vi.mocked(api.composeGear).mockReturnValueOnce(new Promise((resolve) => { resolveComposition = resolve; }));
+  vi.mocked(api.calculateCombo).mockResolvedValue({ steps: [], total_expected_damage_wan: 10, final_kill_prob: .5, kill_prob_curve: [] });
+  await render(); await wait();
+  expect(api.composeGear).toHaveBeenCalledTimes(1);
+  expect(api.calculateDamage).not.toHaveBeenCalled();
+  expect(api.calculateCombo).not.toHaveBeenCalled();
+  expect(section("连招结果").textContent).toContain("先完成当前属性计算");
+  await act(async () => resolveComposition({ ...old, player: { ...old.player, zhuanhua_gongji: 777 } }));
+  await wait();
+  expect(vi.mocked(api.calculateDamage).mock.lastCall?.[0].player.zhuanhua_gongji).toBe(777);
+  expect(api.calculateCombo).toHaveBeenCalledTimes(1);
+  const damageCalls = vi.mocked(api.calculateDamage).mock.calls.length;
+  let resolveCatalog!: (value: typeof fixture.catalog) => void;
+  vi.mocked(api.gearCatalog).mockReturnValueOnce(new Promise((resolve) => { resolveCatalog = resolve; }));
+  vi.mocked(api.composeGear).mockRejectedValue(new Error("职业规则校验失败：等级不匹配"));
+  await click("重新读取职业规则");
+  // 目录读取尚未完成时，旧 DTO 就已不能送给连招。
+  expect(section("连招结果").textContent).toContain("先完成当前属性计算");
+  expect(api.composeGear).toHaveBeenCalledTimes(1);
+  await act(async () => resolveCatalog(fixture.catalog));
+  await wait(); await wait();
+  expect(api.composeGear).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toContain("职业规则校验失败：等级不匹配");
+  expect(vi.mocked(api.calculateDamage).mock.calls).toHaveLength(damageCalls);
+  expect(api.calculateCombo).toHaveBeenCalledTimes(1);
+  expect(section("连招结果").textContent).toContain("先完成当前属性计算");
+});
+
+it("已保存的职业规则结果不能掩盖启动时缺失规则；失败不自动循环重试", async () => {
+  persistProfessionSnapshot();
+  vi.mocked(api.composeGear).mockRejectedValue(new Error("职业 TOML 缺少 [attributes]"));
+  await render(); await wait(); await wait();
+  expect(api.composeGear).toHaveBeenCalledTimes(1);
+  expect(api.calculateDamage).not.toHaveBeenCalled();
+  expect(api.calculateCombo).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("职业 TOML 缺少 [attributes]");
+  expect(saved().calculation.results[0].q).toBe(100);
+  expect(section("连招结果").textContent).toContain("先完成当前属性计算");
 });

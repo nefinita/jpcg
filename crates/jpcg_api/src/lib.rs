@@ -5,6 +5,12 @@
 // 双端通过本 crate 保证 JSON 契约单一来源，防止漂移。
 // ============================================================================
 
+pub mod attributes;
+pub use attributes::{
+    AttributeConversion, AttributeDamageKind, AttributeRatio, AttributeRules, AttributeTarget,
+    BasicAttribute,
+};
+
 // ============ 玩家/目标/心法/增益/系数 配置 DTO ============
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -418,6 +424,9 @@ pub struct VersionInfoDTO {
 pub struct SkillEditorDataDTO {
     pub xinfa: XinfaConfigDTO,
     pub version: Option<VersionInfoDTO>,
+    /// None/旧请求不删除已有规则；规则由各心法 TOML 维护。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<AttributeRules>,
     pub skills: Vec<SkillEditorItemDTO>,
 }
 

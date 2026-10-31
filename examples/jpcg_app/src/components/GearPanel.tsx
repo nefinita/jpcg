@@ -1,6 +1,6 @@
 import type { GearCatalog, GearChoice, GearComposition, GearLoadout } from "../types/gear";
 import { GEAR_SLOTS, emptyGearStats } from "../types/gear";
-import { choiceKey, slotNames, sourceNames, greenNames, statNames, attributeRuleFor } from "../state/gear";
+import { choiceKey, slotNames, sourceNames, greenNames, statNames, PROFESSION_ATTRIBUTE_RULES } from "../state/gear";
 import styles from "./GearPanel.module.css";
 
 const convertedFields = ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue_additional"] as const;
@@ -11,8 +11,8 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
   onImport: (text: string) => Promise<void>; pending: boolean;
 }) {
   const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
-  const supportedRule = attributeRuleFor(loadout);
-  const panel = composition?.composed.panel;
+  const panel = loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
+    && composition?.composed.loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES ? composition.composed.panel : undefined;
   const legacyHasBasics = !loadout.attribute_rules && convertedFields.some((key) => (loadout.base[key] ?? 0) > 0);
   const change = (choice: GearChoice) => onChange({ ...loadout, choices: loadout.choices.map((c) => c.slot === choice.slot ? choice : c) });
   return <section className={styles.panel} aria-label="配装">
@@ -30,12 +30,12 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
     <div className={styles.base}>
       <label>属性换算规则 <select aria-label="属性换算规则" value={loadout.attribute_rules ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, attribute_rules: event.target.value || null })}>
         <option value="">旧版合成（不换算体质与基础属性会心）</option>
-        {supportedRule && <option value={supportedRule.id}>130 级{supportedRule.name} · 2026-08-14 参考规则</option>}
-        {loadout.attribute_rules && loadout.attribute_rules !== supportedRule?.id && <option value={loadout.attribute_rules}>已保存规则：{loadout.attribute_rules}（当前范围不支持）</option>}
+        <option value={PROFESSION_ATTRIBUTE_RULES}>从职业 TOML 读取换算规则（当前50级，需填写并验证）</option>
+        {loadout.attribute_rules && loadout.attribute_rules !== PROFESSION_ATTRIBUTE_RULES && <option value={loadout.attribute_rules}>已保存规则：{loadout.attribute_rules}（当前范围不支持）</option>}
       </select></label>
-      {loadout.attribute_rules ? loadout.attribute_rules === supportedRule?.id
-        ? <p>参考规则已核对来源，尚未经真实游戏面板验证；仅适用所选版本及心法。</p>
-        : <p>已保存规则不适用于当前心法或数值集，请更换规则后再计算。</p>
+      {loadout.attribute_rules ? loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
+        ? <p>先在对应职业 TOML 填写属性换算规则并验证；等级与所选数值集必须匹配。缺少规则时不能进行属性换算。</p>
+        : <p>已保存规则已不受支持，请重新选择职业 TOML 规则并核对数据后再计算；不会自动沿用历史系数。</p>
         : <p>体质及五维属性换算需选择对应规则；旧配装保持原有计算方式。</p>}
       {legacyHasBasics && <p role="alert">旧版合成不支持这些换算输入。请重新选择换算规则，或在下方将已填写的体质、力道、身法、根骨、元气及额外气血上限清零后再计算。</p>}
     </div>
@@ -74,6 +74,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
       <p>{Object.entries(composition.composed.stats).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
       {panel && <div aria-label="换算后玩家属性">
         <strong>换算后玩家属性（不含战斗增益）</strong>
+        {(panel.level !== undefined || panel.value_set !== undefined) && <p>规则版本：{panel.level !== undefined ? `${panel.level} 级` : "等级未提供"}{panel.value_set !== undefined ? ` · ${panel.value_set}` : ""}</p>}
         <p>气血 {panel.qixue} · 攻击 {panel.gongji}（基础 {panel.gongji_base} + 转化 {panel.gongji_extra}） · 会心等级 {panel.huixin} · 破防等级 {panel.pofang}</p>
         {panel.qixue_base !== undefined && <p>气血分项：基础换算后 {panel.qixue_base} + 额外气血上限 {panel.qixue_additional ?? 0}</p>}
         <p>体质 {panel.tizhi} · 力道 {panel.liliang} · 身法 {panel.shenfa} · 根骨 {panel.gengu} · 元气 {panel.yuanqi}</p>

@@ -19,8 +19,8 @@ import { toCalculateRequest } from "./utils/normalize";
 import { usePersistentState, writePreference, readPreference } from "./hooks/usePersistentState";
 import { cockpitSchema, defaultCockpit, comboDraftSchema, defaultComboDraft } from "./state/cockpit";
 import SnapshotDiff from "./components/SnapshotDiff";
-import type { GearCatalog, GearLoadout } from "./types/gear";
-import { initialLoadout, gearInputKey, gearPlayerForm } from "./state/gear";
+import type { GearCatalog, GearLoadout, GearComposition } from "./types/gear";
+import { initialLoadout, gearInputKey, gearPlayerForm, PROFESSION_ATTRIBUTE_RULES } from "./state/gear";
 import CockpitCombo from "./components/CockpitCombo";
 import GearPanel from "./components/GearPanel";
 import styles from "./App.module.css";
@@ -45,6 +45,8 @@ export default function App() {
   const [catalog, setCatalog] = useState<GearCatalog | null>(null);
   const [gearError, setGearError] = useState("");
   const [catalogAttempt, setCatalogAttempt] = useState(0);
+  // 仅存在于当前会话；配装缓存不能证明磁盘上的职业 TOML 仍有效。
+  const [validatedRules, setValidatedRules] = useState<{ inputKey: string; catalog: GearCatalog; composition: GearComposition } | null>(null);
   const formData = cockpit.form;
   const [comboDraft, setComboDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(formData.xinfa)}`, defaultComboDraft, comboDraftSchema);
   const [comboBusy, setComboBusy] = useState(false);
@@ -81,15 +83,20 @@ export default function App() {
   }, [catalog, loadout, formData.xinfa, setCockpit]);
 
   const desiredGearKey = loadout ? gearInputKey(formData, loadout) : "";
+  const acceptedAttributeMode = !loadout?.attribute_rules || loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES;
+  const professionRules = loadout?.attribute_rules === PROFESSION_ATTRIBUTE_RULES;
+  const rulesCurrent = !professionRules || (validatedRules?.inputKey === desiredGearKey
+    && validatedRules.catalog === catalog && validatedRules.composition === cockpit.calculation?.composition);
   const compatible = contextReady && !!catalog && !!loadout && loadout.school === formData.xinfa && loadout.revision === catalog.version.revision
     && loadout.value_set === catalog.version.value_set && formData.value_set === loadout.value_set;
   const stale = !!cockpit.calculation && (gearMode
-    ? cockpit.calculation.mode !== "gear" || cockpit.calculation.inputKey !== desiredGearKey
+    ? !acceptedAttributeMode || !rulesCurrent || cockpit.calculation.mode !== "gear" || cockpit.calculation.inputKey !== desiredGearKey
     : cockpit.calculation.mode === "gear" || JSON.stringify(toCalculateRequest(formData)) !== JSON.stringify(toCalculateRequest(cockpit.calculation.form)));
 
   useEffect(() => {
-    if (!gearMode || curPage !== "calc" || !compatible || !loadout) { setCalculating(false); return; }
-    if (cockpit.calculation?.mode === "gear" && cockpit.calculation.inputKey === desiredGearKey) return;
+    if (!gearMode || curPage !== "calc" || !compatible || !acceptedAttributeMode || !loadout) { setCalculating(false); return; }
+    if (cockpit.calculation?.mode === "gear" && cockpit.calculation.inputKey === desiredGearKey && rulesCurrent) return;
+    if (professionRules) setValidatedRules(null);
     const revision = ++requestRevision.current;
     const timer = window.setTimeout(async () => {
       setCalculating(true); setGearError(""); setStatus("合成配装并计算中…");
@@ -103,6 +110,7 @@ export default function App() {
         if (revision !== requestRevision.current) return;
         setCockpit((previous) => ({ ...previous, calculation: { mode: "gear", form: effectiveForm,
           manualForm: formData, loadout, composition, inputKey: desiredGearKey, results: data } }));
+        if (professionRules && catalog) setValidatedRules({ inputKey: desiredGearKey, catalog, composition });
         setStatus(`配装已更新 — ${data.length} 个技能`);
       } catch (err) {
         if (revision === requestRevision.current) { setGearError(String(err)); setStatus("配装计算失败"); }
@@ -110,7 +118,16 @@ export default function App() {
     }, 125);
     return () => { window.clearTimeout(timer); ++requestRevision.current; };
     // desiredGearKey 包含完整上下文与配装；结果入库不重启同一输入的计算。
-  }, [desiredGearKey, compatible, gearMode, curPage, catalog, setCockpit]);
+  }, [desiredGearKey, compatible, acceptedAttributeMode, gearMode, curPage, catalog, restoreRevision, setCockpit]);
+
+  const reloadGearRules = () => {
+    ++requestRevision.current;
+    setValidatedRules(null);
+    setCatalog(null);
+    setGearError("");
+    setStatus("正在重新读取职业规则…");
+    setCatalogAttempt((value) => value + 1);
+  };
 
   const handleCalculate = useCallback(async (form: FormData) => {
     const revision = ++requestRevision.current;
@@ -180,7 +197,7 @@ export default function App() {
     catch (err) { addToast(String(err), "error"); }
   };
   const composition = cockpit.calculation?.mode === "gear" && cockpit.calculation.loadout?.school === formData.xinfa ? cockpit.calculation.composition : undefined;
-  const activeForm = gearMode ? (compatible && !stale && cockpit.calculation?.mode === "gear" ? cockpit.calculation.form : null) : formData;
+  const activeForm = gearMode ? (compatible && rulesCurrent && !stale && cockpit.calculation?.mode === "gear" ? cockpit.calculation.form : null) : formData;
   const comboKey = JSON.stringify({ request: activeForm ? toCalculateRequest(activeForm) : null, sequence: comboDraft.sequence });
   const resultPanel = <div className={styles.resultPanel}>
     <SnapshotDiff snapshot={cockpit.baseline} calculation={cockpit.calculation} stale={stale} calculating={calculating || comboBusy}
@@ -221,7 +238,11 @@ export default function App() {
         </div>
         {gearMode ? <>
           <details className={styles.contextPanel}><summary>{formData.xinfa_config.xinfa_name} · {formData.value_set ?? "默认数值集"} · 目标血量 {formData.hostile.target_hp || 0} · 编辑计算环境</summary>{configPanel}</details>
-          {gearError && <div role="alert" className={styles.gearAlert}>{gearError}<button onClick={() => setCatalogAttempt((n) => n + 1)}>重新读取模板</button></div>}
+          {professionRules && <div className={styles.gearAlert}>
+            <button onClick={reloadGearRules}>重新读取职业规则</button>
+            {!rulesCurrent && <span> 需重新合成当前职业规则；已有结果暂不用于后续计算。</span>}
+          </div>}
+          {gearError && <div role="alert" className={styles.gearAlert}>{gearError}<button onClick={reloadGearRules}>重新读取模板</button></div>}
           {!catalog && !gearError && <p role="status">正在读取配装模板…</p>}
           {catalog && !loadout && <p>当前心法没有完整的 12 部位模板，请选择其他心法或切换手动属性。</p>}
           {catalog && loadout && !compatible && <div className={styles.gearAlert}>配装需要匹配模板版本与数值集。<button onClick={() => void adoptValueSet()}>使用模板数值集 {loadout.value_set}</button></div>}

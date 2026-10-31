@@ -5,17 +5,18 @@ use crate::model::MainStat;
 use crate::model::{DamageType, School, Stats};
 use serde::{Deserialize, Serialize};
 
-pub const MOWEN_130: &str = "jx3-130-mowen-20260814";
-pub const AOXUE_130: &str = "jx3-130-aoxue-20260814";
-pub const FENSHAN_130: &str = "jx3-130-fenshan-20260814";
-pub const HUAJIAN_130: &str = "jx3-130-huajian-20260814";
-pub const SOURCE: &str =
-    "https://github.com/IcyTide/Generator/tree/21f472e211581ac1c1a7fa5ea2ff9199df6151cb";
+pub const PROFESSION_TOML: &str = "profession-toml";
+#[cfg(feature = "engine")]
+use jpcg_api::{AttributeDamageKind, AttributeRules, AttributeTarget, BasicAttribute};
 
 /// 无战斗增益的派生面板；攻击区分可吃基础攻击增益的部分和心法额外转换。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttributePanel {
     pub rule_id: String,
+    #[serde(default)]
+    pub level: u32,
+    #[serde(default)]
+    pub value_set: String,
     pub source: String,
     pub verified_in_game: bool,
     #[serde(default)]
@@ -47,96 +48,137 @@ fn sum(values: &[u32]) -> Result<u32, String> {
 /// 每个转换阶段独立向下取整。u64 中间量防止先乘后除溢出，最终越界报错。
 #[cfg(feature = "engine")]
 fn scale(value: u32, numerator: u32, denominator: u32) -> Result<u32, String> {
+    if denominator == 0 {
+        return Err("换算分母不能为0".into());
+    }
     u32::try_from(u64::from(value) * u64::from(numerator) / u64::from(denominator))
         .map_err(|_| "派生属性溢出 u32".into())
 }
 
-/// 固定130级快照的四条已核对规则。输入为转换前平铺值；主属性增量别名
-/// 加到 profile 指定的具名属性，再执行通用转换和心法额外转换，不自动补裸装值。
+/// 每次请求读取选中职业同一TOML的规则；无隐式心法系数或等级回退。
+#[cfg(feature = "engine")]
+pub(crate) fn load_rules(
+    loadout: &crate::model::Loadout,
+) -> Result<Option<AttributeRules>, String> {
+    match loadout.attribute_rules.as_deref() {
+        None => Ok(None),
+        Some(PROFESSION_TOML) => {
+            let rules = jpcg_core::skill_editor::load_attribute_rules(&loadout.school)?;
+            let value = jpcg_core::host::values::resolve_value_set(Some(&loadout.value_set));
+            if rules.value_set != loadout.value_set
+                || value.id != loadout.value_set
+                || !value.available
+                || value.source != "data"
+                || value.level != rules.level
+            {
+                return Err(
+                    "职业换算表的value_set/level必须与可用的所选数值集一致，禁止回退或混用50/130级"
+                        .into(),
+                );
+            }
+            Ok(Some(rules))
+        }
+        Some(id) => Err(format!(
+            "不再支持内置历史规则 {id}；请将已验证规则填写到职业TOML并选择 profession-toml"
+        )),
+    }
+}
+
+/// 通用分阶段整数换算。所有转换系数由职业TOML提供，等级不决定隐式常数。
 #[cfg(feature = "engine")]
 pub fn convert(
     stats: &Stats,
     profile: &School,
     value_set: &str,
-    rule_id: &str,
+    rules: &AttributeRules,
 ) -> Result<AttributePanel, String> {
-    // 只独立记录必要数学常数；每条来源/排除范围见文档，未复制上游代码或数据表。
-    let (school, main, kind, atk_extra, crit_extra, pofang_extra) = match rule_id {
-        MOWEN_130 => ("mowen", MainStat::Gengu, "lunar", 2007, 410, 0),
-        AOXUE_130 => ("10026", MainStat::Liliang, "physical", 1843, 0, 287),
-        FENSHAN_130 => ("10390", MainStat::Shenfa, "physical", 1925, 0, 0),
-        HUAJIAN_130 => ("10021", MainStat::Yuanqi, "neutral", 2079, 0, 205),
-        _ => return Err(format!("未知属性规则: {rule_id}")),
+    let main = match rules.main_stat {
+        BasicAttribute::Liliang => MainStat::Liliang,
+        BasicAttribute::Shenfa => MainStat::Shenfa,
+        BasicAttribute::Gengu => MainStat::Gengu,
+        BasicAttribute::Yuanqi => MainStat::Yuanqi,
+        BasicAttribute::Tizhi => return Err("当前配装主属性不能为体质".into()),
     };
-    let damage_type = if kind == "physical" {
+    let kind = match rules.damage_kind {
+        AttributeDamageKind::Physical => "physical",
+        AttributeDamageKind::Solar => "solar",
+        AttributeDamageKind::Lunar => "lunar",
+        AttributeDamageKind::Neutral => "neutral",
+        AttributeDamageKind::Poison => "poison",
+    };
+    let damage = if kind == "physical" {
         DamageType::Waigong
     } else {
         DamageType::Neigong
     };
-    if value_set != "live-130"
-        || profile.id != school
+    if rules.id.trim().is_empty()
+        || rules.source.trim().is_empty()
+        || rules.level == 0
+        || rules.value_set != value_set
         || profile.zhushuxing != main
-        || profile.gongji_type != damage_type
-        || profile.pofang_type != damage_type
+        || profile.gongji_type != damage
+        || profile.pofang_type != damage
+        || rules.qixue_multiplier.denominator == 0
     {
-        return Err(format!(
-            "{rule_id} 仅支持 live-130 心法{school}的{kind}属性及对应主属性"
-        ));
+        return Err("职业换算表缺少来源/版本，或主属性/通道/数值集/分母不匹配".into());
     }
-    let mut liliang = stats.liliang;
-    let mut shenfa = stats.shenfa;
-    let mut gengu = stats.gengu;
-    let mut yuanqi = stats.yuanqi;
+    let mut basics = stats.clone();
     let major = match main {
-        MainStat::Liliang => &mut liliang,
-        MainStat::Shenfa => &mut shenfa,
-        MainStat::Gengu => &mut gengu,
-        MainStat::Yuanqi => &mut yuanqi,
+        MainStat::Liliang => &mut basics.liliang,
+        MainStat::Shenfa => &mut basics.shenfa,
+        MainStat::Gengu => &mut basics.gengu,
+        MainStat::Yuanqi => &mut basics.yuanqi,
     };
     *major = sum(&[*major, stats.zhushuxing])?;
-    let major = *major;
-    let (generic_attack, generic_crit, generic_pofang) = if kind == "physical" {
-        (
-            scale(liliang, 163, 1000)?,
-            scale(shenfa, 9, 10)?,
-            scale(liliang, 3, 10)?,
-        )
-    } else {
-        (
-            scale(yuanqi, 181, 1000)?,
-            scale(gengu, 9, 10)?,
-            scale(yuanqi, 3, 10)?,
-        )
-    };
-    let gongji_base = sum(&[stats.gongji, generic_attack])?;
-    let gongji_extra = scale(major, atk_extra, 1024)?;
-    let huixin = sum(&[stats.huixin, generic_crit, scale(major, crit_extra, 1024)?])?;
-    let pofang = sum(&[
-        stats.pofang,
-        generic_pofang,
-        scale(major, pofang_extra, 1024)?,
-    ])?;
-    let life_base = sum(&[stats.qixue, scale(stats.tizhi, 10, 1)?])?;
-    let qixue_base = scale(life_base, 1331, 1024)?;
-    let qixue = sum(&[qixue_base, stats.qixue_additional])?;
+    let mut gongji_base = stats.gongji;
+    let mut gongji_extra = 0;
+    let mut huixin = stats.huixin;
+    let mut pofang = stats.pofang;
+    let mut life_base = stats.qixue;
+    let mut qixue_additional = stats.qixue_additional;
+    for term in &rules.conversions {
+        let value = match term.from {
+            BasicAttribute::Tizhi => basics.tizhi,
+            BasicAttribute::Liliang => basics.liliang,
+            BasicAttribute::Shenfa => basics.shenfa,
+            BasicAttribute::Gengu => basics.gengu,
+            BasicAttribute::Yuanqi => basics.yuanqi,
+        };
+        let target = match term.to {
+            AttributeTarget::GongjiBase => &mut gongji_base,
+            AttributeTarget::GongjiExtra => &mut gongji_extra,
+            AttributeTarget::Huixin => &mut huixin,
+            AttributeTarget::Pofang => &mut pofang,
+            AttributeTarget::QixueBase => &mut life_base,
+            AttributeTarget::QixueAdditional => &mut qixue_additional,
+        };
+        *target = sum(&[*target, scale(value, term.numerator, term.denominator)?])?;
+    }
+    let qixue_base = scale(
+        life_base,
+        rules.qixue_multiplier.numerator,
+        rules.qixue_multiplier.denominator,
+    )?;
     Ok(AttributePanel {
-        rule_id: rule_id.into(),
-        source: SOURCE.into(),
+        rule_id: rules.id.clone(),
+        level: rules.level,
+        value_set: value_set.into(),
+        source: rules.source.clone(),
         verified_in_game: false,
         damage_kind: kind.into(),
-        tizhi: stats.tizhi,
-        liliang,
-        shenfa,
-        gengu,
-        yuanqi,
+        tizhi: basics.tizhi,
+        liliang: basics.liliang,
+        shenfa: basics.shenfa,
+        gengu: basics.gengu,
+        yuanqi: basics.yuanqi,
         gongji_base,
         gongji_extra,
         gongji: sum(&[gongji_base, gongji_extra])?,
         huixin,
         pofang,
-        qixue,
+        qixue: sum(&[qixue_base, qixue_additional])?,
         qixue_base,
-        qixue_additional: stats.qixue_additional,
+        qixue_additional,
     })
 }
 
