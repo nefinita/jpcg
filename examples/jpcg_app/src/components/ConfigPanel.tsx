@@ -6,11 +6,12 @@ import {
 } from "../utils/constants";
 import * as api from "../api/commands";
 import { readPreference, writePreference } from "../hooks/usePersistentState";
-import { defaultManualForm } from "../state/cockpit";
+import { defaultManualForm, type ManualHydration } from "../state/cockpit";
 import styles from "./ConfigPanel.module.css";
 
 export interface FormChangeOptions {
   ready?: boolean;
+  hydration?: ManualHydration;
   source?: "user" | "metadata";
 }
 
@@ -23,6 +24,7 @@ interface Props {
   form?: FormData;
   onFormChange?: (update: SetStateAction<FormData>, options?: FormChangeOptions) => void;
   preserveInitialForm?: boolean;
+  initialHydration?: ManualHydration;
   manualMode?: boolean;
   onReady?: (ready: boolean) => void;
   playerPreview?: Record<string, number | string>;
@@ -46,15 +48,20 @@ const defaultForm = (): FormData => ({
 });
 
 export default function ConfigPanel({ onCalculate, calculating, addToast, setStatus, onXinfaChange,
-  form: controlledForm, onFormChange, preserveInitialForm = false, manualMode = true, playerPreview, onReady }: Props) {
+  form: controlledForm, onFormChange, preserveInitialForm = false, initialHydration, manualMode = true, playerPreview, onReady }: Props) {
   const [localForm, setLocalForm] = useState<FormData>(defaultManualForm);
   const form = controlledForm ?? localForm;
-  const preserveInitialRef = useRef(preserveInitialForm);
-  // 元数据（心法属性/存档）成功加载后才允许把表单标记为「已初始化」；
-  // 初始挂载的同步占位写入保持 ready=false，失败时下次启动会重新加载。
-  const hydratedRef = useRef(preserveInitialForm);
+  const initialHydrationRef = useRef(initialHydration ?? { xinfa: preserveInitialForm, coefficient: preserveInitialForm });
+  const [hydration, setHydration] = useState(initialHydrationRef.current);
+  const hydrationRef = useRef(hydration);
+  const updateHydration = useCallback((update: Partial<ManualHydration>) => {
+    hydrationRef.current = { ...hydrationRef.current, ...update };
+    setHydration(hydrationRef.current);
+  }, []);
+  // 心法和系数独立恢复，避免重试其中一项时丢失另一项的自定义值。
   const setForm = useCallback((update: SetStateAction<FormData>, source: "user" | "metadata" = "user") => {
-    if (onFormChange) onFormChange(update, { ready: hydratedRef.current, source });
+    if (onFormChange) onFormChange(update, { ready: hydrationRef.current.xinfa && hydrationRef.current.coefficient,
+      hydration: { ...hydrationRef.current }, source });
     else setLocalForm(update);
   }, [onFormChange]);
 
@@ -73,7 +80,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   // 新选择/清空的系数基线尚未就绪时禁止编辑；同值集热更新仍允许自定义。
   const [coefficientBaselinePending, setCoefficientBaselinePending] = useState(true);
   // 用户是否手动改过系数（改过则数据热更新后不自动覆盖）
-  const coefficientCustomRef = useRef(preserveInitialForm);
+  const coefficientCustomRef = useRef(initialHydrationRef.current.coefficient);
   // 应用内确认（Tauri v2 禁用 window.confirm，需自绘）
   const [confirmKind, setConfirmKind] = useState<null | "app" | "modules">(null);
 
@@ -103,10 +110,11 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       setAppliedValueSet(vs);
       setValueSetReady(true);
       setCoefficientBaselinePending(false);
+      updateHydration({ coefficient: true });
       const coefficient = vs.coefficient;
       if (!coefficientCustomRef.current && coefficient) {
         setForm((prev) => ({ ...prev, coefficient: { ...coefficient } }), "metadata");
-      }
+      } else setForm((prev) => prev, "metadata");
       return vs;
     } catch (err) {
       if (revision === valueSetRevisionRef.current && resolveId === valueSetResolveRef.current) {
@@ -120,6 +128,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
     const revision = ++valueSetRevisionRef.current;
     persistValueSet(id);
     coefficientCustomRef.current = false;
+    updateHydration({ coefficient: false });
     setCoefficientBaselinePending(true);
     setAppliedValueSet(null);
     setForm((prev) => ({ ...prev, value_set: id }), source);
@@ -150,7 +159,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       setValueSets(sets);
       // 统一走 resolveValueSet：即使默认项快照损坏，也应用实际回退的值集与常数
       if (revision === valueSetRevisionRef.current) {
-        if (preserveInitialRef.current) {
+        if (initialHydrationRef.current.coefficient) {
           persistValueSet(selectedValueSetRef.current);
           void resolveCurrentValueSet(selectedValueSetRef.current, revision);
         } else void selectValueSet(pickValueSetId(sets), "metadata");
@@ -163,6 +172,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const handleXinfaChange = useCallback((value: string, source: "user" | "metadata" = "user") => {
     const revision = ++xinfaRevisionRef.current;
+    updateHydration({ xinfa: false });
     const entry = professionOptions.find((x) => x.value === value);
     writePreference(STORAGE_KEYS.lastXinfa, value);
     setForm((prev): FormData => ({
@@ -175,7 +185,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       if (revision !== xinfaRevisionRef.current) return;
       // 元数据请求成功（含该门派没有配置文件返回 null）才算初始化完成；
       // 失败/挂起保持未完成，下次启动会重新拉取而不是永久保留占位属性。
-      hydratedRef.current = true;
+      updateHydration({ xinfa: true });
       if (!cfg) {
         setForm((prev) => prev, "metadata");
         return;
@@ -191,8 +201,10 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
             huixin_up: Number(cfg.huixin_up) || 0,
           },
         }), "metadata");
-    }).catch(() => {});
-  }, [professionOptions, defaultXinfa, onXinfaChange]);
+    }).catch((err) => {
+      if (revision === xinfaRevisionRef.current) addToast(`心法属性加载失败，请重新选择心法后重试：${String(err)}`, "error");
+    });
+  }, [professionOptions, defaultXinfa, onXinfaChange, addToast]);
 
   const handleValueSetChange = useCallback(async (value: string) => {
     const id = value || null;
@@ -297,6 +309,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       setAppliedValueSet(null);
       const xinfaVal = cfg.xinfa_config.profession || "mowen";
       writePreference(STORAGE_KEYS.lastXinfa, xinfaVal);
+      updateHydration({ xinfa: true, coefficient: true });
       setForm({
         xinfa: xinfaVal,
         player: {
@@ -323,7 +336,6 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
         coefficient: cfg.coefficient ? { ...cfg.coefficient } : { ...DEFAULT_COEFFICIENT },
         value_set: requestedId,
       });
-      hydratedRef.current = true;
       // 加载的系数以存档为准（不再自动 seed）；标记为“已自定义”以免数据热更新覆盖
       coefficientCustomRef.current = true;
       setCoefficientBaselinePending(false);
@@ -338,7 +350,7 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   const handleClear = useCallback(() => {
     ++xinfaRevisionRef.current;
-    hydratedRef.current = true;
+    updateHydration({ xinfa: true, coefficient: false });
     const requestedId = selectedValueSetRef.current;
     setForm({ ...defaultForm(), value_set: requestedId });
     // 重新解析当前选择，不读取可能与当前表单不同的持久化偏好。
@@ -514,11 +526,11 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
   }, [betaChannel, updateCheckResult, addToast]);
 
   useEffect(() => {
-    if (!preserveInitialRef.current) handleXinfaChange(form.xinfa, "metadata");
+    if (!initialHydrationRef.current.xinfa) handleXinfaChange(form.xinfa, "metadata");
     return () => { ++xinfaRevisionRef.current; };
   }, []);
 
-  useEffect(() => { onReady?.(valueSetReady && !coefficientBaselinePending && (manualMode || (!!appliedValueSet?.available && (form.value_set == null || appliedValueSet.id === form.value_set)))); }, [valueSetReady, coefficientBaselinePending, manualMode, appliedValueSet, form.value_set, onReady]);
+  useEffect(() => { onReady?.(hydration.xinfa && valueSetReady && !coefficientBaselinePending && (manualMode || (!!appliedValueSet?.available && (form.value_set == null || appliedValueSet.id === form.value_set)))); }, [hydration.xinfa, valueSetReady, coefficientBaselinePending, manualMode, appliedValueSet, form.value_set, onReady]);
 
   const playerStats = React.useMemo(() => {
     const pct = (v: number) => (v * 100).toFixed(1) + "%";
@@ -636,11 +648,11 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       <div className={styles.section}>
         <div className={styles.actions}>
           {manualMode && <button className={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={handleCalculate} disabled={calculating || !valueSetReady}>
+            onClick={handleCalculate} disabled={calculating || !hydration.xinfa || !valueSetReady}>
             {calculating ? "计算中..." : "开始计算"}
           </button>}
           {manualMode && <>
-          <button className={styles.btn} onClick={handleSave} disabled={!valueSetReady}>保存</button>
+          <button className={styles.btn} onClick={handleSave} disabled={!hydration.xinfa || !valueSetReady}>保存</button>
           <button className={styles.btn} onClick={handleLoad}>加载</button>
           <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleClear}>清空</button>
           <button className={styles.btn} onClick={handleExport}>导出</button>
