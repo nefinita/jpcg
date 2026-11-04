@@ -136,6 +136,17 @@ pub fn convert(
     let mut pofang = stats.pofang;
     let mut life_base = stats.qixue;
     let mut qixue_additional = stats.qixue_additional;
+    for constant in &rules.constants {
+        let target = match constant.to {
+            AttributeTarget::GongjiBase => &mut gongji_base,
+            AttributeTarget::GongjiExtra => &mut gongji_extra,
+            AttributeTarget::Huixin => &mut huixin,
+            AttributeTarget::Pofang => &mut pofang,
+            AttributeTarget::QixueBase => &mut life_base,
+            AttributeTarget::QixueAdditional => &mut qixue_additional,
+        };
+        *target = sum(&[*target, constant.value])?;
+    }
     for term in &rules.conversions {
         let value = match term.from {
             BasicAttribute::Tizhi => basics.tizhi,

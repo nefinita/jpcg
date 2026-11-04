@@ -37,6 +37,7 @@ fn rules(main: Basic, kind: Kind) -> AttributeRules {
             numerator: 3,
             denominator: 2,
         },
+        constants: vec![],
         conversions: vec![
             AttributeConversion {
                 from: Basic::Tizhi,
@@ -300,7 +301,12 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
     for dir in ["gear", "shuxing", "values"] {
         std::fs::create_dir(temp.path().join(dir)).unwrap();
     }
-    for f in ["index.toml", "cszj-exp-260908.toml", "live-130.toml", "live-50.toml"] {
+    for f in [
+        "index.toml",
+        "cszj-exp-260908.toml",
+        "live-130.toml",
+        "live-50.toml",
+    ] {
         std::fs::copy(
             root.join("values").join(f),
             temp.path().join("values").join(f),

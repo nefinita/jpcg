@@ -6,9 +6,53 @@ pofang_up = 2
 huixin_up = 0
 
 [version]
-level = 130
+level = 50
 season = 3
-modified = 20260814
+modified = 20261030
+
+# 50 级属性换算规则（来源：jx3box bps/109685 数值体系 + bps/109665 莫问心法加成）
+# 主属性→基础攻击 0.190、基础破防 0.060、内功会心等级 0.25；莫问心法额外 0.72 攻击、0.03 会心；
+# 心法固定加成：内功攻击力 +2282、内功会心等级 +308。
+[attributes]
+id = "jx3-50-mowen-20261030"
+level = 50
+value_set = "live-50"
+source = "https://www.jx3box.com/bps/109685 + https://www.jx3box.com/bps/109665"
+main_stat = "gengu"
+damage_kind = "lunar"
+qixue_multiplier = { numerator = 1, denominator = 1 }
+
+[[attributes.conversions]]
+from = "gengu"
+to = "gongji_base"
+numerator = 91
+denominator = 100
+
+[[attributes.conversions]]
+from = "gengu"
+to = "huixin"
+numerator = 28
+denominator = 100
+
+[[attributes.conversions]]
+from = "gengu"
+to = "pofang"
+numerator = 6
+denominator = 100
+
+[[attributes.conversions]]
+from = "tizhi"
+to = "qixue_base"
+numerator = 0
+denominator = 1
+
+[[attributes.constants]]
+to = "gongji_extra"
+value = 2282
+
+[[attributes.constants]]
+to = "huixin"
+value = 308
 
 [[skill]]
 skill_name = "五音六律"           #名字
