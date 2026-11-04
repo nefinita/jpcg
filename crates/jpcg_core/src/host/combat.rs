@@ -9,14 +9,14 @@
 
 use jpcg_api::{
     BuffEffectDTO, CombatDataDTO, CombatMetaDTO, FormDefDTO, MijiDefDTO, OnCastDTO, QixueDefDTO,
-    SkillCombatDTO, SkillModifierDTO, SkillPoolItemDTO, TimedBuffDefDTO,
+    QixueHookDTO, SkillCombatDTO, SkillModifierDTO, SkillPoolItemDTO, TimedBuffDefDTO,
 };
 
 use crate::host::conv::skilltype_to_pool_item;
 use crate::store;
 use crate::type_set::buff::{BuffEffect, TimedBuffDef};
 use crate::type_set::combat::{CombatData, CombatMeta, FormDef, OnCast, SkillCombatDef};
-use crate::type_set::modifier::{MijiDef, QixueDef, SkillModifier};
+use crate::type_set::modifier::{MijiDef, QixueDef, QixueHook, SkillModifier};
 use crate::type_set::skilltype::Skilltype;
 
 /// 加载某门派的战斗时序 overlay（文件缺失 = 空数据，不算错误）
@@ -87,6 +87,9 @@ impl From<SkillCombatDef> for SkillCombatDTO {
             cd_haste: s.cd_haste,
             channel: s.channel,
             buff_id: s.buff_id,
+            jihuoqixue: s.jihuoqixue,
+            qifeng_gain: s.qifeng_gain,
+            spend_all_qifeng: s.spend_all_qifeng,
         }
     }
 }
@@ -130,9 +133,12 @@ impl From<SkillModifier> for SkillModifierDTO {
             SkillModifier::HuixiaoUpAdd(v) => SkillModifierDTO::HuixiaoUpAdd(v),
             SkillModifier::WushifangyuAdd(v) => SkillModifierDTO::WushifangyuAdd(v),
             SkillModifier::CastTimeMul(v) => SkillModifierDTO::CastTimeMul(v),
+            SkillModifier::CastTimeAdd(v) => SkillModifierDTO::CastTimeAdd(v),
             SkillModifier::CooldownMul(v) => SkillModifierDTO::CooldownMul(v),
             SkillModifier::DotDurationMul(v) => SkillModifierDTO::DotDurationMul(v),
             SkillModifier::DotIntervalMul(v) => SkillModifierDTO::DotIntervalMul(v),
+            SkillModifier::CooldownAdd(v) => SkillModifierDTO::CooldownAdd(v),
+            SkillModifier::DotTicksAdd(v) => SkillModifierDTO::DotTicksAdd(v),
         }
     }
 }
@@ -169,6 +175,10 @@ fn qixue_to_dto(q: QixueDef) -> QixueDefDTO {
         slot: q.slot,
         replaces_skill_id: q.replaces_skill_id,
         replaces_sub_id: q.replaces_sub_id,
+        applies_to: q.applies_to,
+        grants_skills: q.grants_skills,
+        hooks: q.hooks.iter().map(hook_to_dto).collect(),
+        shelved: q.shelved,
         replacement: q.replacement.as_ref().map(skilltype_to_pool_item),
         modifiers: q.modifiers.into_iter().map(Into::into).collect(),
     }
@@ -215,6 +225,9 @@ impl From<SkillCombatDTO> for SkillCombatDef {
             cd_haste: s.cd_haste,
             channel: s.channel,
             buff_id: s.buff_id,
+            jihuoqixue: s.jihuoqixue,
+            qifeng_gain: s.qifeng_gain,
+            spend_all_qifeng: s.spend_all_qifeng,
         }
     }
 }
@@ -258,9 +271,12 @@ impl From<SkillModifierDTO> for SkillModifier {
             SkillModifierDTO::HuixiaoUpAdd(v) => SkillModifier::HuixiaoUpAdd(v),
             SkillModifierDTO::WushifangyuAdd(v) => SkillModifier::WushifangyuAdd(v),
             SkillModifierDTO::CastTimeMul(v) => SkillModifier::CastTimeMul(v),
+            SkillModifierDTO::CastTimeAdd(v) => SkillModifier::CastTimeAdd(v),
             SkillModifierDTO::CooldownMul(v) => SkillModifier::CooldownMul(v),
             SkillModifierDTO::DotDurationMul(v) => SkillModifier::DotDurationMul(v),
             SkillModifierDTO::DotIntervalMul(v) => SkillModifier::DotIntervalMul(v),
+            SkillModifierDTO::CooldownAdd(v) => SkillModifier::CooldownAdd(v),
+            SkillModifierDTO::DotTicksAdd(v) => SkillModifier::DotTicksAdd(v),
         }
     }
 }
@@ -278,6 +294,10 @@ impl From<QixueDefDTO> for QixueDef {
             slot: q.slot,
             replaces_skill_id: q.replaces_skill_id,
             replaces_sub_id: q.replaces_sub_id,
+            applies_to: q.applies_to,
+            grants_skills: q.grants_skills,
+            hooks: q.hooks.into_iter().map(QixueHook::from).collect(),
+            shelved: q.shelved,
             replacement: q.replacement.as_ref().map(pool_item_to_skilltype),
             modifiers: q.modifiers.into_iter().map(Into::into).collect(),
         }
@@ -319,6 +339,34 @@ impl From<CombatDataDTO> for CombatData {
             buff: d.buff.into_iter().map(Into::into).collect(),
             miji: d.miji.into_iter().map(Into::into).collect(),
             qixue: d.qixue.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+fn hook_to_dto(h: &QixueHook) -> QixueHookDTO {
+    match *h {
+        QixueHook::FlatDamageOnCast {
+            damage,
+            per_qifeng_spent,
+        } => QixueHookDTO::FlatDamageOnCast {
+            damage,
+            per_qifeng_spent,
+        },
+        QixueHook::DamagePctPerQifeng { pct } => QixueHookDTO::DamagePctPerQifeng { pct },
+    }
+}
+
+impl From<QixueHookDTO> for QixueHook {
+    fn from(h: QixueHookDTO) -> Self {
+        match h {
+            QixueHookDTO::FlatDamageOnCast {
+                damage,
+                per_qifeng_spent,
+            } => QixueHook::FlatDamageOnCast {
+                damage,
+                per_qifeng_spent,
+            },
+            QixueHookDTO::DamagePctPerQifeng { pct } => QixueHook::DamagePctPerQifeng { pct },
         }
     }
 }

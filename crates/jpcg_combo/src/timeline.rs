@@ -26,11 +26,33 @@ use jpcg_core::type_set::xinfa::XinfaConfig;
 // 形态 / 施放副作用 / 技能键的数据结构由 core 数据层定义（与 data/combat/*.toml 一一对应），
 // 时序引擎直接复用，避免两套类型。
 pub use jpcg_core::type_set::combat::{CombatData, FormDef, OnCast, SkillKey};
+use jpcg_core::type_set::modifier::QixueHook;
+
+/// 已激活奇穴的运行时钩子（带作用技能；targets 为空 = 对所有技能生效）
+#[derive(Debug, Clone)]
+pub struct ActiveHook {
+    pub targets: Vec<SkillKey>,
+    pub hook: QixueHook,
+}
+
+impl ActiveHook {
+    fn target(&self, key: SkillKey) -> bool {
+        self.targets.is_empty()
+            || self
+                .targets
+                .iter()
+                .any(|(id, sub)| *id == key.0 && (*sub == 0 || *sub == key.1))
+    }
+}
 
 /// 带时序数据的技能条目
 #[derive(Debug, Clone)]
 pub struct TimingSkill {
     pub skill: Skilltype,
+    /// 施放获得曲风
+    pub qifeng_gain: u8,
+    /// 施放消耗全部曲风
+    pub spend_all_qifeng: bool,
     /// 所属形态 id（None = 任意形态可用）
     pub form: Option<String>,
     /// 该技能占用的 GCD 通道（空 = "default"）
@@ -57,6 +79,8 @@ impl TimingSkill {
         }
         TimingSkill {
             skill: resolved,
+            qifeng_gain: sc.and_then(|s| s.qifeng_gain).unwrap_or(0),
+            spend_all_qifeng: sc.and_then(|s| s.spend_all_qifeng).unwrap_or(false),
             form: sc.and_then(|s| s.form.clone()),
             gcd_lane,
             on_cast: sc.map(|s| s.on_cast.clone()).unwrap_or_default(),
@@ -124,6 +148,10 @@ pub struct TimelineInput {
     pub timed_buffs: Vec<TimedBuffDef>,
     /// 动作序列（按给定顺序，引擎计算最早可执行时刻）
     pub actions: Vec<TimelineAction>,
+    /// 已激活的奇穴（id 或名称；技能 `jihuoqixue` 命中才可用）
+    pub active_qixue: Vec<String>,
+    /// 已激活奇穴的运行时钩子
+    pub hooks: Vec<ActiveHook>,
     /// 模拟窗口（秒）
     pub window: f32,
 }
@@ -215,6 +243,8 @@ impl DotInstance {
 
 struct Sim<'a> {
     input: &'a TimelineInput,
+    /// 曲风（0~9）
+    qifeng: u8,
     events: Vec<TimelineEvent>,
     dots: Vec<DotInstance>,
     /// 各 GCD 通道就绪时刻
@@ -242,6 +272,7 @@ impl<'a> Sim<'a> {
             .unwrap_or_default();
         Sim {
             input,
+            qifeng: MAX_QIFENG,
             events: Vec::new(),
             dots: Vec::new(),
             lane_ready: HashMap::new(),
@@ -370,7 +401,16 @@ impl<'a> Sim<'a> {
             .skills
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.skill.skill_id == skill_id && s.skill.sub_id == sub_id)
+            .filter(|(_, s)| {
+                s.skill.skill_id == skill_id
+                    && s.skill.sub_id == sub_id
+                    && (s.skill.jihuoqixue.is_empty()
+                        || self
+                            .input
+                            .active_qixue
+                            .iter()
+                            .any(|q| q == &s.skill.jihuoqixue))
+            })
             .map(|(i, _)| i)
             .collect();
         match candidates.as_slice() {
@@ -378,13 +418,18 @@ impl<'a> Sim<'a> {
             [only] => Some(*only),
             _ => {
                 let name = name?;
-                let mut named = candidates
+                let named: Vec<usize> = candidates
                     .iter()
                     .copied()
-                    .filter(|&i| self.input.skills[i].skill.skill_name == name);
-                match (named.next(), named.next()) {
-                    (Some(i), None) => Some(i),
-                    _ => None,
+                    .filter(|&i| self.input.skills[i].skill.skill_name == name)
+                    .collect();
+                // 同 (id, sub) 的重复条目（如多等级变体）视为同一技能，取第一条
+                let first = *named.first()?;
+                let key = self.input.skills[first].key();
+                if named.iter().all(|&i| self.input.skills[i].key() == key) {
+                    Some(first)
+                } else {
+                    None
                 }
             }
         }
@@ -429,10 +474,49 @@ impl<'a> Sim<'a> {
 
         // DOT 技能的 q_damage 已是全部跳数之和，伤害由 DotTick 事件按实际跳点计入；
         // 这里只记起手事件，避免与 dot 跳点重复累加。
-        let direct_damage = if damage.dot_jumps.is_empty() {
+        let base_direct = if damage.dot_jumps.is_empty() {
             damage.q_damage
         } else {
             0
+        };
+
+        // ---- 曲风与奇穴钩子（第 3 层）：按施放前曲风与本次消耗结算 ----
+        let qifeng_before = self.qifeng;
+        let key = sk.key();
+        let spent = if sk.spend_all_qifeng {
+            qifeng_before as f32
+        } else {
+            0.0
+        };
+        let mut flat_bonus = 0.0f32;
+        let mut pct_bonus = 0.0f32;
+        for h in &self.input.hooks {
+            if !h.target(key) {
+                continue;
+            }
+            match h.hook {
+                QixueHook::FlatDamageOnCast {
+                    damage,
+                    per_qifeng_spent,
+                } => {
+                    flat_bonus += if per_qifeng_spent {
+                        damage * spent
+                    } else {
+                        damage
+                    };
+                }
+                QixueHook::DamagePctPerQifeng { pct } => {
+                    pct_bonus += pct * qifeng_before as f32;
+                }
+            }
+        }
+        let direct_damage =
+            ((base_direct as f32) * (1.0 + pct_bonus / 100.0) + flat_bonus).max(0.0) as u32;
+        // 施放后更新曲风：先结清消耗，再加获得（上限 9）
+        self.qifeng = if sk.spend_all_qifeng {
+            sk.qifeng_gain.min(MAX_QIFENG)
+        } else {
+            (self.qifeng + sk.qifeng_gain).min(MAX_QIFENG)
         };
         self.events.push(TimelineEvent {
             time: start,
@@ -697,6 +781,9 @@ impl<'a> Sim<'a> {
 }
 
 /// 运行时序模拟
+/// 战斗内曲风初始值：非战斗获取不建模，进场按满点 9 处理。
+pub const MAX_QIFENG: u8 = 9;
+
 pub fn simulate(input: &TimelineInput) -> TimelineResult {
     Sim::new(input).run()
 }
@@ -761,6 +848,8 @@ mod tests {
     fn timing(skill: Skilltype, lane: &str) -> TimingSkill {
         TimingSkill {
             skill,
+            qifeng_gain: 0,
+            spend_all_qifeng: false,
             form: None,
             gcd_lane: lane.into(),
             on_cast: OnCast::default(),
@@ -781,6 +870,8 @@ mod tests {
             skills,
             forms: Vec::new(),
             timed_buffs: Vec::new(),
+            active_qixue: Vec::new(),
+            hooks: Vec::new(),
             actions,
             window,
         }

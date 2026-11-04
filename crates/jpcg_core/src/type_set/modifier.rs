@@ -35,12 +35,18 @@ pub enum SkillModifier {
     WushifangyuAdd(u32),
     /// 读条时长 ×(1 + v/100)（负值 = 缩短）
     CastTimeMul(f32),
+    /// 读条时长 +v 秒（负值 = 缩短；用于秘籍的定值减读条）
+    CastTimeAdd(f32),
     /// 调息时间 ×(1 + v/100)（负值 = 缩短）
     CooldownMul(f32),
     /// Dot 持续时长 ×(1 + v/100)
     DotDurationMul(f32),
     /// Dot 每跳间隔 ×(1 + v/100)
     DotIntervalMul(f32),
+    /// 调息时间 +v 秒（用于 base 为 0、需额外定死调息的奇穴/秘籍）
+    CooldownAdd(f32),
+    /// Dot 跳数 +v（按 interval 折算到持续时间）
+    DotTicksAdd(i32),
 }
 
 impl SkillModifier {
@@ -66,6 +72,7 @@ impl SkillModifier {
             SkillModifier::CastTimeMul(v) => {
                 skill.cast_time = (skill.cast_time * (1.0 + v / 100.0)).max(0.0)
             }
+            SkillModifier::CastTimeAdd(v) => skill.cast_time = (skill.cast_time + v).max(0.0),
             SkillModifier::CooldownMul(v) => {
                 skill.cooldown = (skill.cooldown * (1.0 + v / 100.0)).max(0.0)
             }
@@ -74,6 +81,15 @@ impl SkillModifier {
             }
             SkillModifier::DotIntervalMul(v) => {
                 skill.dot_interval = (skill.dot_interval * (1.0 + v / 100.0)).max(0.0)
+            }
+            SkillModifier::CooldownAdd(v) => {
+                skill.cooldown = (skill.cooldown + v).max(0.0);
+            }
+            SkillModifier::DotTicksAdd(v) => {
+                if skill.dot_interval > 0.0 {
+                    skill.dot_duration =
+                        (skill.dot_duration + v as f32 * skill.dot_interval).max(0.0);
+                }
             }
         }
     }
@@ -102,6 +118,22 @@ impl MijiDef {
     }
 }
 
+/// 奇穴的运行时钩子（第 3 层：触发/资源类）
+///
+/// 只建模能直接换算成「伤害」的钩子；护盾/位移等非伤害效果暂不入模型。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QixueHook {
+    /// 施放命中时追加固定伤害；`per_qifeng_spent` 为真时按本次消耗的曲风点数额外累加
+    FlatDamageOnCast {
+        damage: f32,
+        #[serde(default)]
+        per_qifeng_spent: bool,
+    },
+    /// 每点当前曲风使本次伤害提高 pct%
+    DamagePctPerQifeng { pct: f32 },
+}
+
 /// 奇穴定义（把默认技能替换为奇穴技能条目）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -116,15 +148,29 @@ pub struct QixueDef {
     pub replaces_skill_id: u32,
     /// 被替换的子技能 id（0 = 不限）
     pub replaces_sub_id: u32,
+    /// 作用技能列表（(skill_id, sub_id)；空 = 用 replaces_skill_id/replaces_sub_id）
+    pub applies_to: Vec<(u32, u32)>,
+    /// 该奇穴解锁的技能（(skill_id, sub_id)；配合技能条目的 jihuoqixue 门控）
+    pub grants_skills: Vec<(u32, u32)>,
     /// 替换后的独立技能条目（None = 不替换，仅施加 modifiers）
     pub replacement: Option<Skilltype>,
     /// 附加修正项（作用于替换后技能；无 replacement 时作用于默认技能）
     pub modifiers: Vec<SkillModifier>,
+    /// 运行时钩子（第 3 层）
+    pub hooks: Vec<QixueHook>,
+    /// 暂不建模（PvE/待补数据），仅登记名称与槽位
+    pub shelved: bool,
 }
 
 impl QixueDef {
     /// 是否替换/修改给定技能
     pub fn targets(&self, skill: &Skilltype) -> bool {
+        if !self.applies_to.is_empty() {
+            return self
+                .applies_to
+                .iter()
+                .any(|(id, sub)| *id == skill.skill_id && (*sub == 0 || *sub == skill.sub_id));
+        }
         self.replaces_skill_id == skill.skill_id
             && (self.replaces_sub_id == 0 || self.replaces_sub_id == skill.sub_id)
     }
@@ -219,6 +265,10 @@ mod tests {
             slot: 1,
             replaces_skill_id: 100,
             replaces_sub_id: 0,
+            applies_to: Vec::new(),
+            grants_skills: Vec::new(),
+            hooks: Vec::new(),
+            shelved: false,
             replacement: Some(rep),
             modifiers: vec![SkillModifier::HitUpAdd(10)],
         };

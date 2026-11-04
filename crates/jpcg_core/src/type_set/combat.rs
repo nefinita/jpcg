@@ -95,6 +95,12 @@ pub struct SkillCombatDef {
     pub channel: Option<bool>,
     /// 施放后施加的定时 buff id（空 = 不施加）
     pub buff_id: Option<String>,
+    /// 技能激活所需奇穴 id（空 = 不限；用于奇穴主动技能门控）
+    pub jihuoqixue: Option<String>,
+    /// 施放获得曲风点数（None = 0）
+    pub qifeng_gain: Option<u8>,
+    /// 施放消耗全部曲风（None = false）
+    pub spend_all_qifeng: Option<bool>,
 }
 
 impl SkillCombatDef {
@@ -131,6 +137,9 @@ impl SkillCombatDef {
         }
         if let Some(v) = &self.buff_id {
             skill.buff_id = v.clone();
+        }
+        if let Some(v) = &self.jihuoqixue {
+            skill.jihuoqixue = v.clone();
         }
     }
 }
@@ -297,8 +306,28 @@ impl CombatData {
             } else {
                 seen_qixue.push(q.id.as_str());
             }
-            if q.replaces_skill_id == 0 {
-                errors.push(format!("qixue `{}`: replaces_skill_id 为 0", q.id));
+            if q.shelved {
+                continue;
+            }
+            if q.replaces_skill_id == 0
+                && q.applies_to.is_empty()
+                && q.grants_skills.is_empty()
+                && q.hooks.is_empty()
+            {
+                errors.push(format!(
+                    "qixue `{}`: replaces_skill_id 为 0 且未提供 applies_to",
+                    q.id
+                ));
+            }
+            for (id, _) in &q.applies_to {
+                if *id == 0 {
+                    errors.push(format!("qixue `{}`: applies_to 含 0 技能 id", q.id));
+                }
+            }
+            for (id, _) in &q.grants_skills {
+                if *id == 0 {
+                    errors.push(format!("qixue `{}`: grants_skills 含 0 技能 id", q.id));
+                }
             }
         }
 
@@ -360,6 +389,46 @@ impl CombatData {
             }
         }
         for q in &self.qixue {
+            if !q.grants_skills.is_empty() {
+                for (id, sub) in &q.grants_skills {
+                    if !skills
+                        .iter()
+                        .any(|s| s.skill_id == *id && (*sub == 0 || s.sub_id == *sub))
+                    {
+                        errors.push(format!(
+                            "qixue `{}`: 解锁技能 {id}:{sub} 不在技能表中",
+                            q.id
+                        ));
+                    }
+                }
+            }
+            if q.replaces_skill_id == 0 && q.applies_to.is_empty() {
+                continue;
+            }
+            if q.shelved {
+                continue;
+            }
+            if q.replaces_skill_id == 0
+                && q.applies_to.is_empty()
+                && q.grants_skills.is_empty()
+                && q.hooks.is_empty()
+            {
+                continue;
+            }
+            if !q.applies_to.is_empty() {
+                for (id, sub) in &q.applies_to {
+                    if !skills
+                        .iter()
+                        .any(|s| s.skill_id == *id && (*sub == 0 || s.sub_id == *sub))
+                    {
+                        errors.push(format!(
+                            "qixue `{}`: 作用技能 {id}:{sub} 不在技能表中",
+                            q.id
+                        ));
+                    }
+                }
+                continue;
+            }
             if !skills.iter().any(|s| {
                 s.skill_id == q.replaces_skill_id
                     && (q.replaces_sub_id == 0 || s.sub_id == q.replaces_sub_id)

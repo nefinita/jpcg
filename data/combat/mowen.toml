@@ -1,0 +1,661 @@
+# ============================================================================
+# 莫问 —— 战斗时序 overlay（#92）
+#
+# 数据来源：游戏内 tooltip 截图（data/skill-shots/莫问/）+ data/skill-shots/out/mowen-final.json
+# 基准：50 级，最终阴性内功攻击 8438；伤害数值在 data/shuxing/mowen.toml，这里只写时序。
+#
+# 四形态：阳春白雪 / 高山流水 / 平沙落雁（三曲）+ 剑
+#   - 曲之间用各自的「曲」主动切换（14230 / 14229 / 14232）
+#   - 剑形态：清绝影歌 14083 进入，清绝影歌·回 14522 收剑回琴退出（只占 1 个 GCD）
+#   - 变宫/变徵 = 高山流水曲下的 宫/徵 变体（可移动吟唱，复用秘籍）
+# ============================================================================
+
+[meta]
+profession = "mowen"
+version = "2026-11-05"
+note = "由游戏内 tooltip 截图整理；曲/气/影 与形态切换技能已补 id，九衢闻曲与太常律 主技能 id 仍缺"
+
+# ----------------------------------------------------------------------------
+# 形态
+# ----------------------------------------------------------------------------
+[[form]]
+id = "qu-yangchun"
+name = "阳春白雪"
+gcd_base = 1.5
+initial = true
+skills = [
+  [14064, 14474], [14065, 14311], [14066, 14312], [14067, 14227], [14068, 14100],
+  [14230, 0], [14229, 0], [14232, 0],
+  [14073, 0], [14074, 0], [14075, 0], [14076, 0], [14154, 0], [14082, 15076], [14081, 0],
+  [14083, 0],
+  [29071, 29077], [42529, 41903], [36489, 0], [14093, 41871], [30564, 0],
+]
+
+[[form]]
+id = "qu-gaoshan"
+name = "高山流水"
+gcd_base = 1.5
+skills = [
+  [14298, 18860], [14299, 18859], [14065, 14311], [14066, 14312], [14068, 14100],
+  [14230, 0], [14229, 0], [14232, 0],
+  [14073, 0], [14074, 0], [14075, 0], [14076, 0], [14154, 0], [14082, 15076], [14081, 0],
+  [14083, 0],
+  [29071, 29077], [42529, 41903], [36489, 0], [14093, 41871], [30564, 0],
+]
+
+[[form]]
+id = "qu-pingsha"
+name = "平沙落雁"
+gcd_base = 1.5
+skills = [
+  [14064, 14474], [14065, 14311], [14066, 14312], [14067, 14227], [14068, 14100],
+  [14230, 0], [14229, 0], [14232, 0],
+  [14073, 0], [14074, 0], [14075, 0], [14076, 0], [14154, 0], [14082, 15076], [14081, 0],
+  [14083, 0],
+  [29071, 29077], [42529, 41903], [36489, 0], [14093, 41871], [30564, 0],
+]
+
+[[form]]
+id = "jian"
+name = "剑"
+gcd_base = 1.5
+skills = [
+  [14449, 18656], [25225, 25225], [14451, 0], [14452, 14455], [40291, 40293],
+  [14522, 0],
+]
+
+# ----------------------------------------------------------------------------
+# 音（三曲通用）
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14064
+sub_id = 14474
+spend_all_qifeng = true
+cast_time = 1.75
+cooldown = 0.0
+
+# 变宫：高山流水曲下 宫 的变体，可移动吟唱
+[[skill_combat]]
+skill_id = 14298
+sub_id = 18860
+spend_all_qifeng = true
+form = "qu-gaoshan"
+cast_time = 1.75
+cooldown = 0.0
+
+[[skill_combat]]
+skill_id = 14065
+sub_id = 14311
+qifeng_gain = 1
+cast_time = 0.0
+cooldown = 0.0
+# 对目标 DOT：每 3 秒 1 跳，持续 18 秒（伤害在 shuxing 表）
+
+[[skill_combat]]
+skill_id = 14067
+sub_id = 14227
+qifeng_gain = 1
+cast_time = 0.0
+cooldown = 0.0
+# 2.81 秒内 3 段
+
+# 变徵：高山流水曲下 徵 的变体
+[[skill_combat]]
+skill_id = 14299
+sub_id = 18859
+form = "qu-gaoshan"
+cast_time = 0.0
+cooldown = 0.0
+
+[[skill_combat]]
+skill_id = 14066
+sub_id = 14312
+qifeng_gain = 1
+cast_time = 0.0
+cooldown = 0.0
+# 平沙落雁曲下额外禁轻功 2 秒
+
+[[skill_combat]]
+skill_id = 14068
+sub_id = 14100
+qifeng_gain = 1
+charges = 3
+recharge = 6.0
+cd_haste = true
+# 3 层充能，6 秒恢复一层（受加速影响）
+
+# ----------------------------------------------------------------------------
+# 曲形态切换（主动）
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14230
+sub_id = 0
+cast_time = 0.0
+cooldown = 0.0
+on_cast = { switch_form = "qu-yangchun" }
+
+[[skill_combat]]
+skill_id = 14229
+sub_id = 0
+cast_time = 0.0
+cooldown = 0.0
+on_cast = { switch_form = "qu-gaoshan" }
+
+[[skill_combat]]
+skill_id = 14232
+sub_id = 0
+cast_time = 0.0
+cooldown = 0.0
+on_cast = { switch_form = "qu-pingsha" }
+
+# ----------------------------------------------------------------------------
+# 气 / 影 / 辅助
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14076
+sub_id = 0
+cast_time = 1.0
+cooldown = 40.0
+# 青霄飞羽：浮空 6 秒（+2 秒秘籍）
+
+[[skill_combat]]
+skill_id = 14075
+sub_id = 0
+cast_time = 0.0
+cooldown = 70.0
+# 云生结海
+
+[[skill_combat]]
+skill_id = 14074
+sub_id = 0
+cast_time = 0.0
+cooldown = 70.0
+# 江逐月天
+
+[[skill_combat]]
+skill_id = 14154
+sub_id = 0
+cast_time = 0.0
+cooldown = 70.0
+# 迴梦逐光
+
+[[skill_combat]]
+skill_id = 14073
+sub_id = 0
+cast_time = 0.0
+cooldown = 70.0
+# 笑傲光阴
+
+[[skill_combat]]
+skill_id = 14082
+sub_id = 15076
+cast_time = 0.0
+charges = 1
+recharge = 28.0
+# 疏影横斜（28 秒充能）
+
+[[skill_combat]]
+skill_id = 14081
+sub_id = 0
+cast_time = 0.0
+cooldown = 150.0
+# 孤影化双（2 分 30 秒；超然奇穴降至 60 秒并受加速影响）
+
+# ----------------------------------------------------------------------------
+# 形态切换：清绝影歌 / 清绝影歌·回
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14083
+sub_id = 0
+cast_time = 0.0
+cooldown = 60.0
+on_cast = { switch_form = "jian" }
+# 非战斗状态下无调息；重伤后重置调息
+
+[[skill_combat]]
+skill_id = 14522
+sub_id = 0
+cast_time = 0.0
+cooldown = 0.0
+on_cast = { switch_form = "qu-yangchun" }
+# 收剑回琴：只占 1 个 GCD。注：引擎暂无「回上一个形态」，先固定回阳春白雪
+
+# ----------------------------------------------------------------------------
+# 剑
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14449
+sub_id = 18656
+cast_time = 0.0
+cooldown = 0.0
+
+[[skill_combat]]
+skill_id = 25225
+sub_id = 25225
+charges = 2
+recharge = 20.0
+cd_haste = false
+# 2 层充能，20 秒一层；命中眩晕 4 秒
+
+[[skill_combat]]
+skill_id = 14451
+sub_id = 0
+cast_time = 0.0
+cooldown = 11.0
+cd_haste = false
+# 每 0.5 秒 1 段，共 4 段（2 秒）
+
+[[skill_combat]]
+skill_id = 14452
+sub_id = 14455
+charges = 1
+recharge = 16.0
+cd_haste = false
+# 16 秒充能；定身 2 秒，「影」持续 8 秒
+
+[[skill_combat]]
+skill_id = 40291
+sub_id = 40293
+cast_time = 3.0
+channel = true
+cooldown = 20.0
+cd_haste = false
+# 蓄力技，最多 3 秒；蓄力档位影响定身/冲刺距离
+
+# ----------------------------------------------------------------------------
+# 奇穴主动（可选技能）
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14093
+sub_id = 41871
+cast_time = 0.0
+cooldown = 25.0
+jihuoqixue = "chongqiuming"
+# 冲秋冥（需奇穴「冲秋冥」）
+
+[[skill_combat]]
+skill_id = 29071
+sub_id = 29077
+cast_time = 0.0
+cooldown = 20.0
+jihuoqixue = "bukuijun"
+# 不愧君（需奇穴「不愧君」）
+
+[[skill_combat]]
+skill_id = 42529
+sub_id = 41903
+cast_time = 0.0
+charges = 5
+recharge = 8.0
+cd_haste = false
+jihuoqixue = "duanshuiliu"
+# 断水流（需奇穴「断水流」）
+
+[[skill_combat]]
+skill_id = 36489
+sub_id = 0
+cast_time = 0.0
+cooldown = 0.0
+jihuoqixue = "zhanchangjing"
+# 斩长鲸（爆发，无调息；需奇穴「斩长鲸」）
+
+[[skill_combat]]
+skill_id = 30564
+sub_id = 0
+cast_time = 0.0
+cooldown = 0.0
+jihuoqixue = "taichanglv"
+# 太常律（爆发，无调息，0.75s 一跳共 2.25s；需奇穴「太常律」）
+
+# ----------------------------------------------------------------------------
+# 九衢闻曲 45730 为被动效果（曲风机制），暂无独立时序；如需可加 charges 类逻辑。
+# ----------------------------------------------------------------------------
+
+# ============================================================================
+# 奇穴 —— 第 1 层（纯修饰类，可直接参与计算）
+#
+# 三层规划：
+#   1. 修饰类：modifiers 直接挂在 applies_to 列出的技能上（本节）
+#   2. 替换/新增技能：replacement + jihuoqixue 门控（待做）
+#   3. 触发/资源类：等引擎 on_cast/on_hit/on_dot_tick/on_qifeng 钩子（待做）
+#
+# applies_to = [[skill_id, sub_id], ...]；sub_id=0 表示不限子技能。
+# ============================================================================
+
+# 殊曲（第二重）：商/角 持续间隔 -1 秒（3s→2s），每跳效果 +12%
+[[qixue]]
+id = "shuqu"
+name = "殊曲"
+slot = 2
+applies_to = [[14065, 14311], [14066, 14312]]
+modifiers = [
+  { dot_interval_mul = -33.3333 },
+  { hit_up_add = 12 },
+]
+
+# 削竹（第二重）：剑·徵 伤害 +16%（2 层充能/8 秒属第 2 层，暂未启用）
+[[qixue]]
+id = "xiaozhu"
+name = "削竹"
+slot = 2
+applies_to = [[14451, 0]]
+modifiers = [
+  { hit_up_add = 16 },
+]
+
+# 参连（第三重）：无视目标 60% 内功防御等级（1024 制 60% ≈ 614）
+[[qixue]]
+id = "canlian"
+name = "参连"
+slot = 3
+applies_to = [
+  [14064, 14474], [14065, 14311], [14066, 14312], [14067, 14227], [14068, 14100],
+  [14298, 18860], [14299, 18859],
+  [14449, 18656], [25225, 25225], [14451, 0], [14452, 14455], [40291, 40293],
+]
+modifiers = [
+  { wushifangyu_add = 614 },
+]
+
+# 冻泉（第四重）：商/角 +4 跳；宫/变宫 调息 12 秒
+[[qixue]]
+id = "dongquan"
+name = "冻泉"
+slot = 4
+applies_to = [[14065, 14311], [14066, 14312]]
+modifiers = [
+  { dot_ticks_add = 4 },
+]
+
+[[qixue]]
+id = "dongquan-gong"
+name = "冻泉·宫"
+slot = 4
+applies_to = [[14064, 14474], [14298, 18860]]
+modifiers = [
+  { cooldown_add = 12.0 },
+]
+
+# 凌冬（第四重）：徵/变徵 调息 18 秒（6 段递增伤害属第 3 层）
+[[qixue]]
+id = "lingdong"
+name = "凌冬"
+slot = 4
+applies_to = [[14067, 14227], [14299, 18859]]
+modifiers = [
+  { cooldown_add = 18.0 },
+]
+
+# 兼山（混选）：云生结海 调息 +20 秒
+[[qixue]]
+id = "jianshan"
+name = "兼山"
+slot = 8
+applies_to = [[14075, 0]]
+modifiers = [
+  { cooldown_add = 20.0 },
+]
+
+# ----------------------------------------------------------------------------
+# 奇穴第 2 层：解锁主动技能（技能本身由 jihuoqixue 门控，未激活时不可用）
+# ----------------------------------------------------------------------------
+
+[[qixue]]
+id = "bukuijun"
+name = "不愧君"
+slot = 6
+grants_skills = [[29071, 29077]]
+
+[[qixue]]
+id = "duanshuiliu"
+name = "断水流"
+slot = 6
+grants_skills = [[42529, 41903]]
+
+[[qixue]]
+id = "zhanchangjing"
+name = "斩长鲸"
+slot = 6
+grants_skills = [[36489, 0]]
+
+[[qixue]]
+id = "chongqiuming"
+name = "冲秋冥"
+slot = 7
+grants_skills = [[14093, 41871]]
+
+[[qixue]]
+id = "taichanglv"
+name = "太常律"
+slot = 6
+grants_skills = [[30564, 0]]
+
+
+# ----------------------------------------------------------------------------
+# 奇穴第 3 层：运行时钩子（触发/资源类）
+# ----------------------------------------------------------------------------
+
+[[qixue]]
+id = "yince"
+name = "音彻"
+slot = 5
+applies_to = [[14449, 18656], [25225, 25225], [14451, 0], [14452, 14455], [40291, 40293]]
+hooks = [{ flat_damage_on_cast = { damage = 2159.0 } }]
+
+[[qixue]]
+id = "jingzhi"
+name = "净植"
+slot = 5
+hooks = [{ flat_damage_on_cast = { damage = 1330.0, per_qifeng_spent = true } }]
+
+[[qixue]]
+id = "shixiang"
+name = "师襄"
+slot = 7
+hooks = [{ damage_pct_per_qifeng = { pct = 2.0 } }]
+
+
+# ----------------------------------------------------------------------------
+# 秘籍（按技能 id 挂修正项；请求 `miji` 里给出 id 才生效）
+# 数据来源：游戏内「秘籍选择」页 8 张截图（宫/商/徵/羽/角/青霄飞羽/笑傲光阴/杯水留影）
+# 只建模数值类（伤害/会心/读条/调息），距离/移速/禁轻功等非伤害效果暂不建模。
+# ----------------------------------------------------------------------------
+
+[[miji]]
+id = "gong_cast1"
+name = "《音·宫》经脉图残页"
+skill_id = 14064
+sub_id = 14474
+modifiers = [{ cast_time_add = -0.125 }]
+
+[[miji]]
+id = "gong_cast2"
+name = "《音·宫》经脉图断篇"
+skill_id = 14064
+sub_id = 14474
+modifiers = [{ cast_time_add = -0.125 }]
+
+[[miji]]
+id = "gong_dmg3"
+name = "《音·宫》参悟残页"
+skill_id = 14064
+sub_id = 14474
+modifiers = [{ hit_up_add = 3 }]
+
+[[miji]]
+id = "gong_dmg4"
+name = "《音·宫》参悟断篇"
+skill_id = 14064
+sub_id = 14474
+modifiers = [{ hit_up_add = 4 }]
+
+[[miji]]
+id = "gong_crit2"
+name = "《音·宫》秘决残页"
+skill_id = 14064
+sub_id = 14474
+modifiers = [{ huixin_up_add = 2 }]
+
+[[miji]]
+id = "gong_crit3"
+name = "《音·宫》秘决断篇"
+skill_id = 14064
+sub_id = 14474
+modifiers = [{ huixin_up_add = 3 }]
+
+[[miji]]
+id = "gong_crit4"
+name = "《音·宫》秘决绝章"
+skill_id = 14064
+sub_id = 14474
+modifiers = [{ huixin_up_add = 4 }]
+
+[[miji]]
+id = "shang_dmg3"
+name = "《音·商》参悟残页"
+skill_id = 14065
+modifiers = [{ hit_up_add = 3 }]
+
+[[miji]]
+id = "shang_dmg4"
+name = "《音·商》参悟断篇"
+skill_id = 14065
+modifiers = [{ hit_up_add = 4 }]
+
+[[miji]]
+id = "shang_dmg5"
+name = "《音·商》参悟绝章"
+skill_id = 14065
+modifiers = [{ hit_up_add = 5 }]
+
+[[miji]]
+id = "shang_crit2"
+name = "《音·商》秘决残页"
+skill_id = 14065
+modifiers = [{ huixin_up_add = 2 }]
+
+[[miji]]
+id = "shang_crit3"
+name = "《音·商》秘决断篇"
+skill_id = 14065
+modifiers = [{ huixin_up_add = 3 }]
+
+[[miji]]
+id = "shang_crit4"
+name = "《音·商》秘决绝章"
+skill_id = 14065
+modifiers = [{ huixin_up_add = 4 }]
+
+[[miji]]
+id = "zheng_dmg3"
+name = "《音·徵》参悟残页"
+skill_id = 14066
+modifiers = [{ hit_up_add = 3 }]
+
+[[miji]]
+id = "zheng_dmg4"
+name = "《音·徵》参悟断篇"
+skill_id = 14066
+modifiers = [{ hit_up_add = 4 }]
+
+[[miji]]
+id = "zheng_crit2"
+name = "《音·徵》秘决残页"
+skill_id = 14066
+modifiers = [{ huixin_up_add = 2 }]
+
+[[miji]]
+id = "zheng_crit3"
+name = "《音·徵》秘决断篇"
+skill_id = 14066
+modifiers = [{ huixin_up_add = 3 }]
+
+[[miji]]
+id = "zheng_crit4"
+name = "《音·徵》秘决绝章"
+skill_id = 14066
+modifiers = [{ huixin_up_add = 4 }]
+
+[[miji]]
+id = "yu_dmg3"
+name = "《音·羽》参悟残页"
+skill_id = 14067
+modifiers = [{ hit_up_add = 3 }]
+
+[[miji]]
+id = "yu_dmg4"
+name = "《音·羽》参悟断篇"
+skill_id = 14067
+modifiers = [{ hit_up_add = 4 }]
+
+[[miji]]
+id = "yu_crit3"
+name = "《音·羽》秘决残页"
+skill_id = 14067
+modifiers = [{ huixin_up_add = 3 }]
+
+[[miji]]
+id = "yu_crit4"
+name = "《音·羽》秘决断篇"
+skill_id = 14067
+modifiers = [{ huixin_up_add = 4 }]
+
+[[miji]]
+id = "qingxiao_cd"
+name = "《气·青霄飞羽》穴位图断篇"
+skill_id = 14076
+modifiers = [{ cooldown_add = -3.0 }]
+
+[[miji]]
+id = "xiaoao_cd1"
+name = "《气·笑傲光阴》穴位图残页"
+skill_id = 14073
+modifiers = [{ cooldown_add = -3.0 }]
+
+[[miji]]
+id = "xiaoao_cd2"
+name = "《气·笑傲光阴》穴位图断篇"
+skill_id = 14073
+modifiers = [{ cooldown_add = -3.0 }]
+
+[[miji]]
+id = "xiaoao_cd3"
+name = "《气·笑傲光阴》穴位图绝章"
+skill_id = 14073
+modifiers = [{ cooldown_add = -4.0 }]
+
+# ----------------------------------------------------------------------------
+# 奇穴替换型（第 2 层剩余）：把默认技能替换为独立条目
+# ----------------------------------------------------------------------------
+
+# 洞天：变徵 → 1.5 秒内 3 次 4851 点固定伤害（消耗 3 点曲风，暂未建模消耗）
+[[qixue]]
+id = "dongtian"
+name = "洞天"
+slot = 1
+replaces_skill_id = 14299
+replaces_sub_id = 18859
+replacement = { skill_name = "洞天", skill_id = 14299, sub_id = 18859, base_damage1 = 4851, base_damage2 = 4851, atk_xishu = 0.0, dot_flag = 1, dot_interval = 0.5, dot_duration = 1.5, cast_time = 0.0, gcd_kind = 0 }
+
+# 超然：孤影化双 调息 150 → 60 秒，且受加速率影响（cd_haste 暂未建模单技能加成）
+[[qixue]]
+id = "chaoran"
+name = "超然"
+slot = 5
+replaces_skill_id = 14081
+modifiers = [{ cooldown_mul = -60.0 }]
+
+# 鸾羽：青霄飞羽 → 飞鸾动羽（999 点固定伤害 + 锁足/眩晕，40 秒调息）
+[[qixue]]
+id = "luanyu"
+name = "鸾羽"
+slot = 3
+replaces_skill_id = 14076
+replacement = { skill_name = "飞鸾动羽", skill_id = 14076, sub_id = 0, base_damage1 = 999, base_damage2 = 999, atk_xishu = 0.0, cast_time = 0.0, cooldown = 40.0, gcd_kind = 0 }
+
+# 鹿鸣：PvE 奇穴（宫 6 秒调息 + 持续运功消耗曲风），暂不建模，先占位
+[[qixue]]
+id = "luming"
+name = "鹿鸣"
+slot = 1
+shelved = true
