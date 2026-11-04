@@ -11,6 +11,7 @@ import { usePersistentState, readPreference, writePreference } from "../hooks/us
 import { STORAGE_KEYS } from "../utils/constants";
 import { comboDraftSchema, defaultComboDraft, type ComboDraft } from "../state/cockpit";
 import { formatTimelineEvent } from "./timelineFormat";
+import type { MijiDefDTO, QixueDefDTO } from "../types";
 import styles from "./ComboPage.module.css";
 
 interface Props {
@@ -42,6 +43,11 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const [presets, setPresets] = useState<string[]>([]);
   const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
   const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
+  // #92 秘籍/奇穴：可选列表来自门派 combat overlay，勾选后随请求下发
+  const [timelineMiji, setTimelineMiji] = useState<MijiDefDTO[]>([]);
+  const [timelineQixue, setTimelineQixue] = useState<QixueDefDTO[]>([]);
+  const [selMiji, setSelMiji] = useState<string[]>([]);
+  const [selQixue, setSelQixue] = useState<string[]>([]);
   const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
@@ -78,7 +84,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     setComboResult(null);
     setComputing(false);
     return () => { ++calculationRevision.current; };
-  }, [sequence, formData]);
+  }, [sequence, formData, selMiji, selQixue]);
 
   const pool = skillPool;
 
@@ -141,7 +147,24 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     } finally {
       if (revision === calculationRevision.current) setComputing(false);
     }
-  }, [sequence, formData]);
+  }, [sequence, formData, selMiji, selQixue]);
+
+  // 面板属性同步后加载门派 combat overlay，填充秘籍/奇穴可选项
+  useEffect(() => {
+    if (!formData) return;
+    let cancelled = false;
+    void Promise.resolve()
+      .then(() => api.loadCombatBundle(formData.xinfa_config.profession))
+      .then((bundle) => {
+        if (cancelled || !bundle?.combat) return;
+        setTimelineMiji(bundle.combat.miji ?? []);
+        setTimelineQixue(bundle.combat.qixue ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [formData?.xinfa_config.profession]);
 
   // #92 时间轴预览：读门派 combat overlay → DTO 请求 → 时序引擎（窗口伤害 / DPS / 事件）
   const handleTimeline = useCallback(async () => {
@@ -169,6 +192,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         coeff: req.coefficient,
         value_set: req.value_set ?? null,
         combat: bundle.combat,
+        miji: selMiji,
+        qixue: selQixue,
       });
       setTimelineResult(result);
     } catch (err) {
@@ -176,7 +201,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     } finally {
       setComputing(false);
     }
-  }, [sequence, formData]);
+  }, [sequence, formData, selMiji, selQixue]);
 
   const handleSavePreset = useCallback(async () => {
     if (!presetName.trim()) return;
@@ -348,6 +373,48 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       {/* Combo result */}
       {!configurationOnly && comboResult && (
         <ComboResultDisplay result={comboResult} />
+      )}
+
+      {/* #92 秘籍 / 奇穴勾选：随「时间轴预览」一起下发给时序引擎 */}
+      {!configurationOnly && (timelineMiji.length > 0 || timelineQixue.length > 0) && (
+        <div className={styles.optionsPanel} data-testid="timeline-options">
+          <div className={styles.optionsRow}>
+            <span className={styles.optionsLabel}>秘籍</span>
+            {timelineMiji.map((m) => (
+              <label key={m.id} className={styles.optionChip} title={`秘籍：${m.name}`}>
+                <input
+                  type="checkbox"
+                  checked={selMiji.includes(m.id)}
+                  onChange={(e) =>
+                    setSelMiji((prev) =>
+                      e.target.checked ? [...prev, m.id] : prev.filter((id) => id !== m.id),
+                    )
+                  }
+                />
+                {m.name}
+              </label>
+            ))}
+            {timelineMiji.length === 0 && <span className={styles.optionsLabel}>（该门派无秘籍数据）</span>}
+          </div>
+          <div className={styles.optionsRow}>
+            <span className={styles.optionsLabel}>奇穴</span>
+            {timelineQixue.map((q) => (
+              <label key={q.id} className={styles.optionChip} title={`第${q.slot}重：${q.name}`}>
+                <input
+                  type="checkbox"
+                  checked={selQixue.includes(q.id)}
+                  onChange={(e) =>
+                    setSelQixue((prev) =>
+                      e.target.checked ? [...prev, q.id] : prev.filter((id) => id !== q.id),
+                    )
+                  }
+                />
+                {q.name}
+              </label>
+            ))}
+            {timelineQixue.length === 0 && <span className={styles.optionsLabel}>（该门派无奇穴数据）</span>}
+          </div>
+        </div>
       )}
 
       {/* #92 时间轴预览（实验） */}

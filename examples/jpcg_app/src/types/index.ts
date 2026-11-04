@@ -390,13 +390,24 @@ export interface CombatMetaDTO {
   note: string;
 }
 
+export interface MijiDefDTO {
+  id: string;
+  name: string;
+}
+
+export interface QixueDefDTO {
+  id: string;
+  name: string;
+  slot: number;
+}
+
 export interface CombatDataDTO {
   meta: CombatMetaDTO;
   form: FormDefDTO[];
   skill_combat: SkillCombatDTO[];
   buff: TimedBuffDefDTO[];
-  miji: unknown[];
-  qixue: unknown[];
+  miji: MijiDefDTO[];
+  qixue: QixueDefDTO[];
 }
 
 export interface CombatBundleDTO {
@@ -421,6 +432,10 @@ export interface TimelineRequestDTO {
   coeff: CoefficientConfigDTO;
   value_set?: string | null;
   combat?: CombatDataDTO | null;
+  /** 激活的秘籍 id 列表 */
+  miji?: string[];
+  /** 激活的奇穴 id 列表 */
+  qixue?: string[];
 }
 
 // 与 Rust `TimelineEventKindDTO` 的 #[serde(tag = "kind")] 内部标签形状一致：

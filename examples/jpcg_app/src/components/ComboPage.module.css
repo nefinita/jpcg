@@ -494,3 +494,41 @@
   background: rgba(239, 131, 84, 0.1);
   border: 1px solid rgba(239, 131, 84, 0.25);
 }
+
+/* #92 时机选项：秘籍/奇穴勾选 */
+.optionsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--glass-bg);
+}
+
+.optionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.optionsLabel {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-right: 4px;
+}
+
+.optionChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.optionChip input {
+  accent-color: var(--accent);
+}

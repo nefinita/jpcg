@@ -48,3 +48,37 @@ it("加载预设只更新当前草稿，修改后不自动写回预设", async (
   expect(host.textContent).toContain("从下方技能池添加技能"); expect(host.querySelector("select")!.value).toBe("已保存");
   expect(api.saveComboPreset).not.toHaveBeenCalled();
 });
+
+it("时间轴预览下发勾选的秘籍与奇穴", async () => {
+  vi.mocked(api.loadCombatBundle).mockResolvedValue({
+    skills: [skill],
+    combat: {
+      meta: { profession: "mowen", version: "test", note: "" },
+      form: [],
+      skill_combat: [],
+      buff: [],
+      miji: [{ id: "mj_gong", name: "宫·秘籍" }],
+      qixue: [{ id: "qx_dongtian", name: "洞天", slot: 1 }],
+    },
+  } as never);
+  vi.mocked(api.calculateTimeline).mockResolvedValue({
+    events: [],
+    total_damage: 0,
+    window_dps: 0,
+    skipped_actions: 0,
+  });
+  await mount();
+  await click("测试技·一");
+  const panel = host.querySelector('[data-testid="timeline-options"]');
+  expect(panel).not.toBeNull();
+  const boxes = [...panel!.querySelectorAll('input[type="checkbox"]')] as HTMLInputElement[];
+  expect(boxes.length).toBe(2);
+  await act(async () => {
+    boxes[0].click();
+    boxes[1].click();
+  });
+  await click("时间轴预览");
+  expect(api.calculateTimeline).toHaveBeenCalledWith(
+    expect.objectContaining({ miji: ["mj_gong"], qixue: ["qx_dongtian"] }),
+  );
+});
