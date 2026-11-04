@@ -3,10 +3,10 @@ xinfa_name = "莫问"
 xinfa_nom = "根骨"
 # 50 级口径：主属性(根骨)自身换算 + 莫问心法加成，见 [attributes]
 # atk_up   = 根骨 0.19 + 心法 0.72
-# pofang_up= 根骨 0.06
+# pofang_up= 0（根骨不提供破防）
 # huixin_up= 根骨 0.25 + 心法 0.03
 atk_up = 0.91
-pofang_up = 0.06
+pofang_up = 0
 huixin_up = 0.28
 
 [version]
@@ -36,12 +36,6 @@ denominator = 100
 from = "gengu"
 to = "huixin"
 numerator = 28
-denominator = 100
-
-[[attributes.conversions]]
-from = "gengu"
-to = "pofang"
-numerator = 6
 denominator = 100
 
 [[attributes.conversions]]
