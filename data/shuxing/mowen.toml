@@ -28,7 +28,7 @@ qixue_multiplier = { numerator = 1, denominator = 1 }
 
 [[attributes.conversions]]
 from = "gengu"
-to = "gongji_base"
+to = "gongji_extra"
 numerator = 72
 denominator = 100
 
