@@ -367,6 +367,8 @@ mod tests {
             std::fs::write(values.join("index.toml"), INDEX).expect("write index");
             std::fs::write(values.join("cszj-exp-260908.toml"), EXP).expect("write exp");
             std::fs::write(values.join("live-130.toml"), LIVE).expect("write live");
+            // live-50 与 cszj 同值（正式服 50 级先沿用 50 级观测快照）
+            std::fs::write(values.join("live-50.toml"), EXP).expect("write live-50");
             Self { root, values }
         }
         fn values(&self) -> &Path {
@@ -386,9 +388,11 @@ mod tests {
     fn lists_with_availability_and_default() {
         let t = TempData::new("list");
         let sets = list_from(t.values());
-        assert_eq!(sets.len(), 2);
+        assert_eq!(sets.len(), 3);
+        let live50 = sets.iter().find(|s| s.id == "live-50").unwrap();
+        assert!(live50.is_default && live50.available && live50.source == "data");
         let exp = sets.iter().find(|s| s.id == "cszj-exp-260908").unwrap();
-        assert!(exp.is_default && exp.available && exp.source == "data");
+        assert!(!exp.is_default && exp.available);
         let live = sets.iter().find(|s| s.id == "live-130").unwrap();
         assert!(!live.is_default && live.available);
     }

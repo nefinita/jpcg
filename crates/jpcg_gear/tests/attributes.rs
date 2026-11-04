@@ -300,13 +300,19 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
     for dir in ["gear", "shuxing", "values"] {
         std::fs::create_dir(temp.path().join(dir)).unwrap();
     }
-    for f in ["index.toml", "cszj-exp-260908.toml", "live-130.toml"] {
+    for f in ["index.toml", "cszj-exp-260908.toml", "live-130.toml", "live-50.toml"] {
         std::fs::copy(
             root.join("values").join(f),
             temp.path().join("values").join(f),
         )
         .unwrap();
     }
+    // 夹具的换算规则按 cszj-exp-260908 写，默认值集也指向它，避免默认项切到 live-50 后不一致
+    let idx_path = temp.path().join("values/index.toml");
+    let idx = std::fs::read_to_string(&idx_path)
+        .unwrap()
+        .replace("default = \"live-50\"", &format!("default = \"{}\"", VALUE));
+    std::fs::write(&idx_path, idx).unwrap();
     for f in [
         "schools.toml",
         "templates.toml",
@@ -315,7 +321,8 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
     ] {
         let text = std::fs::read_to_string(root.join("gear").join(f))
             .unwrap()
-            .replace("live-130", VALUE);
+            .replace("live-130", VALUE)
+            .replace("live-50", VALUE);
         std::fs::write(temp.path().join("gear").join(f), text).unwrap();
     }
     let base = std::fs::read_to_string(root.join("shuxing/mowen.toml"))
@@ -337,7 +344,8 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
     let mut req: OptimizeRequest = toml::from_str(
         &std::fs::read_to_string(root.join("gear/sample-request.toml"))
             .unwrap()
-            .replace("live-130", VALUE),
+            .replace("live-130", VALUE)
+            .replace("live-50", VALUE),
     )
     .unwrap();
     req.loadout.attribute_rules = Some(PROFESSION_TOML.into());

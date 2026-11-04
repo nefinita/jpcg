@@ -9,7 +9,13 @@
 #   [[value_sets]] — id / name（界面显示）/ level（等级，仅标识）/ file（本目录内文件名）
 # ============================================================================
 
-default = "cszj-exp-260908"
+default = "live-50"
+
+[[value_sets]]
+id = "live-50"
+name = "正式服·50级"
+level = 50
+file = "live-50.toml"
 
 [[value_sets]]
 id = "cszj-exp-260908"

@@ -9,7 +9,7 @@ kind = "expected"
 [objective.weights]
 "徵" = 1.0
 [config]
-value_set = "live-130"
+value_set = "live-50"
 [config.player]
 jcsx = "根骨"
 [config.hostile]
@@ -30,7 +30,7 @@ pvp_global_jianshang = 0.9
 [loadout]
 school = "mowen"
 revision = "synthetic-v1"
-value_set = "live-130"
+value_set = "live-50"
 [loadout.base]
 zhushuxing = 10000
 gongji = 40000
