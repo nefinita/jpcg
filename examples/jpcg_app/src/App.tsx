@@ -162,18 +162,22 @@ export default function App() {
   };
   const adoptValueSet = async (nextLoadout?: GearLoadout, action = ++actionRevision.current) => {
     const selected = nextLoadout ?? loadout; if (!selected || action !== actionRevision.current) return;
+    // 旧存档的版本/数值集可能落后于模板：统一按模板版本口径迁移，避免与模板版本校验互卡。
+    const migrated: GearLoadout = catalog
+      ? { ...selected, revision: catalog.version.revision, value_set: catalog.version.value_set }
+      : selected;
     try {
-      const vs = await api.resolveValueSet(selected.value_set);
+      const vs = await api.resolveValueSet(migrated.value_set);
       if (action !== actionRevision.current) return;
-      if (!vs.available || vs.id !== selected.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
-      const config = selected.school !== formData.xinfa ? await api.loadProfessionConfig(selected.school) : null;
-      if (selected.school !== formData.xinfa && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
+      if (!vs.available || vs.id !== migrated.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
+      const config = migrated.school !== formData.xinfa ? await api.loadProfessionConfig(migrated.school) : null;
+      if (migrated.school !== formData.xinfa && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
       if (action !== actionRevision.current) return;
       setCockpit((previous) => ({ ...previous, mode: "gear", manualReady: true,
-        loadouts: { ...previous.loadouts, [selected.school]: selected },
-        form: { ...previous.form, xinfa: selected.school, value_set: selected.value_set,
-          coefficient: previous.form.value_set === selected.value_set ? previous.form.coefficient : { ...vs.coefficient! },
-          xinfa_config: config ? { profession: selected.school, xinfa_name: String(config.xinfa_name ?? selected.school),
+        loadouts: { ...previous.loadouts, [migrated.school]: migrated },
+        form: { ...previous.form, xinfa: migrated.school, value_set: migrated.value_set,
+          coefficient: previous.form.value_set === migrated.value_set ? previous.form.coefficient : { ...vs.coefficient! },
+          xinfa_config: config ? { profession: migrated.school, xinfa_name: String(config.xinfa_name ?? migrated.school),
             xinfa_nom: String(config.xinfa_nom ?? previous.form.xinfa_config.xinfa_nom), atk_up: Number(config.atk_up) || 0,
             pofang_up: Number(config.pofang_up) || 0, huixin_up: Number(config.huixin_up) || 0 }
             : previous.form.xinfa_config } }));
@@ -255,7 +259,7 @@ export default function App() {
           {gearError && <div role="alert" className={styles.gearAlert}>{gearError}<button onClick={reloadGearRules}>重新读取模板</button></div>}
           {!catalog && !gearError && <p role="status">正在读取配装模板…</p>}
           {catalog && !loadout && <p>当前心法没有完整的 12 部位模板，请选择其他心法或切换手动属性。</p>}
-          {catalog && loadout && !compatible && <div className={styles.gearAlert}>配装需要匹配模板版本与数值集。<button onClick={() => void adoptValueSet()}>使用模板数值集 {loadout.value_set}</button></div>}
+          {catalog && loadout && !compatible && <div className={styles.gearAlert}>配装需要匹配模板版本与数值集。<button onClick={() => void adoptValueSet()}>使用模板数值集 {catalog.version.value_set}</button></div>}
           <div className={styles.gearBody}>
             {catalog && loadout && <GearPanel catalog={catalog} loadout={loadout} composition={composition} pending={stale || calculating}
               onChange={changeLoadout} onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
