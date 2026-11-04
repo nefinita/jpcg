@@ -44,6 +44,9 @@ def main() -> int:
     # DOT 每跳：tooltip 只给「每 3 秒 1 点(+750)/(+731)」，按整数倍率 14 处理
     for key, ratio in {(14065, 9357): 14, (14067, 9361): 14}.items():
         targets[key] = {"ratio_int": ratio, "base_min": 1, "base_max": 1}
+    # 高山流水变体：变宫/变徵 与 宫/徵 同源（伤害一致，仅可移动吟唱）
+    targets[(14298, 18860)] = {"ratio_int": 51, "base_min": 80, "base_max": 90}
+    targets[(14299, 18859)] = {"ratio_int": 35, "base_min": 84, "base_max": 92}
 
     lines = TOML_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
     out: list[str] = []

@@ -110,15 +110,17 @@ has_critical_strike = true   #无质（伤害固定=期望 Q）
 skill_name = "变宫"           #名字
 skill_id = 14298            #技能ID（数据源池内 id）
 sub_id = 18860              #子ID
-base_damage1 = 160          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.609375        #伤害系数
+base_damage1 = 80
+base_damage2 = 90
+atk_xishu = 0.31875
 
 [[skill]]
 skill_name = "变徵"           #名字
 skill_id = 14299            #技能ID（数据源池内 id）
+base_damage2 = 92
+base_damage1 = 84
 sub_id = 18859              #子ID
-atk_xishu = 1.7760416        #伤害系数
+atk_xishu = 0.21875
 
 [[skill]]
 skill_name = "剑·宫"           #名字
