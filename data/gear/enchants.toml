@@ -222,3 +222,63 @@ slot = "yao"
 id = "体质-tizhi-90"
 name = "体质提高90"
 stats = { tizhi = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "会心-huixin-90"
+name = "全会心等级提高90"
+stats = { huixin = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "根骨-gengu-90"
+name = "根骨提高90"
+stats = { gengu = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "身法-shenfa-90"
+name = "身法提高90"
+stats = { shenfa = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "元气-yuanqi-90"
+name = "元气提高90"
+stats = { yuanqi = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "力道-liliang-90"
+name = "力道提高90"
+stats = { liliang = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "会心-huixin-90"
+name = "全会心等级提高90"
+stats = { huixin = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "根骨-gengu-90"
+name = "根骨提高90"
+stats = { gengu = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "身法-shenfa-90"
+name = "身法提高90"
+stats = { shenfa = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "元气-yuanqi-90"
+name = "元气提高90"
+stats = { yuanqi = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "力道-liliang-90"
+name = "力道提高90"
+stats = { liliang = 90 }
