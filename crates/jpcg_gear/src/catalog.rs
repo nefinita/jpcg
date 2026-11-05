@@ -31,12 +31,6 @@ struct OverridesFile {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct GemsFile {
-    version: Version,
-    gems: Vec<GemDef>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct EnchantsFile {
     version: Version,
     enchants: Vec<EnchantDef>,
@@ -52,17 +46,17 @@ impl Catalog {
         let schools: SchoolsFile = read(dir, "schools.toml")?;
         let sets: SetsFile = read(dir, "sets.toml")?;
         let overrides: OverridesFile = read(dir, "overrides.toml")?;
-        let gems: GemsFile = read(dir, "gems.toml")?;
+
         let enchants: EnchantsFile = read(dir, "enchants.toml")?;
         for version in [
             &schools.version,
             &sets.version,
             &overrides.version,
-            &gems.version,
+
             &enchants.version,
         ] {
             if version != &templates.version {
-                return Err("四个文件的 version 必须完全一致".into());
+                return Err("五个文件的 version 必须完全一致".into());
             }
         }
         let mut catalog = Self {
@@ -70,7 +64,7 @@ impl Catalog {
             templates: templates.templates,
             schools: schools.schools,
             sets: sets.sets,
-            gems: gems.gems,
+
             enchants: enchants.enchants,
         };
         // 先校验原始唯一性，不能用 override 隐藏重复模板。
@@ -112,12 +106,6 @@ impl Catalog {
         }
         if self.schools.is_empty() || self.templates.is_empty() {
             return Err("门派与模板不能为空".into());
-        }
-        let mut gem_ids = BTreeSet::new();
-        for gem in &self.gems {
-            if gem.id.trim().is_empty() || gem.name.trim().is_empty() || !gem_ids.insert(&gem.id) {
-                return Err("宝石重复、空 id 或含负值".into());
-            }
         }
         let mut schools = BTreeSet::new();
         for school in &self.schools {
@@ -204,17 +192,6 @@ impl Catalog {
             }
             if !tiers.contains(&Tier::Base) {
                 return Err("套装缺少基础档".into());
-            }
-        }
-        for t in &self.templates {
-            if t.socket_count as usize != t.default_gems.len() {
-                return Err("模板孔位数量与默认宝石数量不一致".into());
-            }
-            if t.socket_count > 3 {
-                return Err("单件装备孔位不能超过 3".into());
-            }
-            if t.default_gems.iter().any(|id| !gem_ids.contains(id)) {
-                return Err("模板默认宝石不存在".into());
             }
         }
         let mut keys = BTreeSet::new();
@@ -347,26 +324,8 @@ impl Catalog {
                 })
                 .ok_or_else(|| format!("模板不存在: {choice:?}"))?;
             stats.add(&template.stats)?;
-            let gems = loadout
-                .sockets
-                .get(&choice.slot)
-                .cloned()
-                .unwrap_or_else(|| template.default_gems.clone());
-            if gems.len() != template.socket_count as usize {
-                return Err(format!(
-                    "镶嵌孔数量不匹配: {:?} 需要 {} 个宝石，实际 {} 个",
-                    choice.slot,
-                    template.socket_count,
-                    gems.len()
-                ));
-            }
-            for id in &gems {
-                let gem = self
-                    .gems
-                    .iter()
-                    .find(|g| &g.id == id)
-                    .ok_or_else(|| format!("镶嵌宝石不存在: {id}"))?;
-                stats.add(&gem.stats)?;
+            for extra in &template.sockets {
+                stats.add(extra)?;
             }
             if let Some(id) = loadout.enchants.get(&choice.slot) {
                 let enchant = self

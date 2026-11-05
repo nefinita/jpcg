@@ -49,9 +49,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
         const candidates = catalog.templates.filter((t) => (t.school === loadout.school || t.cross_school) && t.choice.slot === slot);
         const selected = loadout.choices.find((c) => c.slot === slot);
         const template = candidates.find((t) => selected && choiceKey(t.choice) === choiceKey(selected));
-        const socketCount = template?.socket_count ?? 0;
-        const gemIds = loadout.sockets?.[slot] ?? template?.default_gems ?? [];
-        const gemOptions = catalog.gems ?? [];
+        const sockets = template?.sockets ?? [];
         const enchantOptions = (catalog.enchants ?? []).filter((e) => e.slot === slot);
         const enchantId = loadout.enchants?.[slot] ?? "";
         return <article className={styles.card} key={slot} aria-label={slotNames[slot]}>
@@ -66,22 +64,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
           </div>
           {template && <>
             <p>{Object.entries(template.stats).filter(([, n]) => n > 0).slice(0, 3).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
-            {socketCount > 0 && <div className={styles.sockets}>
-              {Array.from({ length: socketCount }, (_, i) => (
-                <label key={i} className={styles.enchant}>孔 {i + 1}
-                  <select aria-label={`${slotNames[slot]}孔${i + 1}`} value={gemIds[i] ?? ""} disabled={stale} onChange={(event) => {
-                    const next = { ...(loadout.sockets ?? {}) };
-                    const list = [...(next[slot] ?? gemIds)];
-                    list[i] = event.target.value;
-                    next[slot] = list;
-                    onChange({ ...loadout, sockets: next });
-                  }}>
-                    <option value="">未镶嵌</option>
-                    {gemOptions.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </label>
-              ))}
-            </div>}
+            {sockets.length > 0 && <p>镶嵌（固定）：{sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
             {enchantOptions.length > 0 && <label className={styles.enchant}>附魔 <select aria-label={`${slotNames[slot]}附魔`} value={enchantId} disabled={stale} onChange={(event) => {
               const value = event.target.value;
               const next = { ...(loadout.enchants ?? {}) };

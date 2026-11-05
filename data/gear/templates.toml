@@ -12,8 +12,6 @@ provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基�
 school = "mowen"
 green = "pofang"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-化劲"]
 [templates.choice]
 slot = "tou"
 source = "weiwang"
@@ -25,13 +23,14 @@ tizhi = 675
 gongji = 424
 pofang = 424
 huajin = 446
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-化劲"]
 [templates.choice]
 slot = "tou"
 source = "weiwang"
@@ -43,13 +42,14 @@ tizhi = 642
 gongji = 405
 pofang = 405
 huajin = 426
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-全会心", "八级-气血上限"]
 [templates.choice]
 slot = "tou"
 source = "mingjian"
@@ -61,13 +61,14 @@ tizhi = 675
 gongji = 424
 jiasu = 424
 huajin = 446
-
+[[templates.sockets]]
+huixin = 38
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-全会心", "八级-气血上限"]
 [templates.choice]
 slot = "tou"
 source = "mingjian"
@@ -79,13 +80,14 @@ tizhi = 642
 gongji = 405
 jiasu = 405
 huajin = 426
-
+[[templates.sockets]]
+huixin = 38
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-全破防", "八级-化劲"]
 [templates.choice]
 slot = "yi"
 source = "weiwang"
@@ -97,13 +99,14 @@ tizhi = 750
 gongji = 471
 jiasu = 471
 huajin = 496
-
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-全破防", "八级-化劲"]
 [templates.choice]
 slot = "yi"
 source = "weiwang"
@@ -115,13 +118,14 @@ tizhi = 713
 gongji = 449
 jiasu = 449
 huajin = 473
-
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-气血上限"]
 [templates.choice]
 slot = "yi"
 source = "mingjian"
@@ -133,13 +137,14 @@ tizhi = 750
 gongji = 471
 pofang = 471
 huajin = 496
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "pofang"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-气血上限"]
 [templates.choice]
 slot = "yi"
 source = "mingjian"
@@ -151,13 +156,14 @@ tizhi = 713
 gongji = 449
 pofang = 449
 huajin = 473
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "yujin"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-气血上限"]
 [templates.choice]
 slot = "yao"
 source = "weiwang"
@@ -169,13 +175,14 @@ tizhi = 619
 gongji = 441
 yujin = 139
 huajin = 347
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "yujin"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-气血上限"]
 [templates.choice]
 slot = "yao"
 source = "weiwang"
@@ -187,13 +194,14 @@ tizhi = 588
 gongji = 421
 yujin = 133
 huajin = 331
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-化劲"]
 [templates.choice]
 slot = "yao"
 source = "mingjian"
@@ -205,13 +213,14 @@ tizhi = 525
 gongji = 330
 huixin = 330
 huajin = 347
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-化劲"]
 [templates.choice]
 slot = "yao"
 source = "mingjian"
@@ -223,13 +232,14 @@ tizhi = 499
 gongji = 315
 huixin = 315
 huajin = 331
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "yujin"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-化劲"]
 [templates.choice]
 slot = "shou"
 source = "weiwang"
@@ -241,13 +251,14 @@ tizhi = 619
 gongji = 441
 yujin = 139
 huajin = 347
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "yujin"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-化劲"]
 [templates.choice]
 slot = "shou"
 source = "weiwang"
@@ -259,13 +270,14 @@ tizhi = 588
 gongji = 421
 yujin = 133
 huajin = 331
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-主属性"]
 [templates.choice]
 slot = "shou"
 source = "mingjian"
@@ -277,13 +289,14 @@ tizhi = 525
 gongji = 330
 jiasu = 330
 huajin = 347
-
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+zhushuxing = 38
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-主属性"]
 [templates.choice]
 slot = "shou"
 source = "mingjian"
@@ -295,12 +308,13 @@ tizhi = 499
 gongji = 315
 jiasu = 315
 huajin = 331
-
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+zhushuxing = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
-socket_count = 2
-default_gems = ["八级-全破防", "八级-主属性"]
 [templates.choice]
 slot = "ku"
 source = "weiwang"
@@ -312,12 +326,13 @@ tizhi = 750
 gongji = 471
 pofang = 471
 huajin = 496
-
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+zhushuxing = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
-socket_count = 2
-default_gems = ["八级-全破防", "八级-主属性"]
 [templates.choice]
 slot = "ku"
 source = "weiwang"
@@ -329,12 +344,13 @@ tizhi = 713
 gongji = 449
 pofang = 449
 huajin = 473
-
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+zhushuxing = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-全会心"]
 [templates.choice]
 slot = "ku"
 source = "mingjian"
@@ -346,12 +362,13 @@ tizhi = 750
 gongji = 471
 huixin = 471
 huajin = 496
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huixin = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
-socket_count = 2
-default_gems = ["八级-主属性", "八级-全会心"]
 [templates.choice]
 slot = "ku"
 source = "mingjian"
@@ -363,13 +380,14 @@ tizhi = 713
 gongji = 449
 huixin = 449
 huajin = 473
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+huixin = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-全会心", "八级-化劲"]
 [templates.choice]
 slot = "xie"
 source = "weiwang"
@@ -381,13 +399,14 @@ tizhi = 525
 gongji = 330
 huixin = 330
 huajin = 347
-
+[[templates.sockets]]
+huixin = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "weiwang-armor"
-socket_count = 2
-default_gems = ["八级-全会心", "八级-化劲"]
 [templates.choice]
 slot = "xie"
 source = "weiwang"
@@ -399,13 +418,14 @@ tizhi = 499
 gongji = 315
 huixin = 315
 huajin = 331
-
+[[templates.sockets]]
+huixin = 38
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-全破防"]
 [templates.choice]
 slot = "xie"
 source = "mingjian"
@@ -417,13 +437,14 @@ tizhi = 525
 gongji = 330
 pofang = 330
 huajin = 347
-
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+pofang = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-全破防"]
 [templates.choice]
 slot = "xie"
 source = "mingjian"
@@ -435,13 +456,14 @@ tizhi = 499
 gongji = 315
 pofang = 315
 huajin = 331
-
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+pofang = 38
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-气血上限"]
 [templates.choice]
 slot = "xianglian"
 source = "weiwang"
@@ -453,13 +475,12 @@ tizhi = 375
 gongji = 235
 jiasu = 235
 huajin = 248
-
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "jiasu"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-气血上限"]
 [templates.choice]
 slot = "xianglian"
 source = "weiwang"
@@ -471,13 +492,12 @@ tizhi = 356
 gongji = 224
 jiasu = 224
 huajin = 237
-
+[[templates.sockets]]
+qixue_additional = 577
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-体质"]
 [templates.choice]
 slot = "xianglian"
 source = "weiwang"
@@ -489,13 +509,12 @@ tizhi = 375
 gongji = 235
 huixin = 235
 huajin = 248
-
+[[templates.sockets]]
+tizhi = 57
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-体质"]
 [templates.choice]
 slot = "xianglian"
 source = "weiwang"
@@ -507,13 +526,12 @@ tizhi = 356
 gongji = 224
 huixin = 224
 huajin = 237
-
+[[templates.sockets]]
+tizhi = 57
 [[templates]]
 school = "mowen"
 green = "pofang"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-化劲"]
 [templates.choice]
 slot = "yaozhui"
 source = "weiwang"
@@ -525,13 +543,12 @@ tizhi = 375
 gongji = 235
 pofang = 235
 huajin = 248
-
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-化劲"]
 [templates.choice]
 slot = "yaozhui"
 source = "weiwang"
@@ -543,13 +560,12 @@ tizhi = 356
 gongji = 224
 pofang = 224
 huajin = 237
-
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-化劲"]
 [templates.choice]
 slot = "yaozhui"
 source = "weiwang"
@@ -561,13 +577,12 @@ tizhi = 375
 gongji = 235
 huixin = 235
 huajin = 248
-
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
 set = "weiwang-accessory"
-socket_count = 1
-default_gems = ["八级-化劲"]
 [templates.choice]
 slot = "yaozhui"
 source = "weiwang"
@@ -579,7 +594,8 @@ tizhi = 356
 gongji = 224
 huixin = 224
 huajin = 237
-
+[[templates.sockets]]
+huajin = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
@@ -647,8 +663,6 @@ huajin = 237
 [[templates]]
 school = "mowen"
 green = "yujin"
-socket_count = 3
-default_gems = ["八级-御劲", "八级-全破防", "八级-全攻击"]
 [templates.choice]
 slot = "wuqi"
 source = "weiwang"
@@ -660,12 +674,15 @@ tizhi = 1061
 gongji = 1652
 yujin = 238
 huajin = 148
-
+[[templates.sockets]]
+yujin = 38
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+gongji = 38
 [[templates]]
 school = "mowen"
 green = "yujin"
-socket_count = 3
-default_gems = ["八级-御劲", "八级-全破防", "八级-全攻击"]
 [templates.choice]
 slot = "wuqi"
 source = "weiwang"
@@ -677,12 +694,15 @@ tizhi = 1008
 gongji = 1577
 yujin = 227
 huajin = 141
-
+[[templates.sockets]]
+yujin = 38
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+gongji = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
-socket_count = 3
-default_gems = ["八级-主属性", "八级-全破防", "八级-全攻击"]
 [templates.choice]
 slot = "wuqi"
 source = "mingjian"
@@ -694,12 +714,15 @@ tizhi = 900
 gongji = 1324
 pofang = 788
 huajin = 148
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+gongji = 38
 [[templates]]
 school = "mowen"
 green = "pofang"
-socket_count = 3
-default_gems = ["八级-主属性", "八级-全破防", "八级-全攻击"]
 [templates.choice]
 slot = "wuqi"
 source = "mingjian"
@@ -711,12 +734,15 @@ tizhi = 855
 gongji = 1263
 pofang = 752
 huajin = 141
-
+[[templates.sockets]]
+zhushuxing = 38
+[[templates.sockets]]
+pofang = 38
+[[templates.sockets]]
+gongji = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
-socket_count = 1
-default_gems = ["八级-全会心"]
 [templates.choice]
 slot = "anqi"
 source = "weiwang"
@@ -728,12 +754,11 @@ tizhi = 450
 gongji = 283
 huixin = 283
 huajin = 298
-
+[[templates.sockets]]
+huixin = 38
 [[templates]]
 school = "mowen"
 green = "huixin"
-socket_count = 1
-default_gems = ["八级-全会心"]
 [templates.choice]
 slot = "anqi"
 source = "weiwang"
@@ -745,12 +770,11 @@ tizhi = 428
 gongji = 270
 huixin = 270
 huajin = 284
-
+[[templates.sockets]]
+huixin = 38
 [[templates]]
 school = "mowen"
 green = "jiasu"
-socket_count = 1
-default_gems = ["八级-体质"]
 [templates.choice]
 slot = "anqi"
 source = "mingjian"
@@ -762,12 +786,11 @@ tizhi = 450
 gongji = 283
 jiasu = 283
 huajin = 298
-
+[[templates.sockets]]
+tizhi = 57
 [[templates]]
 school = "mowen"
 green = "jiasu"
-socket_count = 1
-default_gems = ["八级-体质"]
 [templates.choice]
 slot = "anqi"
 source = "mingjian"
@@ -779,14 +802,13 @@ tizhi = 428
 gongji = 270
 jiasu = 270
 huajin = 284
-
+[[templates.sockets]]
+tizhi = 57
 [[templates]]
 school = "bingxin"
 cross_school = true
 green = "huixin"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-会心效果"]
 [templates.choice]
 slot = "tou"
 source = "mingjian"
@@ -798,14 +820,15 @@ tizhi = 675
 gongji = 424
 huixin = 424
 huajin = 446
-
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+huixiao = 38
 [[templates]]
 school = "bingxin"
 cross_school = true
 green = "huixin"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-会心效果"]
 [templates.choice]
 slot = "tou"
 source = "mingjian"
@@ -817,14 +840,15 @@ tizhi = 642
 gongji = 405
 huixin = 405
 huajin = 426
-
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+huixiao = 38
 [[templates]]
 school = "bingxin"
 cross_school = true
 green = "pofang"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-全破防"]
 [templates.choice]
 slot = "shou"
 source = "mingjian"
@@ -836,14 +860,15 @@ tizhi = 525
 gongji = 330
 pofang = 330
 huajin = 347
-
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+pofang = 38
 [[templates]]
 school = "bingxin"
 cross_school = true
 green = "pofang"
 set = "jingji-armor"
-socket_count = 2
-default_gems = ["八级-气血上限", "八级-全破防"]
 [templates.choice]
 slot = "shou"
 source = "mingjian"
@@ -855,6 +880,10 @@ tizhi = 499
 gongji = 315
 pofang = 315
 huajin = 331
+[[templates.sockets]]
+qixue_additional = 577
+[[templates.sockets]]
+pofang = 38
 [[templates]]
 school = "mowen"
 green = "huixin"

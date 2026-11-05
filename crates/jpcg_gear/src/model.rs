@@ -177,12 +177,9 @@ pub struct Choice {
 #[serde(deny_unknown_fields)]
 pub struct Template {
     pub school: String,
-    /// 孔位数量（0 表示无镶嵌孔）。
+    /// 固定镶嵌属性：每件装备的五行石孔不可选，按孔位把属性直接计入。
     #[serde(default)]
-    pub socket_count: u8,
-    /// 默认镶嵌宝石 id（与孔位一一对应）。
-    #[serde(default)]
-    pub default_gems: Vec<String>,
+    pub sockets: Vec<Stats>,
     /// 跨门派装备：不参与该门派的套装与覆盖率校验，仅供其他门派穿戴。
     #[serde(default)]
     pub cross_school: bool,
@@ -231,19 +228,9 @@ pub struct Catalog {
     pub schools: Vec<School>,
     pub templates: Vec<Template>,
     pub sets: Vec<GearSet>,
-    #[serde(default)]
-    pub gems: Vec<GemDef>,
+
     #[serde(default)]
     pub enchants: Vec<EnchantDef>,
-}
-
-/// 镶嵌宝石（当前仅八级）：孔位里选择宝石 id，属性按宝石累加。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct GemDef {
-    pub id: String,
-    pub name: String,
-    pub stats: Stats,
 }
 
 /// 附魔：按部位给出可选列表，loadout 里按 id 选择。
@@ -268,9 +255,6 @@ pub struct Loadout {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attribute_rules: Option<String>,
     pub choices: Vec<Choice>,
-    /// 每件装备的镶嵌宝石 id（按孔位顺序）；未填则用模板默认宝石。
-    #[serde(default)]
-    pub sockets: BTreeMap<Slot, Vec<String>>,
     /// 每件装备选择的附魔 id；未填则该部位不加附魔。
     #[serde(default)]
     pub enchants: BTreeMap<Slot, String>,
