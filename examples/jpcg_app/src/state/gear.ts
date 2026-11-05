@@ -48,6 +48,13 @@ export function initialLoadout(catalog: GearCatalog, school: string): GearLoadou
 export function gearInputKey(form: FormData, loadout: GearLoadout) {
   return JSON.stringify({ mode: "gear", loadout, context: { ...toCalculateRequest(form), player: null } });
 }
+/** 丢弃历史版本遗留字段（例如已删除的 sockets），保证发给 Rust 的 loadout 严格匹配当前结构。 */
+export function sanitizeGearLoadout(loadout: GearLoadout): GearLoadout {
+  const base = { ...loadout } as GearLoadout & Record<string, unknown>;
+  delete base.sockets;
+  return base as GearLoadout;
+}
+
 export function isGearLoadout(x: unknown): x is GearLoadout {
   if (!x || typeof x !== "object") return false;
   const v = x as Partial<GearLoadout>;

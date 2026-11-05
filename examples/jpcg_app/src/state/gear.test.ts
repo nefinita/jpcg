@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fixture } from "../test/gear-fixture";
 import { defaultCockpit, cockpitSchema } from "./cockpit";
-import { emptyGearStats } from "../types/gear";
-import { gearInputKey, gearPlayerForm, initialLoadout, isGearComposition, isGearLoadout, PROFESSION_ATTRIBUTE_RULES } from "./gear";
+import { emptyGearStats, type GearLoadout } from "../types/gear";
+import { gearInputKey, gearPlayerForm, initialLoadout, isGearComposition, isGearLoadout, sanitizeGearLoadout, PROFESSION_ATTRIBUTE_RULES } from "./gear";
 import { toCalculateRequest } from "../utils/normalize";
 
 describe("配装属性换算契约", () => {
@@ -40,5 +40,17 @@ describe("配装属性换算契约", () => {
       const player = gearPlayerForm({ ...raw, zhuanhua_gongji: extra });
       expect(toCalculateRequest({ ...form, player }).player).not.toHaveProperty("zhuanhua_gongji");
     }
+  });
+});
+
+describe("sanitizeGearLoadout", () => {
+  it("丢弃旧版本遗留字段（sockets），保留当前字段", () => {
+    const loadout = initialLoadout(fixture.catalog, "mowen");
+    expect(loadout).not.toBeNull();
+    const legacy = { ...loadout!, sockets: { tou: ["八级-根骨"] }, wucai: "五彩石-根骨会效攻击" };
+    const clean = sanitizeGearLoadout(legacy as unknown as GearLoadout);
+    expect("sockets" in clean).toBe(false);
+    expect(clean.wucai).toBe("五彩石-根骨会效攻击");
+    expect(clean.choices).toHaveLength(12);
   });
 });
