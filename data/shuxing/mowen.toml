@@ -45,7 +45,8 @@ numerator = 0
 denominator = 1
 
 [[attributes.constants]]
-to = "gongji_extra"
+# 心法固定内功攻击：游戏面板的「基础攻击力」包含这一项。
+to = "gongji_base"
 value = 2282
 
 [[attributes.constants]]
