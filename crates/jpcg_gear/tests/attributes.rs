@@ -269,11 +269,7 @@ fn old_inputs_remain_legacy_and_historical_ids_cannot_silently_mix_versions() {
     let mut l: Loadout =
         toml::from_str(&std::fs::read_to_string(root.join("sample-loadout.toml")).unwrap())
             .unwrap();
-    let out = host::compose(&c, &l).unwrap();
-    assert!(out.composed.panel.is_none());
-    assert_eq!(out.player.zhuanhua_gongji, None);
-    assert_eq!(out.player.jiasu_dengji, out.composed.stats.jiasu);
-    l.base.tizhi = 1;
+    // 真实 50 级装备含体质/额外气血，旧模式必须显式选择 attribute_rules。
     assert!(c.compose(&l).unwrap_err().contains("attribute_rules"));
     l.attribute_rules = Some("jx3-130-mowen-20260814".into());
     assert!(c.compose(&l).unwrap_err().contains("不再支持"));
@@ -324,6 +320,8 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
         "templates.toml",
         "sets.toml",
         "overrides.toml",
+        "sockets.toml",
+        "enchants.toml",
     ] {
         let text = std::fs::read_to_string(root.join("gear").join(f))
             .unwrap()
@@ -361,8 +359,9 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
     let out = host::compose(&c, &req.loadout).unwrap();
     let panel = out.composed.panel.as_ref().unwrap();
     let raw = &out.composed.stats;
+    // 装备镶嵌孔也会提供额外气血，因此只校验公式本体与额外气血的传递关系。
     assert_eq!(panel.qixue_base, (raw.qixue + raw.tizhi * 7) * 3 / 2);
-    assert_eq!(panel.qixue, panel.qixue_base + 123);
+    assert_eq!(panel.qixue, panel.qixue_base + raw.qixue_additional);
     assert_eq!(out.player.huixin_dengji, panel.huixin);
     assert_eq!(out.player.zhuanhua_gongji, Some(panel.gongji_extra));
     let core = jpcg_core::type_set::player::PlayerConfig::from(out.player.clone());

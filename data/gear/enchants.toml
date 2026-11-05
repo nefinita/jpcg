@@ -1,0 +1,80 @@
+# 附魔（人工填写）：loadout.enchants 里按 部位 = id 选择。
+[version]
+schema = 1
+season = 3
+revision = "live-50-20261106"
+value_set = "live-50"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
+
+[[enchants]]
+slot = "tou"
+id = "全攻击-gongji-90"
+name = "全攻击提高90"
+stats = { gongji = 90 }
+
+[[enchants]]
+slot = "yi"
+id = "misc-huajin-90"
+name = "附魔提高90"
+stats = { huajin = 90 }
+
+[[enchants]]
+slot = "yao"
+id = "misc-huajin-90"
+name = "附魔提高90"
+stats = { huajin = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "全破防-pofang-90"
+name = "全破防提高90"
+stats = { pofang = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "全破防-pofang-90"
+name = "全破防提高90"
+stats = { pofang = 90 }
+
+[[enchants]]
+slot = "xie"
+id = "全攻击-gongji-90"
+name = "全攻击提高90"
+stats = { gongji = 90 }
+
+[[enchants]]
+slot = "xianglian"
+id = "misc-yujin-126"
+name = "附魔提高126"
+stats = { yujin = 126 }
+
+[[enchants]]
+slot = "yaozhui"
+id = "misc-huajin-126"
+name = "附魔提高126"
+stats = { huajin = 126 }
+
+[[enchants]]
+slot = "jie1"
+id = "全攻击-gongji-126"
+name = "全攻击提高126"
+stats = { gongji = 126 }
+
+[[enchants]]
+slot = "jie2"
+id = "全攻击-gongji-126"
+name = "全攻击提高126"
+stats = { gongji = 126 }
+
+[[enchants]]
+slot = "wuqi"
+id = "全攻击-gongji-90"
+name = "全攻击提高90"
+stats = { gongji = 90 }
+
+[[enchants]]
+slot = "anqi"
+id = "misc-jiasu-126"
+name = "附魔提高126"
+stats = { jiasu = 126 }

@@ -1,0 +1,9 @@
+sockets = []
+
+[version]
+schema = 1
+season = 3
+revision = "synthetic-v1"
+value_set = "live-50"
+sample = true
+provenance = "Issue #90 synthetic fixtures; no game gear values supplied"

@@ -1,47 +1,47 @@
-# 合成测试样例：全部装备/套装点数均人为构造，不是游戏数据。
+# 套装效果（50 级真实数据）。「·悟」为无界手机端技能，PC 端不生效，未收录。
 [version]
 schema = 1
 season = 3
-revision = "synthetic-v1"
+revision = "live-50-20261106"
 value_set = "live-50"
-sample = true
-provenance = "Issue #90 synthetic fixtures; no game gear values supplied"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
 
 [[sets]]
-id = "sample-mingjian"
+id = "weiwang-armor"
+source = "weiwang"
+kind = "armor"
+[[sets.tiers]]
+tier = "base"
+bonus2 = { huixin = 102 }
+cooldown4 = [{ skill_id = 14073, seconds = 9.0 }]
+[[sets.tiers]]
+tier = "upgraded"
+bonus2 = { huixin = 102 }
+cooldown4 = [{ skill_id = 14073, seconds = 9.0 }]
+
+[[sets]]
+id = "jingji-armor"
 source = "mingjian"
 kind = "armor"
 [[sets.tiers]]
 tier = "base"
-bonus2 = { gongji = 11 }
-cooldown4 = [{ skill_id = 14064, seconds = 1.0 }]
+bonus2 = { pofang = 102 }
+cooldown4 = [{ skill_id = 14081, seconds = 15.0 }]
 [[sets.tiers]]
 tier = "upgraded"
-bonus2 = { gongji = 22 }
-cooldown4 = [{ skill_id = 14064, seconds = 2.0 }]
+bonus2 = { pofang = 102 }
+cooldown4 = [{ skill_id = 14081, seconds = 15.0 }]
 
 [[sets]]
-id = "sample-weiwang"
-source = "weiwang"
-kind = "armor"
-[[sets.tiers]]
-tier = "base"
-bonus2 = { gongji = 13 }
-cooldown4 = [{ skill_id = 14064, seconds = 1.0 }]
-[[sets.tiers]]
-tier = "upgraded"
-bonus2 = { gongji = 26 }
-cooldown4 = [{ skill_id = 14064, seconds = 2.0 }]
-
-[[sets]]
-id = "sample-accessory"
+id = "weiwang-accessory"
 source = "weiwang"
 kind = "accessory"
 [[sets.tiers]]
 tier = "base"
-bonus2 = { huajin = 7 }
-bonus3 = { yujin = 9 }
+bonus2 = { yujin = 120 }
+bonus3 = { huajin = 120 }
 [[sets.tiers]]
 tier = "upgraded"
-bonus2 = { huajin = 14 }
-bonus3 = { yujin = 18 }
+bonus2 = { yujin = 120 }
+bonus3 = { huajin = 120 }

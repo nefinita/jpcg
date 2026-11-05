@@ -29,6 +29,18 @@ struct OverridesFile {
     version: Version,
     overrides: Vec<Override>,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SocketsFile {
+    version: Version,
+    sockets: Vec<SocketDef>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EnchantsFile {
+    version: Version,
+    enchants: Vec<EnchantDef>,
+}
 fn read<T: serde::de::DeserializeOwned>(dir: &Path, file: &str) -> Result<T, String> {
     let path = dir.join(file);
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -40,7 +52,15 @@ impl Catalog {
         let schools: SchoolsFile = read(dir, "schools.toml")?;
         let sets: SetsFile = read(dir, "sets.toml")?;
         let overrides: OverridesFile = read(dir, "overrides.toml")?;
-        for version in [&schools.version, &sets.version, &overrides.version] {
+        let sockets: SocketsFile = read(dir, "sockets.toml")?;
+        let enchants: EnchantsFile = read(dir, "enchants.toml")?;
+        for version in [
+            &schools.version,
+            &sets.version,
+            &overrides.version,
+            &sockets.version,
+            &enchants.version,
+        ] {
             if version != &templates.version {
                 return Err("四个文件的 version 必须完全一致".into());
             }
@@ -50,6 +70,8 @@ impl Catalog {
             templates: templates.templates,
             schools: schools.schools,
             sets: sets.sets,
+            sockets: sockets.sockets,
+            enchants: enchants.enchants,
         };
         // 先校验原始唯一性，不能用 override 隐藏重复模板。
         catalog.validate()?;
@@ -131,22 +153,34 @@ impl Catalog {
                         return Err("防具须有非零2件属性和4件CD，不能有3件套".into());
                     }
                     SetKind::Accessory => {
-                        let only_huajin = Stats {
-                            huajin: tier.bonus2.huajin,
+                        let yujin_only = Stats {
+                            yujin: tier.bonus2.yujin.max(0),
                             ..Default::default()
                         };
                         let bonus3 = tier.bonus3.as_ref().ok_or("饰品缺少3件套")?;
-                        let only_yujin = Stats {
-                            yujin: bonus3.yujin,
+                        let huajin_only = Stats {
+                            huajin: bonus3.huajin.max(0),
                             ..Default::default()
                         };
-                        if tier.bonus2.huajin == 0
-                            || bonus3.yujin == 0
-                            || tier.bonus2 != only_huajin
-                            || bonus3 != &only_yujin
-                            || !tier.cooldown4.is_empty()
-                        {
-                            return Err("饰品2件只能加化劲、3件只能加御劲，无4件CD".into());
+                        let game_order = tier.bonus2.yujin > 0
+                            && tier.bonus2 == yujin_only
+                            && bonus3.huajin > 0
+                            && bonus3 == &huajin_only;
+                        // 历史合成样例用「2件化劲、3件御劲」，与游戏顺序相反；两种顺序都接受。
+                        let legacy_order = tier.bonus2.huajin > 0
+                            && tier.bonus2
+                                == Stats {
+                                    huajin: tier.bonus2.huajin,
+                                    ..Default::default()
+                                }
+                            && bonus3.yujin > 0
+                            && bonus3
+                                == &Stats {
+                                    yujin: bonus3.yujin,
+                                    ..Default::default()
+                                };
+                        if (!game_order && !legacy_order) || !tier.cooldown4.is_empty() {
+                            return Err("饰品套装只能提供御劲/化劲，且无4件CD".into());
                         }
                     }
                     _ => (),
@@ -171,8 +205,11 @@ impl Catalog {
         let mut variants: BTreeMap<_, BTreeSet<u8>> = BTreeMap::new();
         for t in &self.templates {
             let c = &t.choice;
-            if !schools.contains(&t.school) || !keys.insert((&t.school, c)) {
-                return Err("模板门派不存在或唯一键重复".into());
+            if !keys.insert((&t.school, c)) {
+                return Err("模板唯一键重复".into());
+            }
+            if !t.cross_school && !schools.contains(&t.school) {
+                return Err("模板门派不存在".into());
             }
             if c.source == Source::Baowu && (c.tier == Tier::Upgraded || t.set.is_some()) {
                 return Err("宝物堆无升级/套装".into());
@@ -277,13 +314,46 @@ impl Catalog {
             if !slots.insert(choice.slot) {
                 return Err("槽位重复".into());
             }
+            let item_school = choice
+                .school
+                .clone()
+                .unwrap_or_else(|| loadout.school.clone());
             let template = self
                 .templates
                 .iter()
-                .find(|t| t.school == loadout.school && &t.choice == choice)
+                .find(|t| {
+                    t.school == item_school
+                        && t.choice.slot == choice.slot
+                        && t.choice.source == choice.source
+                        && t.choice.tier == choice.tier
+                        && t.choice.variant == choice.variant
+                })
                 .ok_or_else(|| format!("模板不存在: {choice:?}"))?;
             stats.add(&template.stats)?;
+            if let Some(sock) = self.sockets.iter().find(|s| {
+                s.school == item_school
+                    && s.source == choice.source
+                    && s.tier == choice.tier
+                    && s.slot == choice.slot
+                    && s.variant == choice.variant
+            }) {
+                for extra in &sock.sockets {
+                    stats.add(extra)?;
+                }
+            }
+            if let Some(id) = loadout.enchants.get(&choice.slot) {
+                let enchant = self
+                    .enchants
+                    .iter()
+                    .find(|e| e.slot == choice.slot && &e.id == id)
+                    .ok_or_else(|| format!("附魔不存在: {:?} {id}", choice.slot))?;
+                stats.add(&enchant.stats)?;
+            }
             if let Some(id) = &template.set {
+                // 跨门派装备不触发套装效果。
+                if item_school != loadout.school {
+                    continue;
+                }
                 let count = counts.entry(id).or_default();
                 count.0 += 1;
                 count.1 += usize::from(choice.tier == Tier::Upgraded);

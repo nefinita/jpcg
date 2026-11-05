@@ -2,7 +2,8 @@
 use jpcg_gear::{Catalog, Composition, Loadout, host};
 
 fn sample() -> (Catalog, Loadout) {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/gear");
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/synthetic/gear");
     let catalog = Catalog::load(&dir).unwrap();
     let loadout =
         toml::from_str(&std::fs::read_to_string(dir.join("sample-loadout.toml")).unwrap()).unwrap();

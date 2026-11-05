@@ -1,11 +1,11 @@
-# 合成测试样例：全部装备/套装点数均人为构造，不是游戏数据。
+# 莫问 50 级装备目录（真实游戏数据）。
 [version]
 schema = 1
 season = 3
-revision = "synthetic-v1"
+revision = "live-50-20261106"
 value_set = "live-50"
-sample = true
-provenance = "Issue #90 synthetic fixtures; no game gear values supplied"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
 
 [[schools]]
 id = "mowen"
