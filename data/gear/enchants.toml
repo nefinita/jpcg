@@ -186,3 +186,15 @@ slot = "anqi"
 id = "力道-liliang-126"
 name = "力道提高126"
 stats = { liliang = 126 }
+
+[[enchants]]
+slot = "tou"
+id = "加速-jiasu-90"
+name = "加速等级提高90"
+stats = { jiasu = 90 }
+
+[[enchants]]
+slot = "xie"
+id = "加速-jiasu-90"
+name = "加速等级提高90"
+stats = { jiasu = 90 }
