@@ -45,6 +45,9 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
         const candidates = catalog.templates.filter((t) => t.school === loadout.school && t.choice.slot === slot);
         const selected = loadout.choices.find((c) => c.slot === slot);
         const template = candidates.find((t) => selected && choiceKey(t.choice) === choiceKey(selected));
+        const socketDef = template ? (catalog.sockets ?? []).find((s) => s.school === template.school && s.source === template.choice.source && s.tier === template.choice.tier && s.slot === template.choice.slot && s.variant === template.choice.variant) : undefined;
+        const enchantOptions = (catalog.enchants ?? []).filter((e) => e.slot === slot);
+        const enchantId = loadout.enchants?.[slot] ?? "";
         return <article className={styles.card} key={slot} aria-label={slotNames[slot]}>
           <h3>{slotNames[slot]}</h3>
           <strong>{template ? `${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "模板不可用"}</strong>
@@ -55,6 +58,16 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
           </div>
           {template && <>
             <p>{Object.entries(template.stats).filter(([, n]) => n > 0).slice(0, 3).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
+            {socketDef && socketDef.sockets.length > 0 && <p>镶嵌：{socketDef.sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
+            {enchantOptions.length > 0 && <label className={styles.enchant}>附魔 <select aria-label={`${slotNames[slot]}附魔`} value={enchantId} disabled={stale} onChange={(event) => {
+              const value = event.target.value;
+              const next = { ...(loadout.enchants ?? {}) };
+              if (value) next[slot] = value; else delete next[slot];
+              onChange({ ...loadout, enchants: next });
+            }}>
+              <option value="">无</option>
+              {enchantOptions.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select></label>}
             <details><summary>属性详情{template.zhuangfen != null ? ` · 参考装分 ${template.zhuangfen}` : ""}</summary>
               <dl>{Object.entries(template.stats).map(([k, n]) => <div key={k}><dt>{statNames[k as keyof typeof statNames]}</dt><dd>{n}</dd></div>)}</dl>
             </details>
