@@ -62,6 +62,11 @@ value = 308
 to = "qixue_base"
 value = 3956
 
+[[attributes.constants]]
+# 角色/心法自带破防 1 点（面板阴性内功破防为整数 3586，装备合计 3585）。
+to = "pofang"
+value = 1
+
 [[skill]]
 skill_name = "五音六律"           #名字
 skill_id = 10447            #技能ID（数据源池内 id）
