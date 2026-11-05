@@ -16,13 +16,13 @@ stats = { gongji = 90 }
 [[enchants]]
 slot = "yi"
 id = "misc-huajin-90"
-name = "附魔提高90"
+name = "化劲等级提高90"
 stats = { huajin = 90 }
 
 [[enchants]]
 slot = "yao"
 id = "misc-huajin-90"
-name = "附魔提高90"
+name = "化劲等级提高90"
 stats = { huajin = 90 }
 
 [[enchants]]
@@ -46,13 +46,13 @@ stats = { gongji = 90 }
 [[enchants]]
 slot = "xianglian"
 id = "misc-yujin-126"
-name = "附魔提高126"
+name = "御劲等级提高126"
 stats = { yujin = 126 }
 
 [[enchants]]
 slot = "yaozhui"
 id = "misc-huajin-126"
-name = "附魔提高126"
+name = "化劲等级提高126"
 stats = { huajin = 126 }
 
 [[enchants]]
@@ -76,7 +76,7 @@ stats = { gongji = 90 }
 [[enchants]]
 slot = "anqi"
 id = "misc-jiasu-126"
-name = "附魔提高126"
+name = "加速等级提高126"
 stats = { jiasu = 126 }
 
 [[enchants]]
