@@ -156,3 +156,33 @@ slot = "yaozhui"
 id = "全会心-huixin-126"
 name = "全会心等级提高126"
 stats = { huixin = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "破防-pofang-126"
+name = "破防等级提高126"
+stats = { pofang = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "根骨-gengu-126"
+name = "根骨提高126"
+stats = { gengu = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "身法-shenfa-126"
+name = "身法提高126"
+stats = { shenfa = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "元气-yuanqi-126"
+name = "元气提高126"
+stats = { yuanqi = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "力道-liliang-126"
+name = "力道提高126"
+stats = { liliang = 126 }
