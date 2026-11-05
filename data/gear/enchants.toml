@@ -198,3 +198,27 @@ slot = "xie"
 id = "加速-jiasu-90"
 name = "加速等级提高90"
 stats = { jiasu = 90 }
+
+[[enchants]]
+slot = "yi"
+id = "御劲-yujin-90"
+name = "御劲等级提高90"
+stats = { yujin = 90 }
+
+[[enchants]]
+slot = "yi"
+id = "体质-tizhi-90"
+name = "体质提高90"
+stats = { tizhi = 90 }
+
+[[enchants]]
+slot = "yao"
+id = "御劲-yujin-90"
+name = "御劲等级提高90"
+stats = { yujin = 90 }
+
+[[enchants]]
+slot = "yao"
+id = "体质-tizhi-90"
+name = "体质提高90"
+stats = { tizhi = 90 }
