@@ -9,7 +9,7 @@ export interface GearChoice { slot: GearSlot; source: GearSource; tier: GearTier
 export interface GearLoadout { school: string; revision: string; value_set: string; base: GearStats; choices: GearChoice[]; attribute_rules?: string | null; enchants?: Record<string, string> }
 export interface GearSchool { id: string; zhushuxing: "liliang" | "shenfa" | "gengu" | "yuanqi"; gongji_type: "neigong" | "waigong"; pofang_type: "neigong" | "waigong" }
 export interface GearEnchantDef { slot: GearSlot; id: string; name: string; stats: GearStats }
-export interface GearTemplate { school: string; cross_school?: boolean; sockets?: GearStats[]; choice: GearChoice; green: "pofang" | "huixin" | "jiasu" | "yujin"; stats: GearStats; set: string | null; zhuangfen: number | null }
+export interface GearTemplate { school: string; cross_school?: boolean; sockets?: GearStats[]; wucai?: GearStats | null; choice: GearChoice; green: "pofang" | "huixin" | "jiasu" | "yujin"; stats: GearStats; set: string | null; zhuangfen: number | null }
 export interface GearCatalog {
   version: { schema: number; season: number; revision: string; value_set: string; sample: boolean; provenance: string };
   schools: GearSchool[];

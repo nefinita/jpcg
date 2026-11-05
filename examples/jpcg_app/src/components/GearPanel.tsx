@@ -64,6 +64,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
           </div>
           {template && <>
             <p>{Object.entries(template.stats).filter(([, n]) => n > 0).slice(0, 3).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
+            {template?.wucai && <p>五彩石：{Object.entries(template.wucai).filter(([, n]) => (n ?? 0) > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")}</p>}
             {sockets.length > 0 && <p>镶嵌（固定）：{sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
             {enchantOptions.length > 0 && <label className={styles.enchant}>附魔 <select aria-label={`${slotNames[slot]}附魔`} value={enchantId} disabled={stale} onChange={(event) => {
               const value = event.target.value;

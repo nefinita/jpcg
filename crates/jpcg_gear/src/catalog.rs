@@ -327,6 +327,9 @@ impl Catalog {
             for extra in &template.sockets {
                 stats.add(extra)?;
             }
+            if let Some(wucai) = &template.wucai {
+                stats.add(wucai)?;
+            }
             if let Some(id) = loadout.enchants.get(&choice.slot) {
                 let enchant = self
                     .enchants
