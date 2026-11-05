@@ -441,7 +441,7 @@ export interface TimelineRequestDTO {
 // 与 Rust `TimelineEventKindDTO` 的 #[serde(tag = "kind")] 内部标签形状一致：
 // 真实 JSON 形如 { "kind": "cast", "skill_name": ..., "damage": ..., "hit_time": ... }
 export type TimelineEventKindDTO =
-  | { kind: "cast"; skill_name: string; damage: number; hit_time: number }
+  | { kind: "cast"; skill_name: string; damage: number; hit_time: number; gcd_secs?: number; gcd_ready_at?: number }
   | { kind: "dot_tick"; skill_name: string; index: number; damage: number }
   | { kind: "form_switch"; from: string; to: string }
   | { kind: "buff_gain"; buff_id: string; stacks: number };

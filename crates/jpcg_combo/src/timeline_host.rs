@@ -188,10 +188,14 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 skill_name,
                 damage,
                 hit_time,
+                gcd_secs,
+                gcd_ready_at,
             } => TimelineEventKindDTO::Cast {
                 skill_name,
                 damage,
                 hit_time,
+                gcd_secs,
+                gcd_ready_at,
             },
             TimelineEventKind::DotTick {
                 skill_name,

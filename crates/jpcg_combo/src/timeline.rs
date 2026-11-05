@@ -164,6 +164,10 @@ pub enum TimelineEventKind {
         skill_name: String,
         damage: u32,
         hit_time: f32,
+        /// 本次施放占用的 GCD 秒数（不占 GCD 为 0）
+        gcd_secs: f32,
+        /// 该 GCD 通道就绪时刻
+        gcd_ready_at: f32,
     },
     /// dot 单跳结算（`index` 从 1 开始）
     DotTick {
@@ -518,12 +522,21 @@ impl<'a> Sim<'a> {
         } else {
             (self.qifeng + sk.qifeng_gain).min(MAX_QIFENG)
         };
+        let own_gcd = self.skill_gcd(sk, rate);
+        let gcd_secs = if sk.skill.occupies_gcd() {
+            own_gcd
+        } else {
+            0.0
+        };
+        let gcd_ready_at = start + gcd_secs;
         self.events.push(TimelineEvent {
             time: start,
             kind: TimelineEventKind::Cast {
                 skill_name: sk.skill.skill_name.clone(),
                 damage: direct_damage,
                 hit_time,
+                gcd_secs,
+                gcd_ready_at,
             },
         });
 
@@ -545,7 +558,6 @@ impl<'a> Sim<'a> {
 
         // ---- 占用 GCD 通道（自身通道 + 副作用额外通道） ----
         // 自身通道取技能自己的 gcd_base / 固定 GCD 语义；副作用通道按通道默认值。
-        let own_gcd = self.skill_gcd(sk, rate);
         if sk.skill.occupies_gcd() {
             let now = self.lane_ready.get(sk.lane()).copied().unwrap_or(0.0);
             self.lane_ready
@@ -897,6 +909,19 @@ mod tests {
         );
         let result = simulate(&input);
         assert_eq!(cast_times(&result), vec![0.0, 1.5]);
+        let casts: Vec<_> = result
+            .events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                TimelineEventKind::Cast {
+                    gcd_secs,
+                    gcd_ready_at,
+                    ..
+                } => Some((*gcd_secs, *gcd_ready_at)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(casts, vec![(1.5, 1.5), (1.5, 3.0)]);
     }
 
     #[test]

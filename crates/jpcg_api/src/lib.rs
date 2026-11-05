@@ -678,6 +678,12 @@ pub enum TimelineEventKindDTO {
         skill_name: String,
         damage: u32,
         hit_time: f32,
+        /// 本次施放占用的 GCD 秒数（不占 GCD 为 0）
+        #[serde(default)]
+        gcd_secs: f32,
+        /// 该 GCD 通道就绪时刻
+        #[serde(default)]
+        gcd_ready_at: f32,
     },
     DotTick {
         skill_name: String,
