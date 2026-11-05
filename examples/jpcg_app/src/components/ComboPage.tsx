@@ -11,6 +11,7 @@ import { usePersistentState, readPreference, writePreference } from "../hooks/us
 import { STORAGE_KEYS } from "../utils/constants";
 import { comboDraftSchema, defaultComboDraft, type ComboDraft } from "../state/cockpit";
 import { formatTimelineEvent } from "./timelineFormat";
+import { TimelineDamageLog } from "./TimelineDamageLog";
 import type { MijiDefDTO, QixueDefDTO } from "../types";
 import styles from "./ComboPage.module.css";
 
@@ -427,13 +428,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
             <span>未执行动作 {timelineResult.skipped_actions}</span>
             <span>事件 {timelineResult.events.length}</span>
           </div>
-          <div style={{ maxHeight: 200, overflowY: "auto", fontSize: 12, fontFamily: "monospace" }}>
-            {timelineResult.events.slice(0, 200).map((e, i) => (
-              <div key={i}>
-                {e.time.toFixed(2)}s  {formatTimelineEvent(e)}
-              </div>
-            ))}
-          </div>
+          <TimelineDamageLog events={timelineResult.events} />
         </section>
       )}
 

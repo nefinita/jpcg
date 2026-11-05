@@ -1,0 +1,78 @@
+# 镶嵌宝石（当前只录入八级）。
+[version]
+schema = 1
+season = 3
+revision = "live-50-20261106"
+value_set = "live-50"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
+
+[[gems]]
+id = "八级-主属性"
+name = "八级·主属性 +38"
+stats = { zhushuxing = 38 }
+
+[[gems]]
+id = "八级-根骨"
+name = "八级·根骨 +38"
+stats = { gengu = 38 }
+
+[[gems]]
+id = "八级-体质"
+name = "八级·体质 +57"
+stats = { tizhi = 57 }
+
+[[gems]]
+id = "八级-身法"
+name = "八级·身法 +38"
+stats = { shenfa = 38 }
+
+[[gems]]
+id = "八级-元气"
+name = "八级·元气 +38"
+stats = { yuanqi = 38 }
+
+[[gems]]
+id = "八级-力道"
+name = "八级·力道 +38"
+stats = { liliang = 38 }
+
+[[gems]]
+id = "八级-全攻击"
+name = "八级·全攻击 +38"
+stats = { gongji = 38 }
+
+[[gems]]
+id = "八级-全会心"
+name = "八级·全会心 +38"
+stats = { huixin = 38 }
+
+[[gems]]
+id = "八级-会心效果"
+name = "八级·会心效果 +38"
+stats = { huixiao = 38 }
+
+[[gems]]
+id = "八级-全破防"
+name = "八级·全破防 +38"
+stats = { pofang = 38 }
+
+[[gems]]
+id = "八级-化劲"
+name = "八级·化劲 +38"
+stats = { huajin = 38 }
+
+[[gems]]
+id = "八级-御劲"
+name = "八级·御劲 +38"
+stats = { yujin = 38 }
+
+[[gems]]
+id = "八级-加速"
+name = "八级·加速 +38"
+stats = { jiasu = 38 }
+
+[[gems]]
+id = "八级-气血上限"
+name = "八级·气血上限 +577"
+stats = { qixue_additional = 577 }

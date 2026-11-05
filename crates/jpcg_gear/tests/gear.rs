@@ -222,7 +222,7 @@ fn overrides_apply_explicit_higher_attack_and_versions_are_checked() {
         "sets.toml",
         "schools.toml",
         "overrides.toml",
-        "sockets.toml",
+        "gems.toml",
         "enchants.toml",
     ] {
         std::fs::copy(dir().join(file), temp.path().join(file)).unwrap();

@@ -33,11 +33,14 @@ export function initialLoadout(catalog: GearCatalog, school: string): GearLoadou
   const choices = GEAR_SLOTS.map((slot) => catalog.templates.find((t) => t.school === school && t.choice.slot === slot)?.choice);
   if (choices.some((c) => !c)) return null;
   const enchants: Record<string, string> = {};
+  const sockets: Record<string, string[]> = {};
   for (const slot of GEAR_SLOTS) {
     const first = (catalog.enchants ?? []).find((e) => e.slot === slot);
     if (first) enchants[slot] = first.id;
+    const template = catalog.templates.find((t) => t.school === school && t.choice.slot === slot);
+    if (template && (template.socket_count ?? 0) > 0) sockets[slot] = [...(template.default_gems ?? [])];
   }
-  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: emptyGearStats(), choices: choices as GearChoice[], enchants };
+  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: emptyGearStats(), choices: choices as GearChoice[], enchants, sockets };
 }
 export function gearInputKey(form: FormData, loadout: GearLoadout) {
   return JSON.stringify({ mode: "gear", loadout, context: { ...toCalculateRequest(form), player: null } });
@@ -48,6 +51,7 @@ export function isGearLoadout(x: unknown): x is GearLoadout {
   return typeof v.school === "string" && typeof v.revision === "string" && typeof v.value_set === "string"
     && validStats(v.base) && (v.attribute_rules == null || typeof v.attribute_rules === "string")
     && (v.enchants == null || (typeof v.enchants === "object" && Object.values(v.enchants).every((x) => typeof x === "string")))
+    && (v.sockets == null || (typeof v.sockets === "object" && Object.values(v.sockets).every((x) => Array.isArray(x) && x.every((g) => typeof g === "string"))))
     && Array.isArray(v.choices) && v.choices.length === 12 && new Set(v.choices.map((c) => c?.slot)).size === 12
     && v.choices.every((c) => c && GEAR_SLOTS.includes(c.slot) && ["mingjian", "weiwang", "baowu"].includes(c.source) && ["base", "upgraded"].includes(c.tier) && [0, 1, 2].includes(c.variant));
 }
