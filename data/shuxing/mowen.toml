@@ -50,6 +50,11 @@ to = "gongji_base"
 value = 2282
 
 [[attributes.constants]]
+# 角色自带基础攻击（50 级成女无装备时面板基础攻击为 3）。
+to = "gongji_base"
+value = 3
+
+[[attributes.constants]]
 to = "huixin"
 value = 308
 
