@@ -321,6 +321,7 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
         "sets.toml",
         "overrides.toml",
         "enchants.toml",
+        "wucai.toml",
     ] {
         let text = std::fs::read_to_string(root.join("gear").join(f))
             .unwrap()

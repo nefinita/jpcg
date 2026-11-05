@@ -680,10 +680,6 @@ yujin = 38
 pofang = 38
 [[templates.sockets]]
 gongji = 38
-[templates.wucai]
-gengu = 52
-huixiao = 104
-gongji = 208
 [[templates]]
 school = "mowen"
 green = "yujin"
@@ -704,10 +700,6 @@ yujin = 38
 pofang = 38
 [[templates.sockets]]
 gongji = 38
-[templates.wucai]
-gengu = 52
-huixiao = 104
-gongji = 208
 [[templates]]
 school = "mowen"
 green = "pofang"
@@ -728,10 +720,6 @@ zhushuxing = 38
 pofang = 38
 [[templates.sockets]]
 gongji = 38
-[templates.wucai]
-gengu = 52
-huixiao = 104
-gongji = 208
 [[templates]]
 school = "mowen"
 green = "pofang"
@@ -752,10 +740,6 @@ zhushuxing = 38
 pofang = 38
 [[templates.sockets]]
 gongji = 38
-[templates.wucai]
-gengu = 52
-huixiao = 104
-gongji = 208
 [[templates]]
 school = "mowen"
 green = "huixin"

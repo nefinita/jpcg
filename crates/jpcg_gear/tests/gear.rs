@@ -223,6 +223,7 @@ fn overrides_apply_explicit_higher_attack_and_versions_are_checked() {
         "schools.toml",
         "overrides.toml",
         "enchants.toml",
+        "wucai.toml",
     ] {
         std::fs::copy(dir().join(file), temp.path().join(file)).unwrap();
     }

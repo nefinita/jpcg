@@ -1,0 +1,13 @@
+# 武器五彩石：武器可插一颗，按组合给三条属性。
+[version]
+schema = 1
+season = 3
+revision = "live-50-20261106"
+value_set = "live-50"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
+
+[[wucai]]
+id = "五彩石-根骨会效攻击"
+name = "五彩石·根骨 +52 / 内功会效 +104 / 内功攻击 +208"
+stats = { gengu = 52, huixiao = 104, gongji = 208 }

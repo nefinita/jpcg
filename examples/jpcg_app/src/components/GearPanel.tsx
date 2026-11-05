@@ -64,8 +64,11 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
           </div>
           {template && <>
             <p>{Object.entries(template.stats).filter(([, n]) => n > 0).slice(0, 3).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
-            {template?.wucai && <p>五彩石：{Object.entries(template.wucai).filter(([, n]) => (n ?? 0) > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")}</p>}
-            {sockets.length > 0 && <p>镶嵌（固定）：{sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
+            {slot === "wuqi" && (catalog.wucai ?? []).length > 0 && <label className={styles.enchant}>五彩石 <select aria-label="武器五彩石" value={loadout.wucai ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, wucai: event.target.value || undefined })}>
+              <option value="">不插五彩石</option>
+              {(catalog.wucai ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select></label>}
+                        {sockets.length > 0 && <p>镶嵌（固定）：{sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
             {enchantOptions.length > 0 && <label className={styles.enchant}>附魔 <select aria-label={`${slotNames[slot]}附魔`} value={enchantId} disabled={stale} onChange={(event) => {
               const value = event.target.value;
               const next = { ...(loadout.enchants ?? {}) };

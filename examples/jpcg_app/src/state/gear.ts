@@ -42,7 +42,8 @@ export function initialLoadout(catalog: GearCatalog, school: string): GearLoadou
     const first = (catalog.enchants ?? []).find((e) => e.slot === slot);
     if (first) enchants[slot] = first.id;
   }
-  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: emptyGearStats(), choices: choices as GearChoice[], enchants };
+  const wucai = catalog.wucai?.[0]?.id;
+  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: emptyGearStats(), choices: choices as GearChoice[], enchants, ...(wucai ? { wucai } : {}) };
 }
 export function gearInputKey(form: FormData, loadout: GearLoadout) {
   return JSON.stringify({ mode: "gear", loadout, context: { ...toCalculateRequest(form), player: null } });
@@ -53,6 +54,7 @@ export function isGearLoadout(x: unknown): x is GearLoadout {
   return typeof v.school === "string" && typeof v.revision === "string" && typeof v.value_set === "string"
     && validStats(v.base) && (v.attribute_rules == null || typeof v.attribute_rules === "string")
     && (v.enchants == null || (typeof v.enchants === "object" && Object.values(v.enchants).every((x) => typeof x === "string")))
+    && (v.wucai == null || typeof v.wucai === "string")
     && Array.isArray(v.choices) && v.choices.length === 12 && new Set(v.choices.map((c) => c?.slot)).size === 12
     && v.choices.every((c) => c && GEAR_SLOTS.includes(c.slot) && ["mingjian", "weiwang", "baowu"].includes(c.source) && ["base", "upgraded"].includes(c.tier) && [0, 1, 2].includes(c.variant));
 }

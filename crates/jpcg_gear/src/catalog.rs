@@ -35,6 +35,12 @@ struct EnchantsFile {
     version: Version,
     enchants: Vec<EnchantDef>,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WucaiFile {
+    version: Version,
+    wucai: Vec<WucaiDef>,
+}
 fn read<T: serde::de::DeserializeOwned>(dir: &Path, file: &str) -> Result<T, String> {
     let path = dir.join(file);
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -48,12 +54,14 @@ impl Catalog {
         let overrides: OverridesFile = read(dir, "overrides.toml")?;
 
         let enchants: EnchantsFile = read(dir, "enchants.toml")?;
+        let wucai: WucaiFile = read(dir, "wucai.toml")?;
         for version in [
             &schools.version,
             &sets.version,
             &overrides.version,
 
             &enchants.version,
+            &wucai.version,
         ] {
             if version != &templates.version {
                 return Err("五个文件的 version 必须完全一致".into());
@@ -66,6 +74,7 @@ impl Catalog {
             sets: sets.sets,
 
             enchants: enchants.enchants,
+            wucai: wucai.wucai,
         };
         // 先校验原始唯一性，不能用 override 隐藏重复模板。
         catalog.validate()?;
@@ -327,8 +336,15 @@ impl Catalog {
             for extra in &template.sockets {
                 stats.add(extra)?;
             }
-            if let Some(wucai) = &template.wucai {
-                stats.add(wucai)?;
+            if choice.slot == Slot::Wuqi
+                && let Some(id) = &loadout.wucai
+            {
+                let stone = self
+                    .wucai
+                    .iter()
+                    .find(|w| &w.id == id)
+                    .ok_or_else(|| format!("五彩石不存在: {id}"))?;
+                stats.add(&stone.stats)?;
             }
             if let Some(id) = loadout.enchants.get(&choice.slot) {
                 let enchant = self

@@ -180,9 +180,7 @@ pub struct Template {
     /// 固定镶嵌属性：每件装备的五行石孔不可选，按孔位把属性直接计入。
     #[serde(default)]
     pub sockets: Vec<Stats>,
-    /// 武器五彩石：当前版本固定属性（根骨/会效/内功攻击），随武器一起计入。
-    #[serde(default)]
-    pub wucai: Option<Stats>,
+
     /// 跨门派装备：不参与该门派的套装与覆盖率校验，仅供其他门派穿戴。
     #[serde(default)]
     pub cross_school: bool,
@@ -234,6 +232,18 @@ pub struct Catalog {
 
     #[serde(default)]
     pub enchants: Vec<EnchantDef>,
+    /// 五彩石候选（仅武器可插），loadout 里按 id 选择。
+    #[serde(default)]
+    pub wucai: Vec<WucaiDef>,
+}
+
+/// 五彩石：武器可插，不同组合给不同属性。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WucaiDef {
+    pub id: String,
+    pub name: String,
+    pub stats: Stats,
 }
 
 /// 附魔：按部位给出可选列表，loadout 里按 id 选择。
@@ -258,6 +268,9 @@ pub struct Loadout {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attribute_rules: Option<String>,
     pub choices: Vec<Choice>,
+    /// 武器五彩石 id；未填则不加五彩石。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wucai: Option<String>,
     /// 每件装备选择的附魔 id；未填则该部位不加附魔。
     #[serde(default)]
     pub enchants: BTreeMap<Slot, String>,
