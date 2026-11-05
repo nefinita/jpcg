@@ -41,8 +41,8 @@ denominator = 100
 [[attributes.conversions]]
 from = "tizhi"
 to = "qixue_base"
-numerator = 21
-denominator = 2
+numerator = 10
+denominator = 1
 
 [[attributes.constants]]
 # 心法固定内功攻击：游戏面板的「基础攻击力」包含这一项。
@@ -52,6 +52,10 @@ value = 2282
 [[attributes.constants]]
 to = "huixin"
 value = 308
+
+[[attributes.constants]]
+to = "qixue_base"
+value = 3956
 
 [[skill]]
 skill_name = "五音六律"           #名字

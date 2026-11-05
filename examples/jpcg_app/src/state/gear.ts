@@ -43,7 +43,7 @@ export function initialLoadout(catalog: GearCatalog, school: string): GearLoadou
     if (first) enchants[slot] = first.id;
   }
   const wucai = catalog.wucai?.[0]?.id;
-  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: emptyGearStats(), choices: choices as GearChoice[], enchants, ...(wucai ? { wucai } : {}) };
+  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: { ...emptyGearStats(), tizhi: 18, gengu: 18, shenfa: 18, yuanqi: 17, liliang: 17 }, choices: choices as GearChoice[], enchants, ...(wucai ? { wucai } : {}) };
 }
 export function gearInputKey(form: FormData, loadout: GearLoadout) {
   return JSON.stringify({ mode: "gear", loadout, context: { ...toCalculateRequest(form), player: null } });
