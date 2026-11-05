@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction,
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
-  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData, TimelineResultDTO,
+  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData, TimelineResultDTO, CombatBundleDTO,
 } from "../types";
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
@@ -12,6 +12,7 @@ import { STORAGE_KEYS } from "../utils/constants";
 import { comboDraftSchema, defaultComboDraft, type ComboDraft } from "../state/cockpit";
 import { formatTimelineEvent } from "./timelineFormat";
 import { TimelineDamageLog } from "./TimelineDamageLog";
+import { checkFormLegality } from "../utils/formLegality";
 import type { MijiDefDTO, QixueDefDTO } from "../types";
 import styles from "./ComboPage.module.css";
 
@@ -44,6 +45,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const [presets, setPresets] = useState<string[]>([]);
   const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
   const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
+  const [combatBundle, setCombatBundle] = useState<CombatBundleDTO | null>(null);
+  const legality = checkFormLegality(sequence, combatBundle?.combat);
   // #92 秘籍/奇穴：可选列表来自门派 combat overlay，勾选后随请求下发
   const [timelineMiji, setTimelineMiji] = useState<MijiDefDTO[]>([]);
   const [timelineQixue, setTimelineQixue] = useState<QixueDefDTO[]>([]);
@@ -158,6 +161,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       .then(() => api.loadCombatBundle(formData.xinfa_config.profession))
       .then((bundle) => {
         if (cancelled || !bundle?.combat) return;
+        setCombatBundle(bundle);
         setTimelineMiji(bundle.combat.miji ?? []);
         setTimelineQixue(bundle.combat.qixue ?? []);
       })
@@ -297,8 +301,11 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                   title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
                   {computing ? "计算中..." : "计算连招"}
                 </button>
-                <button className={styles.btn} onClick={handleTimeline} disabled={computing || noForm}
-                  title="按当前序列跑时间轴（GCD / 读条 / CD / 形态 / buff / dot）">
+                <button className={styles.btn} onClick={handleTimeline}
+                  disabled={computing || noForm || legality.some((s) => !s.legal)}
+                  title={legality.some((s) => !s.legal)
+                    ? "序列中存在当前形态不可用的技能，引擎会跳过；请先调整顺序或去掉这些技能"
+                    : "按当前序列跑时间轴（GCD / 读条 / CD / 形态 / buff / dot）"}>
                   {computing ? "计算中..." : "时间轴预览"}
                 </button>
               </>}
@@ -314,6 +321,11 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         </div>
       )}
       {configurationOnly && <p className={styles.zhenshiHint}>草稿自动保存；切回计算驾驶台查看连招伤害与击杀率。</p>}
+      {!configurationOnly && legality.some((s) => !s.legal) && (
+        <div className={styles.warnBanner}>
+          序列中有 {legality.filter((s) => !s.legal).length} 个技能在当前形态下不可用（已标红）；时间轴会跳过它们，建议调整顺序或换技能。
+        </div>
+      )}
       {!noForm && targetHp <= 0 && (
         <div className={styles.warnBanner}>
           目标血量 = 0：追加真伤（已损失生命值 × 系数）不会生效，请在计算器页设置目标血量。
@@ -340,9 +352,12 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                       <Draggable key={`${item.skill.skill_id}-${item.skill.sub_id ?? 0}-${i}`} draggableId={`seq-${i}`} index={i}>
                         {(provided, snapshot) => (
                           <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
-                            className={`${styles.comboItem} ${snapshot.isDragging ? styles.dragging : ""}`}>
+                            className={`${styles.comboItem} ${snapshot.isDragging ? styles.dragging : ""}`}
+                            style={legality[i] && !legality[i].legal ? { borderColor: "#e5484d", boxShadow: "inset 0 0 0 1px #e5484d" } : undefined}
+                            title={legality[i] && !legality[i].legal ? `当前形态「${legality[i].form}」下不可用，需要「${legality[i].requiredForm}」` : undefined}>
                             <span className={styles.comboIndex}>{i + 1}</span>
                             <span className={styles.comboName}>{item.skill.skill_name}</span>
+                            {legality[i] && !legality[i].legal && <span style={{ fontSize: 11, color: "#e5484d" }}>非法</span>}
                             <span className={styles.comboActions}>
                               <button className={styles.smallBtn} onClick={() => setAdjustTarget(adjustTarget === i ? null : i)} title="调整系数"><IconGear size={14} /></button>
                               <button className={styles.smallBtn} onClick={() => removeFromSequence(i)} title="移除"><IconClose size={14} /></button>
