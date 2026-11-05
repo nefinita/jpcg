@@ -30,7 +30,12 @@ export function gearPlayerForm(player: PlayerConfigDTO): Record<string, number |
   return Object.fromEntries(Object.entries(player).filter(([, value]) => value != null));
 }
 export function initialLoadout(catalog: GearCatalog, school: string): GearLoadout | null {
-  const choices = GEAR_SLOTS.map((slot) => catalog.templates.find((t) => t.school === school && t.choice.slot === slot)?.choice);
+  const choices = GEAR_SLOTS.map((slot) => {
+    const own = catalog.templates.find((t) => t.school === school && t.choice.slot === slot);
+    const cross = catalog.templates.find((t) => t.cross_school && t.choice.slot === slot);
+    const picked = own ?? cross;
+    return picked ? { ...picked.choice, school: picked.school === school ? null : picked.school } : undefined;
+  });
   if (choices.some((c) => !c)) return null;
   const enchants: Record<string, string> = {};
   const sockets: Record<string, string[]> = {};
