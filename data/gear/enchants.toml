@@ -139,11 +139,6 @@ id = "体质-tizhi-126"
 name = "体质提高126"
 stats = { tizhi = 126 }
 
-[[enchants]]
-slot = "yaozhui"
-id = "全会心-huixin-126"
-name = "全会心等级提高126"
-stats = { huixin = 126 }
 
 [[enchants]]
 slot = "anqi"
