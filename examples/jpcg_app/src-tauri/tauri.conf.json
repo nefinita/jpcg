@@ -27,6 +27,7 @@
     "targets": "all",
     "resources": [
       "data/shuxing/*.toml",
+      "data/combat/*.toml",
       "data/values/*.toml",
       "data/gear/templates.toml",
       "data/gear/sets.toml",

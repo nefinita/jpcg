@@ -53,6 +53,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
   const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
   const [combatBundle, setCombatBundle] = useState<CombatBundleDTO | null>(null);
+  const [combatError, setCombatError] = useState<string | null>(null);
   const legality = checkFormLegality(sequence, combatBundle?.combat);
 
   // #92 秘籍/奇穴：可选列表来自门派 combat overlay，勾选后随请求下发
@@ -195,10 +196,15 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       .then((bundle) => {
         if (cancelled || !bundle?.combat) return;
         setCombatBundle(bundle);
+        setCombatError(null);
         setTimelineMiji(bundle.combat.miji ?? []);
         setTimelineQixue(bundle.combat.qixue ?? []);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setCombatBundle(null);
+        setCombatError(err instanceof Error ? err.message : String(err));
+      });
     return () => {
       cancelled = true;
     };
@@ -371,6 +377,12 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                 </button>
               );
             })}
+        </div>
+      )}
+
+      {combatError && (
+        <div className={styles.warnBanner}>
+          战斗数据（data/combat）加载失败：{combatError}
         </div>
       )}
 
