@@ -1,7 +1,7 @@
 # 武器五彩石：武器可插一颗，按组合给三条属性。
 [version]
 schema = 1
-season = 3
+season = 1
 revision = "live-50-20261106"
 value_set = "live-50"
 sample = false

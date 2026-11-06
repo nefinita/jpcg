@@ -13,7 +13,7 @@ default = "live-50"
 
 [[value_sets]]
 id = "live-50"
-name = "正式服·50级"
+name = "正式服·50级·第1赛季"
 level = 50
 file = "live-50.toml"
 

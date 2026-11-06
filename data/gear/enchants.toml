@@ -1,7 +1,7 @@
 # 附魔（人工填写）：loadout.enchants 里按 部位 = id 选择。
 [version]
 schema = 1
-season = 3
+season = 1
 revision = "live-50-20261106"
 value_set = "live-50"
 sample = false

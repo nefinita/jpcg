@@ -2,7 +2,7 @@
 # 装备本体数值 = 基础 + 括号强化；镶嵌孔与附魔分别见 sockets.toml / enchants.toml。
 [version]
 schema = 1
-season = 3
+season = 1
 revision = "live-50-20261106"
 value_set = "live-50"
 sample = false

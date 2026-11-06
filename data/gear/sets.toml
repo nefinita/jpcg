@@ -1,7 +1,7 @@
 # 套装效果（50 级真实数据）。「·悟」为无界手机端技能，PC 端不生效，未收录。
 [version]
 schema = 1
-season = 3
+season = 1
 revision = "live-50-20261106"
 value_set = "live-50"
 sample = false
