@@ -16,7 +16,7 @@ describe("formatTimelineEvent", () => {
     const events = JSON.parse(JSON.stringify(RUST_SHAPED_EVENTS)) as TimelineEventDTO[];
     expect(formatTimelineEvent(events[0])).toBe("施放 断云势 @0.00s 伤害 12345，GCD 1.50s（就绪 1.50s）");
     expect(formatTimelineEvent(events[1])).toBe("dot 疏曲 #1 伤害 678");
-    expect(formatTimelineEvent(events[2])).toBe("切形态 single → dual");
+    expect(formatTimelineEvent(events[2])).toBe("切器形 single → dual");
     expect(formatTimelineEvent(events[3])).toBe("buff burst ×2");
     const noGcd = { time: 0, kind: { kind: "cast" as const, skill_name: "瞬发", damage: 1, hit_time: 0 } } as TimelineEventDTO;
     expect(formatTimelineEvent(noGcd)).toBe("施放 瞬发 @0.00s 伤害 1");

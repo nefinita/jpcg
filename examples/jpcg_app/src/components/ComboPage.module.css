@@ -532,3 +532,116 @@
 .optionChip input {
   accent-color: var(--accent);
 }
+
+
+/* 奇穴盘：底部固定区，按重数分组，同重互斥 + 混选池 */
+.qixueBoard {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--glass-bg);
+}
+
+.qixueHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.qixueHint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.qixueRows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qixueRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.qixueSlot {
+  width: 4.5rem;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: none;
+}
+
+.qixueChip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qixueChip:hover {
+  border-color: var(--accent);
+}
+
+.qixueChipActive {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.qixueChipMixed {
+  border-style: dashed;
+}
+
+
+/* 器形 / 曲风状态条：两轴独立，右侧为曲目快捷切换 */
+.axisBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.axisChip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.axisChip b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.axisDivider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-subtle);
+}
+
+.qifengBtn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qifengBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

@@ -55,6 +55,7 @@ it("时间轴预览下发勾选的秘籍与奇穴", async () => {
     combat: {
       meta: { profession: "mowen", version: "test", note: "" },
       form: [],
+      qifeng: [],
       skill_combat: [],
       buff: [],
       miji: [{ id: "mj_gong", name: "宫·秘籍" }],
@@ -72,10 +73,14 @@ it("时间轴预览下发勾选的秘籍与奇穴", async () => {
   const panel = host.querySelector('[data-testid="timeline-options"]');
   expect(panel).not.toBeNull();
   const boxes = [...panel!.querySelectorAll('input[type="checkbox"]')] as HTMLInputElement[];
-  expect(boxes.length).toBe(2);
+  expect(boxes.length).toBe(1);
+  const board = host.querySelector('[data-testid="qixue-board"]')!;
+  expect(board).not.toBeNull();
+  const qixueButtons = [...board.querySelectorAll("button")];
+  expect(qixueButtons.length).toBe(1);
   await act(async () => {
     boxes[0].click();
-    boxes[1].click();
+    qixueButtons[0].click();
   });
   await click("时间轴预览");
   expect(api.calculateTimeline).toHaveBeenCalledWith(

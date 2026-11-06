@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction,
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
-  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData, TimelineResultDTO, CombatBundleDTO,
+  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData, TimelineResultDTO, CombatBundleDTO, CombatDataDTO,
 } from "../types";
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
@@ -15,6 +15,13 @@ import { TimelineDamageLog } from "./TimelineDamageLog";
 import { checkFormLegality } from "../utils/formLegality";
 import type { MijiDefDTO, QixueDefDTO } from "../types";
 import styles from "./ComboPage.module.css";
+
+const QIFENG_NAMES: Record<string, string> = {
+  yangchun: "阳春白雪",
+  gaoshan: "高山流水",
+  pingsha: "平沙落雁",
+};
+const qifengName = (combat: CombatDataDTO, id: string): string => QIFENG_NAMES[id] ?? id ?? "—";
 
 interface Props {
   xinfaName?: string;
@@ -47,6 +54,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
   const [combatBundle, setCombatBundle] = useState<CombatBundleDTO | null>(null);
   const legality = checkFormLegality(sequence, combatBundle?.combat);
+
   // #92 秘籍/奇穴：可选列表来自门派 combat overlay，勾选后随请求下发
   const [timelineMiji, setTimelineMiji] = useState<MijiDefDTO[]>([]);
   const [timelineQixue, setTimelineQixue] = useState<QixueDefDTO[]>([]);
@@ -56,6 +64,31 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
 
+  // 奇穴盘：第一重~第六重各选 1；第七~九重为混选池（最多 3 个）
+  const qixueGroups = useMemo(() => {
+    const groups = new Map<number, QixueDefDTO[]>();
+    for (const q of timelineQixue) {
+      const list = groups.get(q.slot) ?? [];
+      list.push(q);
+      groups.set(q.slot, list);
+    }
+    const label = (slot: number) => (slot <= 6 ? `第${["一","二","三","四","五","六"][slot - 1]}重` : "混选");
+    return [...groups.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([slot, items]) => ({ slot, items, label: label(slot), mixed: slot > 6 }));
+  }, [timelineQixue]);
+
+  const toggleQixue = useCallback((slot: number, id: string, mixed: boolean) => {
+    setSelQixue((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      const sameSlot = new Set(timelineQixue.filter((q) => q.slot === slot).map((q) => q.id));
+      const others = prev.filter((x) => !sameSlot.has(x));
+      if (!mixed) return [...others, id];
+      const mixedIds = new Set(timelineQixue.filter((q) => q.slot > 6).map((q) => q.id));
+      if (others.filter((x) => mixedIds.has(x)).length >= 3) return prev;
+      return [...others, id];
+    });
+  }, [timelineQixue]);
   useEffect(() => {
     let cancelled = false;
     setSkillPool([]);
@@ -197,6 +230,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         coeff: req.coefficient,
         value_set: req.value_set ?? null,
         combat: bundle.combat,
+        initial_instrument: bundle.combat.form.find((f) => f.initial)?.id ?? bundle.combat.form[0]?.id ?? null,
+        initial_qifeng: bundle.combat.qifeng?.[0] ?? "",
         miji: selMiji,
         qixue: selQixue,
       });
@@ -292,7 +327,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h2>排轴器</h2>
+        <h2>武学</h2>
         <div className={styles.headerActions}>
           {sequence.length > 0 && (
             <>
@@ -314,6 +349,30 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           )}
         </div>
       </div>
+
+      {combatBundle && (
+        <div className={styles.axisBar} data-testid="axis-bar">
+          <span className={styles.axisChip}>
+            器形 <b>{legality.length > 0 ? legality[legality.length - 1].form : (combatBundle.combat.form.find((f) => f.initial)?.name ?? "—")}</b>
+          </span>
+          <span className={styles.axisChip}>
+            曲风 <b>{legality.length > 0 ? qifengName(combatBundle.combat, legality[legality.length - 1].qifeng) : qifengName(combatBundle.combat, combatBundle.combat.qifeng?.[0] ?? "")}</b>
+          </span>
+          <span className={styles.axisDivider} />
+          {combatBundle.combat.skill_combat
+            .filter((sc) => sc.on_cast?.switch_qifeng)
+            .map((sc) => {
+              const sk = combatBundle.skills.find((k) => k.skill_id === sc.skill_id && (k.sub_id ?? 0) === (sc.sub_id ?? 0));
+              if (!sk) return null;
+              return (
+                <button key={`${sc.skill_id}:${sc.sub_id ?? 0}`} type="button" className={styles.qifengBtn}
+                  onClick={() => addToSequence(sk)}>
+                  切至{qifengName(combatBundle.combat, sc.on_cast.switch_qifeng ?? "")}
+                </button>
+              );
+            })}
+        </div>
+      )}
 
       {noForm && (
         <div className={styles.warnBanner}>
@@ -375,6 +434,33 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         </div>
       </section>
 
+          {/* 奇穴盘：同重互斥，第七~九重为混选池（最多 3 个） */}
+          {timelineQixue.length > 0 && (
+            <div className={styles.qixueBoard} data-testid="qixue-board">
+              <div className={styles.qixueHead}>
+                <span>奇穴盘</span>
+                <span className={styles.qixueHint}>同重互斥 · 混选最多 3 个</span>
+              </div>
+              <div className={styles.qixueRows}>
+                {qixueGroups.map((g) => (
+                  <div className={styles.qixueRow} key={g.slot}>
+                    <span className={styles.qixueSlot}>{g.label}</span>
+                    {g.items.map((q) => (
+                      <button
+                        key={q.id}
+                        type="button"
+                        className={`${styles.qixueChip} ${selQixue.includes(q.id) ? styles.qixueChipActive : ""} ${g.mixed ? styles.qixueChipMixed : ""}`}
+                        onClick={() => toggleQixue(g.slot, q.id, g.mixed)}
+                      >
+                        {q.name}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
       {/* Step adjust modal */}
       {adjustTarget !== null && (
         <StepAdjustModal
@@ -412,24 +498,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
             ))}
             {timelineMiji.length === 0 && <span className={styles.optionsLabel}>（该门派无秘籍数据）</span>}
           </div>
-          <div className={styles.optionsRow}>
-            <span className={styles.optionsLabel}>奇穴</span>
-            {timelineQixue.map((q) => (
-              <label key={q.id} className={styles.optionChip} title={`第${q.slot}重：${q.name}`}>
-                <input
-                  type="checkbox"
-                  checked={selQixue.includes(q.id)}
-                  onChange={(e) =>
-                    setSelQixue((prev) =>
-                      e.target.checked ? [...prev, q.id] : prev.filter((id) => id !== q.id),
-                    )
-                  }
-                />
-                {q.name}
-              </label>
-            ))}
-            {timelineQixue.length === 0 && <span className={styles.optionsLabel}>（该门派无奇穴数据）</span>}
-          </div>
+
         </div>
       )}
 

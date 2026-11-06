@@ -19,7 +19,9 @@ export function formatTimelineEvent(e: TimelineEventDTO): string {
     case "dot_tick":
       return `dot ${k.skill_name} #${k.index} 伤害 ${k.damage}`;
     case "form_switch":
-      return `切形态 ${k.from} → ${k.to}`;
+      return `切器形 ${k.from} → ${k.to}`;
+    case "qifeng_switch":
+      return `切曲风 ${k.from} → ${k.to}`;
     case "buff_gain":
       return `buff ${k.buff_id} ×${k.stacks}`;
     default: {

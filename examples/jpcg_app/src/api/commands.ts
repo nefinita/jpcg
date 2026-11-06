@@ -386,6 +386,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         combat: {
           meta: { profession, version: "mock", note: "mock" },
           form: [],
+          qifeng: [],
           skill_combat: [],
           buff: [],
           miji: [],

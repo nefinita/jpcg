@@ -343,7 +343,8 @@ export interface FormDefDTO {
 }
 
 export interface OnCastDTO {
-  switch_form: string | null;
+  switch_instrument: string | null;
+  switch_qifeng: string | null;
   gcd_lanes: string[];
   lock_skills: SkillKeyDTO[];
 }
@@ -351,7 +352,8 @@ export interface OnCastDTO {
 export interface SkillCombatDTO {
   skill_id: number;
   sub_id: number;
-  form: string | null;
+  requires_instrument: string | null;
+  requires_qifeng: string | null;
   gcd_lane: string;
   on_cast: OnCastDTO;
   cast_time: number | null;
@@ -404,6 +406,8 @@ export interface QixueDefDTO {
 export interface CombatDataDTO {
   meta: CombatMetaDTO;
   form: FormDefDTO[];
+  /** 曲风 id 列表（yangchun / gaoshan / pingsha …） */
+  qifeng: string[];
   skill_combat: SkillCombatDTO[];
   buff: TimedBuffDefDTO[];
   miji: MijiDefDTO[];
@@ -432,6 +436,8 @@ export interface TimelineRequestDTO {
   coeff: CoefficientConfigDTO;
   value_set?: string | null;
   combat?: CombatDataDTO | null;
+  initial_instrument?: string | null;
+  initial_qifeng?: string;
   /** 激活的秘籍 id 列表 */
   miji?: string[];
   /** 激活的奇穴 id 列表 */
@@ -444,6 +450,7 @@ export type TimelineEventKindDTO =
   | { kind: "cast"; skill_name: string; damage: number; hit_time: number; gcd_secs?: number; gcd_ready_at?: number }
   | { kind: "dot_tick"; skill_name: string; index: number; damage: number }
   | { kind: "form_switch"; from: string; to: string }
+  | { kind: "qifeng_switch"; from: string; to: string }
   | { kind: "buff_gain"; buff_id: string; stacks: number };
 
 export interface TimelineEventDTO {
