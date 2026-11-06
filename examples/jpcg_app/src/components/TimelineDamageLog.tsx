@@ -11,6 +11,7 @@ const kindLabel = (kind: TimelineEventDTO["kind"]) => {
     case "cast": return "施放";
     case "dot_tick": return "持续伤害";
     case "form_switch": return "切形态";
+    case "qifeng_switch": return "切曲风";
     case "buff_gain": return "获得效果";
   }
 };
@@ -20,6 +21,7 @@ const kindDetail = (kind: TimelineEventDTO["kind"]) => {
     case "cast": return kind.gcd_secs != null && kind.gcd_secs > 0 ? `GCD ${kind.gcd_secs.toFixed(2)}s（就绪 ${(kind.gcd_ready_at ?? 0).toFixed(2)}s）` : "不占 GCD";
     case "dot_tick": return `第 ${kind.index + 1} 跳`;
     case "form_switch": return `${kind.from} → ${kind.to}`;
+    case "qifeng_switch": return `${kind.from} → ${kind.to}`;
     case "buff_gain": return `${kind.buff_id} ×${kind.stacks}`;
   }
 };
@@ -31,6 +33,7 @@ const kindName = (kind: TimelineEventDTO["kind"]) => {
     case "cast": return kind.skill_name;
     case "dot_tick": return kind.skill_name;
     case "form_switch": return "形态切换";
+    case "qifeng_switch": return "曲风切换";
     case "buff_gain": return "增益";
   }
 };
@@ -43,10 +46,10 @@ export function TimelineDamageLog({ events }: { events: TimelineEventDTO[] }) {
     return { event, index, damage, cumulative };
   });
   return <div style={{ maxHeight: 260, overflowY: "auto", fontSize: 12 }}>
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", whiteSpace: "nowrap" }}>
       <thead style={{ position: "sticky", top: 0, background: "var(--glass-bg, transparent)" }}>
         <tr style={{ textAlign: "left", opacity: 0.75 }}>
-          <th style={{ padding: "2px 6px" }}>#</th>
+          <th style={{ padding: "2px 4px" }}>#</th>
           <th style={{ padding: "2px 6px" }}>时间</th>
           <th style={{ padding: "2px 6px" }}>类型</th>
           <th style={{ padding: "2px 6px" }}>技能</th>

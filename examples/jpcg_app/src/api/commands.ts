@@ -381,16 +381,60 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       ];
     case "load_combat_bundle": {
       const profession = String(args?.profession ?? "");
+      const forms = [
+        { id: "qin", name: "琴", gcd_base: 1.5, initial: true, skills: [] },
+        { id: "jian", name: "剑", gcd_base: 1.5, initial: false, skills: [] },
+      ];
+      const sc = (skill_id: number, sub_id: number, extra: Record<string, unknown>) => ({
+        skill_id, sub_id, requires_instrument: "qin", requires_qifeng: null,
+        gcd_lane: "", on_cast: { switch_instrument: null, switch_qifeng: null, gcd_lanes: [], lock_skills: [] },
+        cast_time: null, gcd_base: null, gcd_kind: null, cooldown: null,
+        charges: null, recharge: null, cd_haste: null, channel: null, buff_id: null,
+        jihuoqixue: null, qifeng_gain: null, spend_all_qifeng: null,
+        ...extra,
+      });
       return {
         skills: [],
         combat: {
-          meta: { profession, version: "mock", note: "mock" },
-          form: [],
-          qifeng: [],
-          skill_combat: [],
+          meta: { profession, version: "mock", note: "浏览器预览数据" },
+          form: forms,
+          qifeng: ["yangchun", "gaoshan", "pingsha"],
+          skill_combat: [
+            sc(10447, 14474, { cast_time: 1.75 }),
+            sc(10448, 14475, { qifeng_gain: 1 }),
+            sc(10449, 14476, { qifeng_gain: 1 }),
+            sc(38009, 38438, { requires_instrument: "jian" }),
+            sc(38014, 38093, { requires_instrument: "jian" }),
+            sc(14069, 0, { gcd_kind: 1, cooldown: 3.0, on_cast: { switch_instrument: null, switch_qifeng: "gaoshan", gcd_lanes: [], lock_skills: [] } }),
+          ],
           buff: [],
-          miji: [],
-          qixue: [],
+          miji: [
+            { id: "mj_gong_1", name: "经脉图·残页", skill_id: 10447, sub_id: 14474 },
+            { id: "mj_gong_2", name: "参悟·断篇", skill_id: 10447, sub_id: 14474 },
+            { id: "mj_gong_3", name: "秘法·绝章", skill_id: 10447, sub_id: 14474 },
+            { id: "mj_shang_1", name: "参悟·残页", skill_id: 10448, sub_id: 14475 },
+            { id: "mj_jiao_1", name: "秘法·绝章", skill_id: 10449, sub_id: 14476 },
+          ],
+          qixue: [
+            { id: "qx_1", name: "洞天", slot: 1 },
+            { id: "qx_2", name: "绝弦", slot: 1 },
+            { id: "qx_3", name: "入月", slot: 1 },
+            { id: "qx_4", name: "鹿鸣", slot: 1 },
+            { id: "qx_5", name: "殊曲", slot: 2 },
+            { id: "qx_6", name: "削竹", slot: 2 },
+            { id: "qx_7", name: "醉剑", slot: 2 },
+            { id: "qx_8", name: "参连", slot: 3 },
+            { id: "qx_9", name: "鸾羽", slot: 3 },
+            { id: "qx_10", name: "冻泉", slot: 4 },
+            { id: "qx_11", name: "凌冬", slot: 4 },
+            { id: "qx_12", name: "相依", slot: 5 },
+            { id: "qx_13", name: "音彻", slot: 5 },
+            { id: "qx_14", name: "不愧君", slot: 6 },
+            { id: "qx_15", name: "斩长鲸", slot: 6 },
+            { id: "qx_16", name: "冲秋冥", slot: 7 },
+            { id: "qx_17", name: "师襄", slot: 7 },
+            { id: "qx_18", name: "兼山", slot: 8 },
+          ],
         },
       } as CombatBundleDTO;
     }
@@ -410,6 +454,17 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
           kind: { kind: "cast", skill_name: skill?.skill_name ?? "技能", damage, hit_time: t + (skill?.cast_time ?? 1.5) },
         });
         t += skill?.cast_time ?? 1.5;
+      }
+      // 浏览器预览：补一条器形切换与一条曲风切换事件，便于检查视觉
+      if (events.length >= 2) {
+        events.splice(1, 0, {
+          time: events[0].time,
+          kind: { kind: "qifeng_switch", from: "yangchun", to: "gaoshan" },
+        });
+        events.push({
+          time: t,
+          kind: { kind: "form_switch", from: "qin", to: "jian" },
+        });
       }
       return {
         events,

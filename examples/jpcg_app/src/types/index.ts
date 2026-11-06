@@ -395,6 +395,8 @@ export interface CombatMetaDTO {
 export interface MijiDefDTO {
   id: string;
   name: string;
+  skill_id?: number;
+  sub_id?: number;
 }
 
 export interface QixueDefDTO {

@@ -19,7 +19,8 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
 async function mount(xinfa = "mowen", revision = 0) { await act(async () => root.render(<ComboPage key={`${xinfa}-${revision}`} xinfaName={xinfa} formData={form} />)); }
 async function click(text: string) {
-  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === text || b.title === text)!;
+  const button = [...host.querySelectorAll<HTMLElement>("button, [data-skill-card]")]
+    .find((b) => b.textContent === text || b.title === text || b.getAttribute("data-skill-name") === text)!;
   expect(button).toBeDefined(); await act(async () => button.click());
 }
 async function input(el: HTMLInputElement, value: string) {

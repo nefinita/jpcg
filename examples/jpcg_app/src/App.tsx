@@ -269,7 +269,7 @@ export default function App() {
         </> : <div className={styles.manualBody}><div className={styles.configPanel}>{configPanel}</div>{resultPanel}</div>}
       </div>
       {visitedPages.has("forum") && <div className={styles.residentPage} hidden={curPage !== "forum"}><ForumPage addToast={addToast} /></div>}
-      {visitedPages.has("combo") && <div className={styles.residentPage} hidden={curPage !== "combo"}><ComboPage key={formData.xinfa} xinfaName={formData.xinfa} formData={activeForm} draft={comboDraft} onDraftChange={setComboDraft} configurationOnly /></div>}
+      {visitedPages.has("combo") && <div className={styles.residentPage} hidden={curPage !== "combo"}><ComboPage key={formData.xinfa} xinfaName={formData.xinfa} formData={activeForm} draft={comboDraft} onDraftChange={setComboDraft} /></div>}
       {visitedPages.has("optimize") && <div className={styles.residentPage} hidden={curPage !== "optimize"}><OptimizePage formData={activeForm} /></div>}
       {visitedPages.has("editor") && <div className={styles.residentPage} hidden={curPage !== "editor"}><SkillEditorPage addToast={addToast} /></div>}
     </div>
