@@ -1,13 +1,13 @@
 # ============================================================================
-# 莫问（50 级）技能数据（新建文件，不含 130 级历史系数）
-# 伤害来自游戏内 tooltip 实测；倍率按 160 基准存整数比
-# 时序（读条/调息/形态/奇穴/秘籍）见 data/combat/mowen.toml
+# 莫问（50 级）技能数据 —— 由 data/skill-shots/mowen-final.json 生成
+# 倍率 = 攻击加成 / 攻击力（连续值，不以 160 截断）；160 口径只用于展示
+# 技能 id/sub_id 与基础伤害均来自 tooltip 实测；时序见 data/combat/mowen.toml
 # ============================================================================
 
 [version]
 level = 50
 modified = 20261106
-note = "50 级莫问：tooltip 实测基础伤害 + ratio_int/160 倍率"
+note = "由 mowen-final.json 生成：ratio = 攻击加成 / 8438"
 
 [xinfa]
 xinfa_nom = "根骨"
@@ -68,15 +68,7 @@ skill_id = 14064
 sub_id = 14474
 base_damage1 = 80
 base_damage2 = 90
-atk_xishu = 0.31875
-
-[[skill]]
-skill_name = "商（秘籍目标）"
-skill_id = 14065
-sub_id = 0
-base_damage1 = 0
-base_damage2 = 0
-atk_xishu = 0
+atk_xishu = 0.321759
 
 [[skill]]
 skill_name = "商"
@@ -84,31 +76,7 @@ skill_id = 14065
 sub_id = 14311
 base_damage1 = 95
 base_damage2 = 100
-atk_xishu = 0.3
-
-[[skill]]
-skill_name = "角（秘籍目标）"
-skill_id = 14066
-sub_id = 0
-base_damage1 = 0
-base_damage2 = 0
-atk_xishu = 0
-
-[[skill]]
-skill_name = "角"
-skill_id = 14066
-sub_id = 14312
-base_damage1 = 95
-base_damage2 = 100
-atk_xishu = 0.3
-
-[[skill]]
-skill_name = "徵（秘籍目标）"
-skill_id = 14067
-sub_id = 0
-base_damage1 = 0
-base_damage2 = 0
-atk_xishu = 0
+atk_xishu = 0.302678
 
 [[skill]]
 skill_name = "徵"
@@ -116,7 +84,7 @@ skill_id = 14067
 sub_id = 14227
 base_damage1 = 84
 base_damage2 = 92
-atk_xishu = 0.21875
+atk_xishu = 0.219602
 
 [[skill]]
 skill_name = "羽"
@@ -124,19 +92,115 @@ skill_id = 14068
 sub_id = 14100
 base_damage1 = 156
 base_damage2 = 175
-atk_xishu = 0.31875
+atk_xishu = 0.321996
 
 [[skill]]
-skill_name = "笑傲光阴"
-skill_id = 14073
+skill_name = "角"
+skill_id = 14066
+sub_id = 14312
+base_damage1 = 95
+base_damage2 = 100
+atk_xishu = 0.302678
+
+[[skill]]
+skill_name = "剑·宫"
+skill_id = 14449
+sub_id = 18656
+base_damage1 = 170
+base_damage2 = 182
+atk_xishu = 0.459232
+
+[[skill]]
+skill_name = "剑·商"
+skill_id = 25225
+sub_id = 25225
+base_damage1 = 480
+base_damage2 = 500
+atk_xishu = 1.004029
+
+[[skill]]
+skill_name = "剑·徵"
+skill_id = 14451
+sub_id = 0
+base_damage1 = 156
+base_damage2 = 162
+atk_xishu = 0.390258
+
+[[skill]]
+skill_name = "剑·羽"
+skill_id = 14452
+sub_id = 14455
+base_damage1 = 248
+base_damage2 = 256
+atk_xishu = 0.633088
+
+[[skill]]
+skill_name = "剑·角"
+skill_id = 40291
+sub_id = 40293
+base_damage1 = 260
+base_damage2 = 270
+atk_xishu = 0.425101
+
+[[skill]]
+skill_name = "高山流水"
+skill_id = 14069
 sub_id = 0
 base_damage1 = 0
 base_damage2 = 0
 atk_xishu = 0
 
 [[skill]]
-skill_name = "江逐月天"
-skill_id = 14074
+skill_name = "高山流水曲"
+skill_id = 14229
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "阳春白雪"
+skill_id = 14070
+sub_id = 14494
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "阳春白雪曲"
+skill_id = 14230
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "平沙落雁"
+skill_id = 14072
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "平沙落雁曲"
+skill_id = 14232
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "九衢闻曲"
+skill_id = 45730
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "青霄飞羽"
+skill_id = 14076
 sub_id = 0
 base_damage1 = 0
 base_damage2 = 0
@@ -151,12 +215,44 @@ base_damage2 = 0
 atk_xishu = 0
 
 [[skill]]
-skill_name = "青霄飞羽"
-skill_id = 14076
+skill_name = "江逐月天"
+skill_id = 14074
 sub_id = 0
-base_damage1 = 320
-base_damage2 = 328
-atk_xishu = 0.25625
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "迴梦逐光"
+skill_id = 14154
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "笑傲光阴"
+skill_id = 14073
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "疏影横斜"
+skill_id = 14082
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
+
+[[skill]]
+skill_name = "清绝影歌"
+skill_id = 14083
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
 skill_name = "孤影化双"
@@ -167,16 +263,56 @@ base_damage2 = 0
 atk_xishu = 0
 
 [[skill]]
-skill_name = "疏影横斜"
-skill_id = 14082
-sub_id = 15076
+skill_name = "清绝影歌·回"
+skill_id = 14522
+sub_id = 0
 base_damage1 = 0
 base_damage2 = 0
 atk_xishu = 0
 
 [[skill]]
-skill_name = "清绝影歌"
-skill_id = 14083
+skill_name = "变宫"
+skill_id = 14298
+sub_id = 18860
+base_damage1 = 80
+base_damage2 = 90
+atk_xishu = 0.321759
+
+[[skill]]
+skill_name = "变徵"
+skill_id = 14299
+sub_id = 18859
+base_damage1 = 84
+base_damage2 = 92
+atk_xishu = 0.219602
+
+[[skill]]
+skill_name = "不愧君"
+skill_id = 29071
+sub_id = 29077
+base_damage1 = 850
+base_damage2 = 875
+atk_xishu = 1.35660109
+
+[[skill]]
+skill_name = "太常律"
+skill_id = 30564
+sub_id = 0
+base_damage1 = 180
+base_damage2 = 195
+atk_xishu = 0.65442048
+
+[[skill]]
+skill_name = "断水流"
+skill_id = 42529
+sub_id = 41903
+base_damage1 = 4099
+base_damage2 = 4099
+atk_xishu = 0
+
+[[skill]]
+skill_name = "斩长鲸"
+skill_id = 36489
 sub_id = 0
 base_damage1 = 0
 base_damage2 = 0
@@ -191,129 +327,93 @@ base_damage2 = 463
 atk_xishu = 0
 
 [[skill]]
-skill_name = "迴梦逐光"
-skill_id = 14154
+skill_name = "飞鸾动羽"
+skill_id = 40325
+sub_id = 40334
+base_damage1 = 999
+base_damage2 = 999
+atk_xishu = 0
+
+[[skill]]
+skill_name = "音彻"
+skill_id = 30589
+sub_id = 40330
+base_damage1 = 2159
+base_damage2 = 2159
+atk_xishu = 0
+
+[[skill]]
+skill_name = "净植"
+skill_id = 41796
+sub_id = 41791
+base_damage1 = 1330
+base_damage2 = 1330
+atk_xishu = 0
+
+[[skill]]
+skill_name = "鹿鸣"
+skill_id = 41830
+sub_id = 41831
+base_damage1 = 5
+base_damage2 = 6
+atk_xishu = 1.08532828
+
+[[skill]]
+skill_name = "相依·1段"
+skill_id = 14163
+sub_id = 43043
+base_damage1 = 459
+base_damage2 = 472
+atk_xishu = 0.58011377
+
+[[skill]]
+skill_name = "相依·2段"
+skill_id = 14163
+sub_id = 43043
+base_damage1 = 552
+base_damage2 = 565
+atk_xishu = 0.83846883
+
+[[skill]]
+skill_name = "入月·1层"
+skill_id = 14870
+sub_id = 44386
+base_damage1 = 360
+base_damage2 = 360
+atk_xishu = 0
+
+[[skill]]
+skill_name = "入月·9层"
+skill_id = 14870
+sub_id = 44386
+base_damage1 = 3238
+base_damage2 = 3238
+atk_xishu = 0
+[[skill]]
+skill_name = "技能14065:0"
+skill_id = 14065
 sub_id = 0
 base_damage1 = 0
 base_damage2 = 0
 atk_xishu = 0
-
 [[skill]]
-skill_name = "高山流水_主动"
-skill_id = 14229
+skill_name = "技能14066:0"
+skill_id = 14066
 sub_id = 0
 base_damage1 = 0
 base_damage2 = 0
 atk_xishu = 0
-
 [[skill]]
-skill_name = "阳春白雪_主动"
-skill_id = 14230
+skill_name = "技能14067:0"
+skill_id = 14067
 sub_id = 0
 base_damage1 = 0
 base_damage2 = 0
 atk_xishu = 0
-
 [[skill]]
-skill_name = "平沙落雁_主动"
-skill_id = 14232
-sub_id = 0
+skill_name = "技能14082:15076"
+skill_id = 14082
+sub_id = 15076
 base_damage1 = 0
 base_damage2 = 0
-atk_xishu = 0
-
-[[skill]]
-skill_name = "变宫"
-skill_id = 14298
-sub_id = 18860
-base_damage1 = 80
-base_damage2 = 90
-atk_xishu = 0.31875
-
-[[skill]]
-skill_name = "变徵"
-skill_id = 14299
-sub_id = 18859
-base_damage1 = 84
-base_damage2 = 92
-atk_xishu = 0.21875
-
-[[skill]]
-skill_name = "剑·宫"
-skill_id = 14449
-sub_id = 18656
-base_damage1 = 170
-base_damage2 = 182
-atk_xishu = 0.45625
-
-[[skill]]
-skill_name = "剑·徵"
-skill_id = 14451
-sub_id = 0
-base_damage1 = 156
-base_damage2 = 162
-atk_xishu = 0.3875
-
-[[skill]]
-skill_name = "剑·羽"
-skill_id = 14452
-sub_id = 14455
-base_damage1 = 248
-base_damage2 = 256
-atk_xishu = 0.63125
-
-[[skill]]
-skill_name = "清绝影歌_回"
-skill_id = 14522
-sub_id = 0
-base_damage1 = 0
-base_damage2 = 0
-atk_xishu = 0
-
-[[skill]]
-skill_name = "剑·商"
-skill_id = 25225
-sub_id = 25225
-base_damage1 = 480
-base_damage2 = 500
-atk_xishu = 1
-
-[[skill]]
-skill_name = "不愧君"
-skill_id = 29071
-sub_id = 29077
-base_damage1 = 850
-base_damage2 = 875
-atk_xishu = 1.35625
-
-[[skill]]
-skill_name = "太常律"
-skill_id = 30564
-sub_id = 0
-base_damage1 = 180
-base_damage2 = 195
-atk_xishu = 0.65
-
-[[skill]]
-skill_name = "斩长鲸"
-skill_id = 36489
-sub_id = 0
-base_damage1 = 0
-base_damage2 = 0
-atk_xishu = 0
-
-[[skill]]
-skill_name = "剑·角"
-skill_id = 40291
-sub_id = 40293
-base_damage1 = 260
-base_damage2 = 270
-atk_xishu = 0.425
-
-[[skill]]
-skill_name = "断水流"
-skill_id = 42529
-sub_id = 41903
-base_damage1 = 4099
-base_damage2 = 4099
 atk_xishu = 0
