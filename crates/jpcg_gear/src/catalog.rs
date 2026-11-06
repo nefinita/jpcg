@@ -59,7 +59,6 @@ impl Catalog {
             &schools.version,
             &sets.version,
             &overrides.version,
-
             &enchants.version,
             &wucai.version,
         ] {

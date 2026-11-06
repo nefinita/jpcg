@@ -16,6 +16,8 @@ fn req_full(
     TimelineRequestDTO {
         skills,
         forms: vec![],
+        initial_instrument: None,
+        initial_qifeng: String::new(),
         timed_buffs: vec![],
         qixue,
         miji,
@@ -32,6 +34,16 @@ fn req_full(
         value_set: None,
         combat: Some(combat),
     }
+}
+
+fn req_instrument(
+    instrument: &str,
+    qixue: Vec<String>,
+    actions: Vec<TimelineActionDTO>,
+) -> TimelineRequestDTO {
+    let mut r = req(qixue, actions);
+    r.initial_instrument = Some(instrument.into());
+    r
 }
 
 fn cast(id: u32, sub: u32, name: &str) -> TimelineActionDTO {
@@ -123,11 +135,15 @@ fn shixiang_scales_with_qifeng() {
 
 #[test]
 fn yince_adds_flat_damage_on_sword_skills() {
-    let base =
-        jpcg_combo::timeline_host::calculate_timeline(req(vec![], vec![cast(14451, 0, "剑·徵")]))
-            .expect("base");
+    let base = jpcg_combo::timeline_host::calculate_timeline(req_instrument(
+        "jian",
+        vec![],
+        vec![cast(14451, 0, "剑·徵")],
+    ))
+    .expect("base");
     let b = casts(&base);
-    let with = jpcg_combo::timeline_host::calculate_timeline(req(
+    let with = jpcg_combo::timeline_host::calculate_timeline(req_instrument(
+        "jian",
         vec!["yince".into()],
         vec![cast(14451, 0, "剑·徵")],
     ))
@@ -195,8 +211,10 @@ fn miji_cuts_cast_time() {
 #[test]
 fn replacement_qixue_changes_skill() {
     // 变徵（14299/18859）默认是 84-92 ×3；洞天替换成 4851 ×3 固定伤害
-    let switch = || TimelineActionDTO::SwitchForm {
-        form: "qu-gaoshan".into(),
+    let switch = || TimelineActionDTO::Cast {
+        skill_id: 14069,
+        sub_id: 0,
+        skill_name: Some("高山流水".into()),
     };
     let base = jpcg_combo::timeline_host::calculate_timeline(req(
         vec![],
@@ -211,7 +229,8 @@ fn replacement_qixue_changes_skill() {
     ))
     .expect("base");
     let b = casts(&base);
-    assert_eq!(b.len(), 1);
+    assert_eq!(b.len(), 2, "曲目技能 + 变徵");
+    assert_eq!(b[1].0, "变徵");
 
     let with = jpcg_combo::timeline_host::calculate_timeline(req(
         vec!["dongtian".into()],
@@ -226,8 +245,8 @@ fn replacement_qixue_changes_skill() {
     ))
     .expect("dongtian");
     let w = casts(&with);
-    assert_eq!(w.len(), 1);
-    assert_eq!(w[0].0, "洞天", "替换后技能名应变为洞天");
+    assert_eq!(w.len(), 2);
+    assert_eq!(w[1].0, "洞天", "替换后技能名应变为洞天");
     let dot_total: f64 = with
         .events
         .iter()

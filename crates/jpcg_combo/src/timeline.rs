@@ -53,8 +53,10 @@ pub struct TimingSkill {
     pub qifeng_gain: u8,
     /// 施放消耗全部曲风
     pub spend_all_qifeng: bool,
-    /// 所属形态 id（None = 任意形态可用）
-    pub form: Option<String>,
+    /// 要求当前器形（None = 任意器形可用）
+    pub requires_instrument: Option<String>,
+    /// 要求当前曲风（None = 任意曲风可用）
+    pub requires_qifeng: Option<String>,
     /// 该技能占用的 GCD 通道（空 = "default"）
     pub gcd_lane: String,
     /// 施放副作用
@@ -81,7 +83,8 @@ impl TimingSkill {
             skill: resolved,
             qifeng_gain: sc.and_then(|s| s.qifeng_gain).unwrap_or(0),
             spend_all_qifeng: sc.and_then(|s| s.spend_all_qifeng).unwrap_or(false),
-            form: sc.and_then(|s| s.form.clone()),
+            requires_instrument: sc.and_then(|s| s.requires_instrument.clone()),
+            requires_qifeng: sc.and_then(|s| s.requires_qifeng.clone()),
             gcd_lane,
             on_cast: sc.map(|s| s.on_cast.clone()).unwrap_or_default(),
         }
@@ -144,6 +147,10 @@ pub struct TimelineInput {
     pub coeff: CoefficientConfig,
     pub skills: Vec<TimingSkill>,
     pub forms: Vec<FormDef>,
+    /// 初始器形 id（空 = 取 forms 里标记 initial 的，或第一条）
+    pub initial_instrument: Option<String>,
+    /// 初始曲风（空 = 不限曲风）
+    pub initial_qifeng: String,
     /// 定时 buff 定义（技能 `buff_id` 引用）
     pub timed_buffs: Vec<TimedBuffDef>,
     /// 动作序列（按给定顺序，引擎计算最早可执行时刻）
@@ -175,8 +182,10 @@ pub enum TimelineEventKind {
         index: u32,
         damage: u32,
     },
-    /// 形态切换
+    /// 器形切换（琴 / 剑）
     FormSwitch { from: String, to: String },
+    /// 曲风切换（0 秒状态事件）
+    QifengSwitch { from: String, to: String },
     /// buff 生效
     BuffGain { buff_id: String, stacks: u8 },
 }
@@ -247,8 +256,8 @@ impl DotInstance {
 
 struct Sim<'a> {
     input: &'a TimelineInput,
-    /// 曲风（0~9）
-    qifeng: u8,
+    /// 曲风点数（0~9）
+    qifeng_points: u8,
     events: Vec<TimelineEvent>,
     dots: Vec<DotInstance>,
     /// 各 GCD 通道就绪时刻
@@ -257,8 +266,10 @@ struct Sim<'a> {
     skill_ready: HashMap<usize, f32>,
     /// 充能（按下标记录）
     charges: HashMap<usize, ChargeState>,
-    /// 当前形态 id（空 = 无形态概念）
-    current_form: String,
+    /// 当前器形 id（空 = 无器形概念）
+    instrument: String,
+    /// 当前曲风 id（空 = 无曲风概念）
+    qifeng_id: String,
     /// 活跃定时 buff
     active_buffs: Vec<ActiveBuff>,
     school_gcd_secs: f32,
@@ -267,22 +278,28 @@ struct Sim<'a> {
 impl<'a> Sim<'a> {
     fn new(input: &'a TimelineInput) -> Self {
         let school_gcd_secs = input.xinfa.gcd_base_secs();
-        let current_form = input
-            .forms
-            .iter()
-            .find(|f| f.initial)
-            .or_else(|| input.forms.first())
-            .map(|f| f.id.clone())
+        let instrument = input
+            .initial_instrument
+            .clone()
+            .or_else(|| {
+                input
+                    .forms
+                    .iter()
+                    .find(|f| f.initial)
+                    .or_else(|| input.forms.first())
+                    .map(|f| f.id.clone())
+            })
             .unwrap_or_default();
         Sim {
             input,
-            qifeng: MAX_QIFENG,
+            qifeng_points: MAX_QIFENG,
             events: Vec::new(),
             dots: Vec::new(),
             lane_ready: HashMap::new(),
             skill_ready: HashMap::new(),
             charges: HashMap::new(),
-            current_form,
+            instrument,
+            qifeng_id: input.initial_qifeng.clone(),
             active_buffs: Vec::new(),
             school_gcd_secs,
         }
@@ -324,20 +341,28 @@ impl<'a> Sim<'a> {
         self.input.forms.iter().find(|f| f.id == id)
     }
 
-    /// 技能在当前形态下是否可选
-    fn form_allows(&self, sk: &TimingSkill) -> bool {
-        if self.input.forms.is_empty() {
-            return true;
+    /// 技能在当前器形 / 曲风下是否可选
+    fn skill_allowed(&self, sk: &TimingSkill) -> bool {
+        if let Some(inst) = &sk.requires_instrument
+            && !inst.trim().is_empty()
+            && !self.input.forms.is_empty()
+            && *inst != self.instrument
+        {
+            return false;
         }
-        match &sk.form {
-            Some(form_id) => *form_id == self.current_form,
-            None => true,
+        if let Some(q) = &sk.requires_qifeng
+            && !q.trim().is_empty()
+            && *q != self.qifeng_id
+        {
+            return false;
         }
+        true
     }
 
-    /// 通道默认 GCD 基础（形态 > 心法/门派）
+    /// 通道默认 GCD 基础（具名器形通道 > 当前器形 > 心法/门派）
     fn lane_base(&self, lane: &str) -> f32 {
         self.form(lane)
+            .or_else(|| self.form(&self.instrument))
             .map(|f| f.gcd_base_secs(self.school_gcd_secs))
             .unwrap_or(self.school_gcd_secs)
     }
@@ -485,7 +510,7 @@ impl<'a> Sim<'a> {
         };
 
         // ---- 曲风与奇穴钩子（第 3 层）：按施放前曲风与本次消耗结算 ----
-        let qifeng_before = self.qifeng;
+        let qifeng_before = self.qifeng_points;
         let key = sk.key();
         let spent = if sk.spend_all_qifeng {
             qifeng_before as f32
@@ -517,10 +542,10 @@ impl<'a> Sim<'a> {
         let direct_damage =
             ((base_direct as f32) * (1.0 + pct_bonus / 100.0) + flat_bonus).max(0.0) as u32;
         // 施放后更新曲风：先结清消耗，再加获得（上限 9）
-        self.qifeng = if sk.spend_all_qifeng {
+        self.qifeng_points = if sk.spend_all_qifeng {
             sk.qifeng_gain.min(MAX_QIFENG)
         } else {
-            (self.qifeng + sk.qifeng_gain).min(MAX_QIFENG)
+            (self.qifeng_points + sk.qifeng_gain).min(MAX_QIFENG)
         };
         let own_gcd = self.skill_gcd(sk, rate);
         let gcd_secs = if sk.skill.occupies_gcd() {
@@ -675,16 +700,30 @@ impl<'a> Sim<'a> {
             }
         }
 
-        // ---- 形态切换 ----
-        if let Some(to) = &sk.on_cast.switch_form
-            && *to != self.current_form
+        // ---- 器形切换 ----
+        if let Some(to) = &sk.on_cast.switch_instrument
+            && *to != self.instrument
             && self.form(to).is_some()
         {
-            let from = self.current_form.clone();
-            self.current_form = to.clone();
+            let from = self.instrument.clone();
+            self.instrument = to.clone();
             self.events.push(TimelineEvent {
                 time: start,
                 kind: TimelineEventKind::FormSwitch {
+                    from,
+                    to: to.clone(),
+                },
+            });
+        }
+        // ---- 曲风切换（0 秒状态事件） ----
+        if let Some(to) = &sk.on_cast.switch_qifeng
+            && *to != self.qifeng_id
+        {
+            let from = self.qifeng_id.clone();
+            self.qifeng_id = to.clone();
+            self.events.push(TimelineEvent {
+                time: start,
+                kind: TimelineEventKind::QifengSwitch {
                     from,
                     to: to.clone(),
                 },
@@ -701,9 +740,9 @@ impl<'a> Sim<'a> {
         for action in &self.input.actions {
             match action {
                 TimelineAction::SwitchForm(to) => {
-                    if self.form(to).is_some() && *to != self.current_form {
-                        let from = self.current_form.clone();
-                        self.current_form = to.clone();
+                    if self.form(to).is_some() && *to != self.instrument {
+                        let from = self.instrument.clone();
+                        self.instrument = to.clone();
                         self.events.push(TimelineEvent {
                             time: now,
                             kind: TimelineEventKind::FormSwitch {
@@ -728,7 +767,7 @@ impl<'a> Sim<'a> {
                     };
                     // 先按当前时刻结算充能，再判断能否施放
                     self.settle_charges(index, now);
-                    if !self.form_allows(&self.input.skills[index]) {
+                    if !self.skill_allowed(&self.input.skills[index]) {
                         skipped += 1;
                         continue;
                     }
@@ -862,7 +901,8 @@ mod tests {
             skill,
             qifeng_gain: 0,
             spend_all_qifeng: false,
-            form: None,
+            requires_instrument: None,
+            requires_qifeng: None,
             gcd_lane: lane.into(),
             on_cast: OnCast::default(),
         }
@@ -881,6 +921,8 @@ mod tests {
             coeff: CoefficientConfig::default(),
             skills,
             forms: Vec::new(),
+            initial_instrument: None,
+            initial_qifeng: String::new(),
             timed_buffs: Vec::new(),
             active_qixue: Vec::new(),
             hooks: Vec::new(),
@@ -929,7 +971,8 @@ mod tests {
         // 双形态：两条通道各自 1.5s / 1.0s，交替施放互不阻塞
         let a = timing(skill(1, 0, "单持技能"), "single");
         let b = TimingSkill {
-            form: Some("dual".into()),
+            requires_instrument: Some("dual".into()),
+            requires_qifeng: None,
             ..timing(skill(2, 0, "双持技能"), "dual")
         };
         let mut input = base_input(
@@ -961,7 +1004,7 @@ mod tests {
         // 让单持技能施放后切双持，则双持技能可以在 0 秒（独立通道）后立即施放
         let a2 = TimingSkill {
             on_cast: OnCast {
-                switch_form: Some("dual".into()),
+                switch_instrument: Some("dual".into()),
                 ..OnCast::default()
             },
             ..timing(skill(1, 0, "切形态技能"), "single")
@@ -980,14 +1023,16 @@ mod tests {
         // 刀宗：断云势（单持）额外占用双持通道 → 双持技能被顶到 1.5s
         let duanyun = TimingSkill {
             on_cast: OnCast {
-                switch_form: Some("dual".into()),
+                switch_instrument: Some("dual".into()),
+                switch_qifeng: None,
                 gcd_lanes: vec!["dual".into()],
                 lock_skills: vec![(2, 0)],
             },
             ..timing(skill(1, 0, "断云势"), "single")
         };
         let gufeng = TimingSkill {
-            form: Some("dual".into()),
+            requires_instrument: Some("dual".into()),
+            requires_qifeng: None,
             ..timing(skill(2, 0, "孤锋破浪"), "dual")
         };
         let mut input = base_input(
@@ -1192,14 +1237,14 @@ gcd_base = 1.0
 [[skill_combat]]
 skill_id = 1
 sub_id = 0
-form = "single"
+requires_instrument = "single"
 gcd_lane = "single"
-on_cast = { switch_form = "dual", gcd_lanes = ["dual"], lock_skills = [[2, 0]] }
+on_cast = { switch_instrument = "dual", gcd_lanes = ["dual"], lock_skills = [[2, 0]] }
 
 [[skill_combat]]
 skill_id = 2
 sub_id = 0
-form = "dual"
+requires_instrument = "dual"
 gcd_lane = "dual"
 cast_time = 2.0
 "#;
@@ -1237,11 +1282,13 @@ cast_time = 2.0
     #[test]
     fn manual_form_switch_action() {
         let a = TimingSkill {
-            form: Some("a".into()),
+            requires_instrument: Some("a".into()),
+            requires_qifeng: None,
             ..timing(skill(1, 0, "A"), "a")
         };
         let b = TimingSkill {
-            form: Some("b".into()),
+            requires_instrument: Some("b".into()),
+            requires_qifeng: None,
             ..timing(skill(2, 0, "B"), "b")
         };
         let mut input = base_input(

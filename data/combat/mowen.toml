@@ -10,6 +10,8 @@
 #   - 变宫/变徵 = 高山流水曲下的 宫/徵 变体（可移动吟唱，复用秘籍）
 # ============================================================================
 
+qifeng = ["yangchun", "gaoshan", "pingsha"]
+
 [meta]
 profession = "mowen"
 version = "2026-11-05"
@@ -19,57 +21,22 @@ note = "由游戏内 tooltip 截图整理；曲/气/影 与形态切换技能已
 # 形态
 # ----------------------------------------------------------------------------
 [[form]]
-id = "qu-yangchun"
-name = "阳春白雪"
+id = "qin"
+name = "琴"
 gcd_base = 1.5
 initial = true
-skills = [
-  [14064, 14474], [14065, 14311], [14066, 14312], [14067, 14227], [14068, 14100],
-  [14230, 0], [14229, 0], [14232, 0],
-  [14073, 0], [14074, 0], [14075, 0], [14076, 0], [14154, 0], [14082, 15076], [14081, 0],
-  [14083, 0],
-  [29071, 29077], [42529, 41903], [36489, 0], [14093, 41871], [30564, 0],
-]
-
-[[form]]
-id = "qu-gaoshan"
-name = "高山流水"
-gcd_base = 1.5
-skills = [
-  [14298, 18860], [14299, 18859], [14065, 14311], [14066, 14312], [14068, 14100],
-  [14230, 0], [14229, 0], [14232, 0],
-  [14073, 0], [14074, 0], [14075, 0], [14076, 0], [14154, 0], [14082, 15076], [14081, 0],
-  [14083, 0],
-  [29071, 29077], [42529, 41903], [36489, 0], [14093, 41871], [30564, 0],
-]
-
-[[form]]
-id = "qu-pingsha"
-name = "平沙落雁"
-gcd_base = 1.5
-skills = [
-  [14064, 14474], [14065, 14311], [14066, 14312], [14067, 14227], [14068, 14100],
-  [14230, 0], [14229, 0], [14232, 0],
-  [14073, 0], [14074, 0], [14075, 0], [14076, 0], [14154, 0], [14082, 15076], [14081, 0],
-  [14083, 0],
-  [29071, 29077], [42529, 41903], [36489, 0], [14093, 41871], [30564, 0],
-]
+skills = []
 
 [[form]]
 id = "jian"
 name = "剑"
 gcd_base = 1.5
-skills = [
-  [14449, 18656], [25225, 25225], [14451, 0], [14452, 14455], [40291, 40293],
-  [14522, 0],
-]
+skills = []
 
-# ----------------------------------------------------------------------------
-# 音（三曲通用）
-# ----------------------------------------------------------------------------
 [[skill_combat]]
 skill_id = 14064
 sub_id = 14474
+requires_instrument = "qin"
 spend_all_qifeng = true
 cast_time = 1.75
 cooldown = 0.0
@@ -78,14 +45,16 @@ cooldown = 0.0
 [[skill_combat]]
 skill_id = 14298
 sub_id = 18860
+requires_instrument = "qin"
+requires_qifeng = "gaoshan"
 spend_all_qifeng = true
-form = "qu-gaoshan"
 cast_time = 1.75
 cooldown = 0.0
 
 [[skill_combat]]
 skill_id = 14065
 sub_id = 14311
+requires_instrument = "qin"
 qifeng_gain = 1
 cast_time = 0.0
 cooldown = 0.0
@@ -94,6 +63,7 @@ cooldown = 0.0
 [[skill_combat]]
 skill_id = 14067
 sub_id = 14227
+requires_instrument = "qin"
 qifeng_gain = 1
 cast_time = 0.0
 cooldown = 0.0
@@ -103,13 +73,15 @@ cooldown = 0.0
 [[skill_combat]]
 skill_id = 14299
 sub_id = 18859
-form = "qu-gaoshan"
+requires_instrument = "qin"
+requires_qifeng = "gaoshan"
 cast_time = 0.0
 cooldown = 0.0
 
 [[skill_combat]]
 skill_id = 14066
 sub_id = 14312
+requires_instrument = "qin"
 qifeng_gain = 1
 cast_time = 0.0
 cooldown = 0.0
@@ -118,6 +90,7 @@ cooldown = 0.0
 [[skill_combat]]
 skill_id = 14068
 sub_id = 14100
+requires_instrument = "qin"
 qifeng_gain = 1
 charges = 3
 recharge = 6.0
@@ -130,23 +103,23 @@ cd_haste = true
 [[skill_combat]]
 skill_id = 14230
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 0.0
-on_cast = { switch_form = "qu-yangchun" }
 
 [[skill_combat]]
 skill_id = 14229
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 0.0
-on_cast = { switch_form = "qu-gaoshan" }
 
 [[skill_combat]]
 skill_id = 14232
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 0.0
-on_cast = { switch_form = "qu-pingsha" }
 
 # ----------------------------------------------------------------------------
 # 气 / 影 / 辅助
@@ -154,6 +127,7 @@ on_cast = { switch_form = "qu-pingsha" }
 [[skill_combat]]
 skill_id = 14076
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 1.0
 cooldown = 40.0
 # 青霄飞羽：浮空 6 秒（+2 秒秘籍）
@@ -161,6 +135,7 @@ cooldown = 40.0
 [[skill_combat]]
 skill_id = 14075
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 70.0
 # 云生结海
@@ -168,6 +143,7 @@ cooldown = 70.0
 [[skill_combat]]
 skill_id = 14074
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 70.0
 # 江逐月天
@@ -175,6 +151,7 @@ cooldown = 70.0
 [[skill_combat]]
 skill_id = 14154
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 70.0
 # 迴梦逐光
@@ -182,6 +159,7 @@ cooldown = 70.0
 [[skill_combat]]
 skill_id = 14073
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 70.0
 # 笑傲光阴
@@ -189,6 +167,7 @@ cooldown = 70.0
 [[skill_combat]]
 skill_id = 14082
 sub_id = 15076
+requires_instrument = "qin"
 cast_time = 0.0
 charges = 1
 recharge = 28.0
@@ -197,6 +176,7 @@ recharge = 28.0
 [[skill_combat]]
 skill_id = 14081
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 150.0
 # 孤影化双（2 分 30 秒；超然奇穴降至 60 秒并受加速影响）
@@ -207,31 +187,35 @@ cooldown = 150.0
 [[skill_combat]]
 skill_id = 14083
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 60.0
-on_cast = { switch_form = "jian" }
 # 非战斗状态下无调息；重伤后重置调息
 
+on_cast = { switch_instrument = "jian" }
 [[skill_combat]]
 skill_id = 14522
 sub_id = 0
+requires_instrument = "jian"
 cast_time = 0.0
 cooldown = 0.0
-on_cast = { switch_form = "qu-yangchun" }
 # 收剑回琴：只占 1 个 GCD。注：引擎暂无「回上一个形态」，先固定回阳春白雪
 
 # ----------------------------------------------------------------------------
 # 剑
 # ----------------------------------------------------------------------------
+on_cast = { switch_instrument = "qin" }
 [[skill_combat]]
 skill_id = 14449
 sub_id = 18656
+requires_instrument = "jian"
 cast_time = 0.0
 cooldown = 0.0
 
 [[skill_combat]]
 skill_id = 25225
 sub_id = 25225
+requires_instrument = "jian"
 charges = 2
 recharge = 20.0
 cd_haste = false
@@ -240,6 +224,7 @@ cd_haste = false
 [[skill_combat]]
 skill_id = 14451
 sub_id = 0
+requires_instrument = "jian"
 cast_time = 0.0
 cooldown = 11.0
 cd_haste = false
@@ -248,6 +233,7 @@ cd_haste = false
 [[skill_combat]]
 skill_id = 14452
 sub_id = 14455
+requires_instrument = "jian"
 charges = 1
 recharge = 16.0
 cd_haste = false
@@ -256,6 +242,7 @@ cd_haste = false
 [[skill_combat]]
 skill_id = 40291
 sub_id = 40293
+requires_instrument = "jian"
 cast_time = 3.0
 channel = true
 cooldown = 20.0
@@ -268,6 +255,7 @@ cd_haste = false
 [[skill_combat]]
 skill_id = 14093
 sub_id = 41871
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 25.0
 jihuoqixue = "chongqiuming"
@@ -276,6 +264,7 @@ jihuoqixue = "chongqiuming"
 [[skill_combat]]
 skill_id = 29071
 sub_id = 29077
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 20.0
 jihuoqixue = "bukuijun"
@@ -284,6 +273,7 @@ jihuoqixue = "bukuijun"
 [[skill_combat]]
 skill_id = 42529
 sub_id = 41903
+requires_instrument = "qin"
 cast_time = 0.0
 charges = 5
 recharge = 8.0
@@ -294,6 +284,7 @@ jihuoqixue = "duanshuiliu"
 [[skill_combat]]
 skill_id = 36489
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 0.0
 jihuoqixue = "zhanchangjing"
@@ -302,6 +293,7 @@ jihuoqixue = "zhanchangjing"
 [[skill_combat]]
 skill_id = 30564
 sub_id = 0
+requires_instrument = "qin"
 cast_time = 0.0
 cooldown = 0.0
 jihuoqixue = "taichanglv"
@@ -460,6 +452,36 @@ hooks = [{ damage_pct_per_qifeng = { pct = 2.0 } }]
 # 数据来源：游戏内「秘籍选择」页 8 张截图（宫/商/徵/羽/角/青霄飞羽/笑傲光阴/杯水留影）
 # 只建模数值类（伤害/会心/读条/调息），距离/移速/禁轻功等非伤害效果暂不建模。
 # ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# 曲目技能：释放即切曲风（0 GCD，3 秒调息，剑形态不可用）
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14070
+sub_id = 14494
+requires_instrument = "qin"
+gcd_kind = 1
+cast_time = 0.0
+cooldown = 3.0
+on_cast = { switch_qifeng = "yangchun" }
+
+[[skill_combat]]
+skill_id = 14069
+sub_id = 0
+requires_instrument = "qin"
+gcd_kind = 1
+cast_time = 0.0
+cooldown = 3.0
+on_cast = { switch_qifeng = "gaoshan" }
+
+[[skill_combat]]
+skill_id = 14072
+sub_id = 0
+requires_instrument = "qin"
+gcd_kind = 1
+cast_time = 0.0
+cooldown = 3.0
+on_cast = { switch_qifeng = "pingsha" }
 
 [[miji]]
 id = "gong_cast1"

@@ -63,7 +63,8 @@ impl From<FormDef> for FormDefDTO {
 impl From<OnCast> for OnCastDTO {
     fn from(o: OnCast) -> Self {
         OnCastDTO {
-            switch_form: o.switch_form,
+            switch_instrument: o.switch_instrument,
+            switch_qifeng: o.switch_qifeng,
             gcd_lanes: o.gcd_lanes,
             lock_skills: o.lock_skills,
         }
@@ -75,7 +76,8 @@ impl From<SkillCombatDef> for SkillCombatDTO {
         SkillCombatDTO {
             skill_id: s.skill_id,
             sub_id: s.sub_id,
-            form: s.form,
+            requires_instrument: s.requires_instrument,
+            requires_qifeng: s.requires_qifeng,
             gcd_lane: s.gcd_lane,
             on_cast: s.on_cast.into(),
             cast_time: s.cast_time,
@@ -160,6 +162,7 @@ impl From<CombatData> for CombatDataDTO {
         CombatDataDTO {
             meta: d.meta.into(),
             form: d.form.into_iter().map(Into::into).collect(),
+            qifeng: d.qifeng,
             skill_combat: d.skill_combat.into_iter().map(Into::into).collect(),
             buff: d.buff.into_iter().map(Into::into).collect(),
             miji: d.miji.into_iter().map(Into::into).collect(),
@@ -201,7 +204,8 @@ impl From<FormDefDTO> for FormDef {
 impl From<OnCastDTO> for OnCast {
     fn from(o: OnCastDTO) -> Self {
         OnCast {
-            switch_form: o.switch_form,
+            switch_instrument: o.switch_instrument,
+            switch_qifeng: o.switch_qifeng,
             gcd_lanes: o.gcd_lanes,
             lock_skills: o.lock_skills,
         }
@@ -213,7 +217,8 @@ impl From<SkillCombatDTO> for SkillCombatDef {
         SkillCombatDef {
             skill_id: s.skill_id,
             sub_id: s.sub_id,
-            form: s.form,
+            requires_instrument: s.requires_instrument,
+            requires_qifeng: s.requires_qifeng,
             gcd_lane: s.gcd_lane,
             on_cast: s.on_cast.into(),
             cast_time: s.cast_time,
@@ -335,6 +340,7 @@ impl From<CombatDataDTO> for CombatData {
                 note: d.meta.note,
             },
             form: d.form.into_iter().map(Into::into).collect(),
+            qifeng: d.qifeng,
             skill_combat: d.skill_combat.into_iter().map(Into::into).collect(),
             buff: d.buff.into_iter().map(Into::into).collect(),
             miji: d.miji.into_iter().map(Into::into).collect(),
@@ -390,13 +396,16 @@ mod tests {
                 initial: true,
                 skills: vec![(1, 0)],
             }],
+            qifeng: vec!["yangchun".into(), "gaoshan".into()],
             skill_combat: vec![SkillCombatDef {
                 skill_id: 1,
                 sub_id: 0,
-                form: Some("single".into()),
+                requires_instrument: Some("single".into()),
+                requires_qifeng: None,
                 gcd_lane: "single".into(),
                 on_cast: OnCast {
-                    switch_form: Some("dual".into()),
+                    switch_instrument: Some("dual".into()),
+                    switch_qifeng: None,
                     gcd_lanes: vec!["dual".into()],
                     lock_skills: vec![(2, 0)],
                 },
