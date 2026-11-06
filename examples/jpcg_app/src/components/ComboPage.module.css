@@ -1013,3 +1013,214 @@
 .catalogPanel .poolGroup {
   flex: none;
 }
+
+/* ===== 技能卡左侧秘籍槽 ===== */
+.skillCard {
+  display: flex;
+  gap: 8px;
+}
+
+.cardMijiSlots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 82px;
+  flex: none;
+}
+
+.mijiSlot {
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 9px;
+  line-height: 16px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mijiSlotOn {
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.mijiPicker {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: calc(100% - 4px);
+  z-index: 20;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--bg-elevated, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.mijiPickerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.mijiPickerClose {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.mijiPickerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.mijiOption {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mijiOptionOn {
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.mijiEmpty {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* ===== 奇穴盘：分组卡片网格 ===== */
+.qixueGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.qixueGroup {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+}
+
+.qixueGroupMixed {
+  border-style: dashed;
+}
+
+.qixueGroupLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.qixueGroupHint {
+  font-size: 9px;
+  font-weight: 400;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px dashed var(--border-subtle);
+}
+
+.qixueGroupChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.qixueChip {
+  font-size: 11px;
+}
+
+.qixueSummary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.qixueSummary b {
+  font-size: 18px;
+  color: var(--accent);
+  line-height: 1.2;
+}
+
+/* ===== 整页固定高度：头部 + 三栏 + 底部奇穴盘，避免奇穴盘被挤出视口 ===== */
+.page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.page > :not(.mainGrid):not(.qixueBoard) {
+  flex: none;
+}
+
+.mainGrid {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.catalogPanel,
+.boardPanel,
+.logPanel {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+.comboSequence {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.qixueBoard {
+  flex: none;
+}
+
+/* 奇穴选中态用金色，和游戏奇穴/秘籍区分开 */
+.qixueChipActive {
+  border-color: #c99a3f;
+  background: rgba(201, 154, 63, 0.16);
+  color: #8a6420;
+  font-weight: 600;
+}

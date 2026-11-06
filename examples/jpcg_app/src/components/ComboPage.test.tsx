@@ -59,7 +59,7 @@ it("时间轴预览下发勾选的秘籍与奇穴", async () => {
       qifeng: [],
       skill_combat: [],
       buff: [],
-      miji: [{ id: "mj_gong", name: "宫·秘籍" }],
+      miji: [{ id: "mj_gong", name: "宫·秘籍", skill_id: 1, sub_id: 0 }],
       qixue: [{ id: "qx_dongtian", name: "洞天", slot: 1 }],
     },
   } as never);
@@ -71,16 +71,14 @@ it("时间轴预览下发勾选的秘籍与奇穴", async () => {
   });
   await mount();
   await click("测试技·一");
-  const panel = host.querySelector('[data-testid="timeline-options"]');
-  expect(panel).not.toBeNull();
-  const boxes = [...panel!.querySelectorAll('input[type="checkbox"]')] as HTMLInputElement[];
-  expect(boxes.length).toBe(1);
+  // 秘籍：点技能卡左侧空槽 → 选择弹层里的秘籍
+  await click("＋");
+  await click("宫·秘籍");
   const board = host.querySelector('[data-testid="qixue-board"]')!;
   expect(board).not.toBeNull();
   const qixueButtons = [...board.querySelectorAll("button")];
   expect(qixueButtons.length).toBe(1);
   await act(async () => {
-    boxes[0].click();
     qixueButtons[0].click();
   });
   await click("时间轴预览");

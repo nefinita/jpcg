@@ -64,19 +64,28 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
+  /** 当前展开秘籍选择器的技能（key = skill_id:sub_id） */
+  const [mijiPicker, setMijiPicker] = useState<string | null>(null);
 
   // 奇穴盘：第一重~第六重各选 1；第七~九重为混选池（最多 3 个）
   const qixueGroups = useMemo(() => {
-    const groups = new Map<number, QixueDefDTO[]>();
+    const singles = new Map<number, QixueDefDTO[]>();
+    const mixed: QixueDefDTO[] = [];
     for (const q of timelineQixue) {
-      const list = groups.get(q.slot) ?? [];
-      list.push(q);
-      groups.set(q.slot, list);
+      if (q.slot > 6) {
+        mixed.push(q);
+      } else {
+        const list = singles.get(q.slot) ?? [];
+        list.push(q);
+        singles.set(q.slot, list);
+      }
     }
-    const label = (slot: number) => (slot <= 6 ? `第${["一","二","三","四","五","六"][slot - 1]}重` : "混选");
-    return [...groups.entries()]
+    const label = (slot: number) => `第${["一","二","三","四","五","六"][slot - 1]}重`;
+    const groups = [...singles.entries()]
       .sort(([a], [b]) => a - b)
-      .map(([slot, items]) => ({ slot, items, label: label(slot), mixed: slot > 6 }));
+      .map(([slot, items]) => ({ slot, items, label: label(slot), mixed: false }));
+    if (mixed.length > 0) groups.push({ slot: 7, items: mixed, label: "混选", mixed: true });
+    return groups;
   }, [timelineQixue]);
 
   const toggleQixue = useCallback((slot: number, id: string, mixed: boolean) => {
@@ -337,6 +346,16 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       && ((m.sub_id ?? 0) === 0 || (m.sub_id ?? 0) === (skill.sub_id ?? 0))),
   [timelineMiji]);
 
+  /** 切换某技能的秘籍：同一技能最多 4 个（游戏内秘籍槽位） */
+  const toggleMiji = useCallback((skill: SkillPoolItemDTO, id: string) => {
+    setSelMiji((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      const equipped = mijiFor(skill).filter((m) => prev.includes(m.id)).length;
+      if (equipped >= 4) return prev;
+      return [...prev, id];
+    });
+  }, [mijiFor]);
+
   /** 技能卡的时序标签：吟唱 / 调息 / 充能 */
   const castLabel = useCallback((skill: SkillPoolItemDTO) => {
     const parts: string[] = [];
@@ -546,6 +565,27 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                             onClick={() => addToSequence(s)}
                             onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}
                             title={`${s.skill_name} | 基础伤害 ${s.base_damage1}-${s.base_damage2} | 系数 ${s.atk_xishu}${fav ? " · 已收藏" : " · 右键标记收藏"}`}>
+                            {miji.length > 0 && <div className={styles.cardMijiSlots}>
+                              {[0, 1, 2, 3].map((slot) => {
+                                const equipped = miji.filter((m) => selMiji.includes(m.id))[slot];
+                                return (
+                                  <button
+                                    key={slot}
+                                    type="button"
+                                    className={`${styles.mijiSlot} ${equipped ? styles.mijiSlotOn : ""}`}
+                                    title={equipped ? `秘籍：${equipped.name}（点击卸下）` : `秘籍槽 ${slot + 1}（点击选择）`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (equipped) setSelMiji((prev) => prev.filter((x) => x !== equipped.id));
+                                      else setMijiPicker(mijiPicker === key ? null : key);
+                                    }}
+                                  >
+                                    {equipped ? equipped.name : "＋"}
+                                  </button>
+                                );
+                              })}
+                            </div>}
+                            <div className={styles.cardBody}>
                             <div className={styles.cardHead}>
                               <span className={styles.cardName}>{s.skill_name}</span>
                               {qifengNeed && (
@@ -561,22 +601,26 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                                 <span className={styles.comboZhenshiTag}>真伤{(s.lost_hp_zhenshishanghai * 100).toFixed(0)}%</span>
                               )}
                             </div>
-                            {miji.length > 0 && (
-                              <div className={styles.cardMiji} onClick={(e) => e.stopPropagation()}>
-                                {miji.slice(0, 4).map((m) => (
-                                  <button key={m.id}
-                                    className={`${styles.mijiPill} ${selMiji.includes(m.id) ? styles.mijiPillOn : ""}`}
-                                    title={m.name}
-                                    onClick={() => setSelMiji((prev) => prev.includes(m.id)
-                                      ? prev.filter((x) => x !== m.id)
-                                      : [...prev, m.id])}>
-                                    {m.name}
-                                  </button>
-                                ))}
-                                {miji.length > 4 && <span className={styles.mijiMore}>+{miji.length - 4}</span>}
+                            {fav && <span className={styles.starIcon}><IconStar size={12} /></span>}
+                            </div>
+                            {mijiPicker === key && (
+                              <div className={styles.mijiPicker} onClick={(e) => e.stopPropagation()}>
+                                <div className={styles.mijiPickerHead}>
+                                  <span>{s.skill_name} · 秘籍（{miji.filter((m) => selMiji.includes(m.id)).length}/4）</span>
+                                  <button type="button" className={styles.mijiPickerClose} onClick={() => setMijiPicker(null)}>×</button>
+                                </div>
+                                <div className={styles.mijiPickerList}>
+                                  {miji.map((m) => (
+                                    <button key={m.id} type="button"
+                                      className={`${styles.mijiOption} ${selMiji.includes(m.id) ? styles.mijiOptionOn : ""}`}
+                                      onClick={() => toggleMiji(s, m.id)}>
+                                      {m.name}
+                                    </button>
+                                  ))}
+                                  {miji.length === 0 && <span className={styles.mijiEmpty}>该技能没有秘籍</span>}
+                                </div>
                               </div>
                             )}
-                            {fav && <span className={styles.starIcon}><IconStar size={12} /></span>}
                           </div>
                         );
                       })}
@@ -714,48 +758,31 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         <div className={styles.qixueBoard} data-testid="qixue-board">
           <div className={styles.qixueHead}>
             <span>奇穴盘</span>
-            <span className={styles.qixueHint}>同重互斥 · 混选最多 3 个</span>
+            <span className={styles.qixueHint}>同重互斥 · 混选 9 选 3</span>
+            <span className={styles.qixueCount}>已选 {selQixue.length} / 9</span>
           </div>
-          <div className={styles.qixueRows}>
+          <div className={styles.qixueGrid}>
             {qixueGroups.map((g) => (
-              <div className={styles.qixueRow} key={g.slot}>
-                <span className={styles.qixueSlot}>{g.label}</span>
-                {g.items.map((q) => (
-                  <button
-                    key={q.id}
-                    type="button"
-                    className={`${styles.qixueChip} ${selQixue.includes(q.id) ? styles.qixueChipActive : ""} ${g.mixed ? styles.qixueChipMixed : ""}`}
-                    onClick={() => toggleQixue(g.slot, q.id, g.mixed)}
-                  >
-                    {q.name}
-                  </button>
-                ))}
+              <div className={`${styles.qixueGroup} ${g.mixed ? styles.qixueGroupMixed : ""}`} key={g.slot}>
+                <div className={styles.qixueGroupLabel}>
+                  {g.label}
+                  {g.mixed && <span className={styles.qixueGroupHint}>9 选 3</span>}
+                </div>
+                <div className={styles.qixueGroupChips}>
+                  {g.items.map((q) => (
+                    <button
+                      key={q.id}
+                      type="button"
+                      className={`${styles.qixueChip} ${selQixue.includes(q.id) ? styles.qixueChipActive : ""}`}
+                      onClick={() => toggleQixue(g.slot, q.id, g.mixed)}
+                    >
+                      {q.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             ))}
-          </div>
-        </div>
-      )}
 
-      {/* #92 秘籍勾选：随「时间轴预览」一起下发给时序引擎 */}
-      {!configurationOnly && (timelineMiji.length > 0 || timelineQixue.length > 0) && (
-        <div className={styles.optionsPanel} data-testid="timeline-options">
-          <div className={styles.optionsRow}>
-            <span className={styles.optionsLabel}>秘籍</span>
-            {timelineMiji.map((m) => (
-              <label key={m.id} className={styles.optionChip} title={`秘籍：${m.name}`}>
-                <input
-                  type="checkbox"
-                  checked={selMiji.includes(m.id)}
-                  onChange={(e) =>
-                    setSelMiji((prev) =>
-                      e.target.checked ? [...prev, m.id] : prev.filter((id) => id !== m.id),
-                    )
-                  }
-                />
-                {m.name}
-              </label>
-            ))}
-            {timelineMiji.length === 0 && <span className={styles.optionsLabel}>（该门派无秘籍数据）</span>}
           </div>
         </div>
       )}
