@@ -471,7 +471,10 @@ pub struct FormDefDTO {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OnCastDTO {
-    pub switch_form: Option<String>,
+    /// 施放后切换到的器形 id（如 "jian" / "qin"）
+    pub switch_instrument: Option<String>,
+    /// 施放后切换到的曲风 id（0 秒状态事件）
+    pub switch_qifeng: Option<String>,
     pub gcd_lanes: Vec<String>,
     pub lock_skills: Vec<SkillKeyDTO>,
 }
@@ -482,7 +485,10 @@ pub struct OnCastDTO {
 pub struct SkillCombatDTO {
     pub skill_id: u32,
     pub sub_id: u32,
-    pub form: Option<String>,
+    /// 要求当前器形（空 = 任意）
+    pub requires_instrument: Option<String>,
+    /// 要求当前曲风（空 = 任意；如 变宫/变徵 需要 gaoshan）
+    pub requires_qifeng: Option<String>,
     pub gcd_lane: String,
     pub on_cast: OnCastDTO,
     // ---- 可选覆盖（None = 沿用技能数据） ----
@@ -616,6 +622,8 @@ pub struct CombatMetaDTO {
 pub struct CombatDataDTO {
     pub meta: CombatMetaDTO,
     pub form: Vec<FormDefDTO>,
+    /// 曲风 id 列表（yangchun / gaoshan / pingsha）
+    pub qifeng: Vec<String>,
     pub skill_combat: Vec<SkillCombatDTO>,
     pub buff: Vec<TimedBuffDefDTO>,
     pub miji: Vec<MijiDefDTO>,
@@ -665,6 +673,12 @@ pub struct TimelineRequestDTO {
     /// 激活的秘籍 id 列表（可选；激活后按 [[miji]] 的 modifiers 生效）
     #[serde(default)]
     pub miji: Vec<String>,
+    /// 初始器形 id（空 = 取 combat.forms 里 initial 的）
+    #[serde(default)]
+    pub initial_instrument: Option<String>,
+    /// 初始曲风 id（空 = 不限）
+    #[serde(default)]
+    pub initial_qifeng: String,
     /// 战斗时序 overlay（可选；提供时按 overlay 套形态 / GCD 通道 / on_cast）
     #[serde(default)]
     pub combat: Option<CombatDataDTO>,
@@ -678,6 +692,12 @@ pub enum TimelineEventKindDTO {
         skill_name: String,
         damage: u32,
         hit_time: f32,
+        /// 本次施放占用的 GCD 秒数（不占 GCD 为 0）
+        #[serde(default)]
+        gcd_secs: f32,
+        /// 该 GCD 通道就绪时刻
+        #[serde(default)]
+        gcd_ready_at: f32,
     },
     DotTick {
         skill_name: String,
@@ -685,6 +705,11 @@ pub enum TimelineEventKindDTO {
         damage: u32,
     },
     FormSwitch {
+        from: String,
+        to: String,
+    },
+    /// 曲风切换（0 秒状态事件）
+    QifengSwitch {
         from: String,
         to: String,
     },

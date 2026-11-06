@@ -1,82 +1,92 @@
+# 莫问 50 级样例配装：威望防具 + 名剑武器/暗器 + 威望饰品（升级档）。
 school = "mowen"
-revision = "synthetic-v1"
-value_set = "live-130"
+revision = "live-50-20261106"
+value_set = "live-50"
+
 [base]
-zhushuxing = 10000
-gongji = 40000
-huixin = 20000
-huixiao = 1000
-pofang = 30000
-qixue = 100000
+
+[enchants]
+tou = "全攻击-gongji-90"
+yi = "misc-huajin-90"
+yao = "misc-huajin-90"
+shou = "全破防-pofang-90"
+ku = "全破防-pofang-90"
+xie = "全攻击-gongji-90"
+wuqi = "全攻击-gongji-90"
+anqi = "misc-jiasu-126"
+xianglian = "misc-yujin-126"
+yaozhui = "misc-huajin-126"
+jie1 = "全攻击-gongji-126"
+jie2 = "全攻击-gongji-126"
 
 [[choices]]
 slot = "tou"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "yi"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "yao"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "shou"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "ku"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "xie"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "wuqi"
-source = "weiwang"
-tier = "base"
+source = "mingjian"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "anqi"
-source = "weiwang"
-tier = "base"
+source = "mingjian"
+tier = "upgraded"
 variant = 0
 
 [[choices]]
 slot = "xianglian"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 1
 
 [[choices]]
 slot = "yaozhui"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 1
 
 [[choices]]
 slot = "jie1"
 source = "weiwang"
-tier = "base"
+tier = "upgraded"
 variant = 1
 
 [[choices]]
 slot = "jie2"
 source = "weiwang"
-tier = "base"
-variant = 1
+tier = "upgraded"
+variant = 2

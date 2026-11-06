@@ -4,6 +4,8 @@ import { choiceKey, slotNames, sourceNames, greenNames, statNames, PROFESSION_AT
 import styles from "./GearPanel.module.css";
 
 const convertedFields = ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue_additional"] as const;
+/** 跨门派装备的显示名；后端 schools 里暂无 name 字段。 */
+const SCHOOL_NAMES: Record<string, string> = { mowen: "莫问", bingxin: "冰心" };
 
 export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, pending }: {
   catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
@@ -15,6 +17,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
     && composition?.composed.loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES ? composition.composed.panel : undefined;
   const legacyHasBasics = !loadout.attribute_rules && convertedFields.some((key) => (loadout.base[key] ?? 0) > 0);
   const change = (choice: GearChoice) => onChange({ ...loadout, choices: loadout.choices.map((c) => c.slot === choice.slot ? choice : c) });
+  const schoolName = (id?: string) => SCHOOL_NAMES[id ?? ""] ?? id ?? "";
   return <section className={styles.panel} aria-label="配装">
     <header className={styles.header}>
       <div><h2>当前配装</h2><p>{catalog.version.sample ? "合成测试样例 · 非游戏装备数值" : `赛季 ${catalog.version.season}`} · {catalog.version.revision}</p></div>
@@ -42,19 +45,39 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
     </div>
     <div className={styles.cards}>
       {GEAR_SLOTS.map((slot) => {
-        const candidates = catalog.templates.filter((t) => t.school === loadout.school && t.choice.slot === slot);
+        // 跨门派装备（如冰心护手）也可以在任何一个门派下选择，只是不计套装。
+        const candidates = catalog.templates.filter((t) => (t.school === loadout.school || t.cross_school) && t.choice.slot === slot);
         const selected = loadout.choices.find((c) => c.slot === slot);
         const template = candidates.find((t) => selected && choiceKey(t.choice) === choiceKey(selected));
+        const sockets = template?.sockets ?? [];
+        const enchantOptions = (catalog.enchants ?? []).filter((e) => e.slot === slot);
+        const enchantId = loadout.enchants?.[slot] ?? "";
         return <article className={styles.card} key={slot} aria-label={slotNames[slot]}>
           <h3>{slotNames[slot]}</h3>
-          <strong>{template ? `${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "模板不可用"}</strong>
+          <strong>{template ? `${template.school === loadout.school ? "" : `${schoolName(template.school)} · `}${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "模板不可用"}</strong>
           <div className={styles.choices}>
-            {candidates.map((t) => <button key={choiceKey(t.choice)} disabled={stale} aria-pressed={!!selected && choiceKey(t.choice) === choiceKey(selected)} onClick={() => change(t.choice)}>
-              {sourceNames[t.choice.source]} · {t.choice.tier === "base" ? "基础" : "升级"}{t.choice.variant > 0 ? ` · 属性套${t.choice.variant}` : ""}
+            {candidates.map((t) => <button key={`${t.school}:${choiceKey(t.choice)}`} disabled={stale} aria-pressed={!!selected && choiceKey(t.choice) === choiceKey(selected) && (selected.school ?? loadout.school) === t.school}
+              onClick={() => change({ ...t.choice, school: t.school === loadout.school ? null : t.school })}
+              title={t.school === loadout.school ? undefined : `跨门派装备：${schoolName(t.school)}，可穿戴但不计本门派套装`}>
+              {t.school === loadout.school ? "" : `${schoolName(t.school)} · `}{sourceNames[t.choice.source]} · {t.choice.tier === "base" ? "基础" : "升级"}{t.choice.variant > 0 ? ` · 属性套${t.choice.variant}` : ""}
             </button>)}
           </div>
           {template && <>
             <p>{Object.entries(template.stats).filter(([, n]) => n > 0).slice(0, 3).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
+            {slot === "wuqi" && (catalog.wucai ?? []).length > 0 && <label className={styles.enchant}>五彩石 <select aria-label="武器五彩石" value={loadout.wucai ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, wucai: event.target.value || undefined })}>
+              <option value="">不插五彩石</option>
+              {(catalog.wucai ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select></label>}
+                        {sockets.length > 0 && <p>镶嵌（固定）：{sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
+            {enchantOptions.length > 0 && <label className={styles.enchant}>附魔 <select aria-label={`${slotNames[slot]}附魔`} value={enchantId} disabled={stale} onChange={(event) => {
+              const value = event.target.value;
+              const next = { ...(loadout.enchants ?? {}) };
+              if (value) next[slot] = value; else delete next[slot];
+              onChange({ ...loadout, enchants: next });
+            }}>
+              <option value="">无</option>
+              {enchantOptions.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select></label>}
             <details><summary>属性详情{template.zhuangfen != null ? ` · 参考装分 ${template.zhuangfen}` : ""}</summary>
               <dl>{Object.entries(template.stats).map(([k, n]) => <div key={k}><dt>{statNames[k as keyof typeof statNames]}</dt><dd>{n}</dd></div>)}</dl>
             </details>

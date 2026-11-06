@@ -10,12 +10,18 @@ import type { TimelineEventDTO } from "../types";
 export function formatTimelineEvent(e: TimelineEventDTO): string {
   const k = e.kind;
   switch (k.kind) {
-    case "cast":
-      return `施放 ${k.skill_name} @${k.hit_time.toFixed(2)}s 伤害 ${k.damage}`;
+    case "cast": {
+      const gcd = k.gcd_secs && k.gcd_secs > 0
+        ? `，GCD ${k.gcd_secs.toFixed(2)}s（就绪 ${(k.gcd_ready_at ?? 0).toFixed(2)}s）`
+        : "";
+      return `施放 ${k.skill_name} @${k.hit_time.toFixed(2)}s 伤害 ${k.damage}${gcd}`;
+    }
     case "dot_tick":
       return `dot ${k.skill_name} #${k.index} 伤害 ${k.damage}`;
     case "form_switch":
-      return `切形态 ${k.from} → ${k.to}`;
+      return `切器形 ${k.from} → ${k.to}`;
+    case "qifeng_switch":
+      return `切曲风 ${k.from} → ${k.to}`;
     case "buff_gain":
       return `buff ${k.buff_id} ×${k.stacks}`;
     default: {

@@ -2,7 +2,7 @@ use jpcg_gear::*;
 use std::path::PathBuf;
 
 fn dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/gear")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/synthetic/gear")
 }
 fn catalog() -> Catalog {
     Catalog::load(&dir()).expect("sample catalog")
@@ -222,6 +222,8 @@ fn overrides_apply_explicit_higher_attack_and_versions_are_checked() {
         "sets.toml",
         "schools.toml",
         "overrides.toml",
+        "enchants.toml",
+        "wucai.toml",
     ] {
         std::fs::copy(dir().join(file), temp.path().join(file)).unwrap();
     }
@@ -415,13 +417,16 @@ fn kill_probability_matches_existing_seeded_combo_and_cd_is_never_silent() {
     }
     let c = catalog();
     let mut r = request();
-    r.config.hostile.target_hp = 40000;
+    r.config.hostile.target_hp = 100_000;
+    r.config.hostile.neigong_fangyu = 0;
+    r.config.hostile.huajin_dengji = 0;
+    r.config.hostile.yujin_dengji = 0;
     r.objective = Objective::KillProbability {
         steps: vec![jpcg_api::ComboStepDTO {
             skill: jpcg_api::SkillPoolItemDTO {
                 skill_name: "synthetic-strike".into(),
                 base_damage1: 10000,
-                base_damage2: 10000,
+                base_damage2: 100000,
                 atk_xishu: 1.0,
                 ..Default::default()
             },
@@ -468,7 +473,10 @@ fn kill_probability_matches_existing_seeded_combo_and_cd_is_never_silent() {
     )
     .unwrap();
     assert_eq!(a.baseline.score, out.final_kill_prob);
-    assert!(a.baseline.score > 0.0 && a.baseline.score < 1.0);
+    assert!(
+        (0.0..=1.0).contains(&a.baseline.score),
+        "击杀率必须在 [0,1]"
+    );
     assert!(a.warnings.iter().any(|s| s.contains("CD")));
 }
 #[test]

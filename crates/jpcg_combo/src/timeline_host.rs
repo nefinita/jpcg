@@ -85,7 +85,8 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
                     skill,
                     qifeng_gain: 0,
                     spend_all_qifeng: false,
-                    form: None,
+                    requires_instrument: None,
+                    requires_qifeng: None,
                     gcd_lane: String::new(),
                     on_cast: Default::default(),
                 },
@@ -159,6 +160,8 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         coeff,
         skills,
         forms,
+        initial_instrument: req.initial_instrument,
+        initial_qifeng: req.initial_qifeng,
         timed_buffs,
         active_qixue: combat_qixue_names,
         hooks,
@@ -188,10 +191,14 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 skill_name,
                 damage,
                 hit_time,
+                gcd_secs,
+                gcd_ready_at,
             } => TimelineEventKindDTO::Cast {
                 skill_name,
                 damage,
                 hit_time,
+                gcd_secs,
+                gcd_ready_at,
             },
             TimelineEventKind::DotTick {
                 skill_name,
@@ -202,6 +209,9 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 index,
                 damage,
             },
+            TimelineEventKind::QifengSwitch { from, to } => {
+                TimelineEventKindDTO::QifengSwitch { from, to }
+            }
             TimelineEventKind::FormSwitch { from, to } => {
                 TimelineEventKindDTO::FormSwitch { from, to }
             }
@@ -233,6 +243,8 @@ mod tests {
                 ..Default::default()
             }],
             forms: Vec::new(),
+            initial_instrument: None,
+            initial_qifeng: String::new(),
             timed_buffs: Vec::new(),
             qixue: Vec::new(),
             miji: Vec::new(),

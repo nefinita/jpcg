@@ -19,7 +19,8 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
 async function mount(xinfa = "mowen", revision = 0) { await act(async () => root.render(<ComboPage key={`${xinfa}-${revision}`} xinfaName={xinfa} formData={form} />)); }
 async function click(text: string) {
-  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === text || b.title === text)!;
+  const button = [...host.querySelectorAll<HTMLElement>("button, [data-skill-card]")]
+    .find((b) => b.textContent === text || b.title === text || b.getAttribute("data-skill-name") === text)!;
   expect(button).toBeDefined(); await act(async () => button.click());
 }
 async function input(el: HTMLInputElement, value: string) {
@@ -47,4 +48,41 @@ it("加载预设只更新当前草稿，修改后不自动写回预设", async (
   await click("清空"); await mount("mowen", 1);
   expect(host.textContent).toContain("从下方技能池添加技能"); expect(host.querySelector("select")!.value).toBe("已保存");
   expect(api.saveComboPreset).not.toHaveBeenCalled();
+});
+
+it("时间轴预览下发勾选的秘籍与奇穴", async () => {
+  vi.mocked(api.loadCombatBundle).mockResolvedValue({
+    skills: [skill],
+    combat: {
+      meta: { profession: "mowen", version: "test", note: "" },
+      form: [],
+      qifeng: [],
+      skill_combat: [],
+      buff: [],
+      miji: [{ id: "mj_gong", name: "宫·秘籍", skill_id: 1, sub_id: 0 }],
+      qixue: [{ id: "qx_dongtian", name: "洞天", slot: 1 }],
+    },
+  } as never);
+  vi.mocked(api.calculateTimeline).mockResolvedValue({
+    events: [],
+    total_damage: 0,
+    window_dps: 0,
+    skipped_actions: 0,
+  });
+  await mount();
+  await click("测试技·一");
+  // 秘籍：点技能卡左侧空槽 → 选择弹层里的秘籍
+  await click("＋");
+  await click("宫·秘籍");
+  const board = host.querySelector('[data-testid="qixue-board"]')!;
+  expect(board).not.toBeNull();
+  const qixueButtons = [...board.querySelectorAll("button")];
+  expect(qixueButtons.length).toBe(1);
+  await act(async () => {
+    qixueButtons[0].click();
+  });
+  await click("时间轴预览");
+  expect(api.calculateTimeline).toHaveBeenCalledWith(
+    expect.objectContaining({ miji: ["mj_gong"], qixue: ["qx_dongtian"] }),
+  );
 });

@@ -494,3 +494,733 @@
   background: rgba(239, 131, 84, 0.1);
   border: 1px solid rgba(239, 131, 84, 0.25);
 }
+
+/* #92 时机选项：秘籍/奇穴勾选 */
+.optionsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--glass-bg);
+}
+
+.optionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.optionsLabel {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-right: 4px;
+}
+
+.optionChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.optionChip input {
+  accent-color: var(--accent);
+}
+
+
+/* 奇穴盘：底部固定区，按重数分组，同重互斥 + 混选池 */
+.qixueBoard {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--glass-bg);
+}
+
+.qixueHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.qixueHint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.qixueRows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qixueRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.qixueSlot {
+  width: 4.5rem;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: none;
+}
+
+.qixueChip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qixueChip:hover {
+  border-color: var(--accent);
+}
+
+.qixueChipActive {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.qixueChipMixed {
+  border-style: dashed;
+}
+
+
+/* 器形 / 曲风状态条：两轴独立，右侧为曲目快捷切换 */
+.axisBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.axisChip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.axisChip b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.axisDivider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-subtle);
+}
+
+.qifengBtn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qifengBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ===== 三栏武学布局（mockup：左技能目录 / 中排轴 / 右伤害记录） ===== */
+.headerTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.headerMeta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: 304px minmax(0, 1fr) 372px;
+  gap: 14px;
+  align-items: start;
+}
+
+.catalogPanel,
+.boardPanel,
+.logPanel {
+  min-height: 360px;
+  max-height: calc(100vh - 300px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  overflow: hidden;
+}
+
+.panelTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.panelHint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.catalogPanel .comboPool {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.sequenceRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 80px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.comboItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg-strong, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle);
+}
+
+.comboMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.comboMeta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.illegalStep {
+  border-color: #e5484d !important;
+  box-shadow: inset 0 0 0 1px #e5484d;
+}
+
+.illegalBadge {
+  font-size: 11px;
+  color: #e5484d;
+}
+
+.boardStats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.boardStats b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.logPanel :global(.tableWrap) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.logEmpty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1180px) {
+  .mainGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalogPanel,
+  .boardPanel,
+  .logPanel {
+    max-height: none;
+  }
+}
+
+
+/* ===== 技能卡（左栏） ===== */
+.poolGroupItems {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skillCard {
+  position: relative;
+  padding: 7px 9px 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+  background: var(--glass-bg);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.skillCard:hover {
+  border-color: var(--accent);
+}
+
+.cardQin {
+  border-left-color: #3aa675;
+  background: linear-gradient(90deg, rgba(58, 166, 117, 0.10), transparent 62%);
+}
+
+.cardQin .cardName {
+  color: #2f8d63;
+}
+
+.cardJian {
+  border-left-color: #8a6cd4;
+  background: linear-gradient(90deg, rgba(138, 108, 212, 0.12), transparent 62%);
+}
+
+.cardJian .cardName {
+  color: #7a5bc8;
+}
+
+.favoriteCard {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.cardName {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.cardBadge {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+
+.cardTag {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cardDamage {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardBonus {
+  color: var(--text-primary);
+}
+
+.cardDot {
+  color: var(--text-secondary);
+}
+
+.cardMiji {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.mijiPill {
+  font-size: 9.5px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mijiPillOn {
+  font-size: 9.5px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.mijiMore {
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  align-self: center;
+}
+
+/* ===== 排轴步骤（中栏） ===== */
+.stepCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+}
+
+.stepRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepTime {
+  width: 52px;
+  flex: none;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepSwitch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #7a5bc8;
+  padding-left: 52px;
+}
+
+.stepSwitchKind {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px dashed currentColor;
+  opacity: 0.85;
+}
+
+.stepSwitchArrow {
+  opacity: 0.8;
+}
+
+.stepSwitchTo {
+  font-weight: 600;
+}
+
+.stepMiji {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.stepGcd {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ===== 伤害记录（右栏） ===== */
+.logScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.totalsRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.totalBox {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+}
+
+.totalBox b {
+  display: block;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.totalBox span {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* 左栏技能组：避免 flex 收缩把卡片压扁（内容超出时整体滚动） */
+.catalogPanel .comboPool > * {
+  flex: none;
+}
+
+.catalogPanel .poolGroup {
+  flex: none;
+}
+
+/* ===== 技能卡左侧秘籍槽 ===== */
+.skillCard {
+  display: flex;
+  gap: 8px;
+}
+
+.cardMijiSlots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 82px;
+  flex: none;
+}
+
+.mijiSlot {
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 9px;
+  line-height: 16px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mijiSlotOn {
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.mijiPicker {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: calc(100% - 4px);
+  z-index: 20;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--bg-elevated, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.mijiPickerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.mijiPickerClose {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.mijiPickerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.mijiOption {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mijiOptionOn {
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.mijiEmpty {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* ===== 奇穴盘：分组卡片网格 ===== */
+.qixueGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.qixueGroup {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+}
+
+.qixueGroupMixed {
+  border-style: dashed;
+}
+
+.qixueGroupLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.qixueGroupHint {
+  font-size: 9px;
+  font-weight: 400;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px dashed var(--border-subtle);
+}
+
+.qixueGroupChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.qixueChip {
+  font-size: 11px;
+}
+
+.qixueSummary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.qixueSummary b {
+  font-size: 18px;
+  color: var(--accent);
+  line-height: 1.2;
+}
+
+/* ===== 整页固定高度：头部 + 三栏 + 底部奇穴盘，避免奇穴盘被挤出视口 ===== */
+.page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.page > :not(.mainGrid):not(.qixueBoard) {
+  flex: none;
+}
+
+.mainGrid {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.catalogPanel,
+.boardPanel,
+.logPanel {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+.comboSequence {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.qixueBoard {
+  flex: none;
+}
+
+/* 奇穴选中态用金色，和游戏奇穴/秘籍区分开 */
+.qixueChipActive {
+  border-color: #c99a3f;
+  background: rgba(201, 154, 63, 0.16);
+  color: #8a6420;
+  font-weight: 600;
+}

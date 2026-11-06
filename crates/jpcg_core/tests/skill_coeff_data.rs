@@ -26,12 +26,13 @@ fn mowen_coefficients_match_screenshots() {
 
     let mut checked = 0;
     for entry in json["skills"].as_array().expect("skills array") {
-        let (Some(id), Some(ratio)) = (entry["skill_id"].as_u64(), entry["ratio_int"].as_i64())
+        // 计算使用连续倍率（攻击加成 / 攻击力），比率整数只用于展示。
+        let (Some(id), Some(ratio)) = (entry["skill_id"].as_u64(), entry["ratio_raw"].as_f64())
         else {
             continue;
         };
         let sub = entry["sub_id"].as_u64().unwrap_or(0);
-        let want = ratio as f64 / BASE;
+        let want = ratio;
         let found = skills.iter().find(|s| {
             s["skill_id"].as_integer() == Some(id as i64)
                 && s["sub_id"].as_integer() == Some(sub as i64)
