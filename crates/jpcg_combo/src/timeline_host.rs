@@ -41,24 +41,65 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         req.value_set,
     );
 
+    // overlay 提供的形态定义可以作为默认值；调用方显式给了 forms 则以调用方为准
+    let default_forms: Vec<jpcg_api::FormDefDTO> = req
+        .combat
+        .as_ref()
+        .map(|c| c.form.clone())
+        .unwrap_or_default();
     let combat = req.combat.map(CombatData::from);
+    // 激活的奇穴：先按 id 取出定义，后面逐个技能套 modifiers
+    let active_qixue: Vec<jpcg_core::type_set::modifier::QixueDef> = combat
+        .as_ref()
+        .map(|data| {
+            data.qixue
+                .iter()
+                .filter(|q| req.qixue.iter().any(|id| id == &q.id))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    let qixue_refs: Vec<&jpcg_core::type_set::modifier::QixueDef> = active_qixue.iter().collect();
+    // 已激活秘籍：按 id 取定义，逐个技能套修正项
+    let active_miji: Vec<jpcg_core::type_set::modifier::MijiDef> = combat
+        .as_ref()
+        .map(|data| {
+            data.miji
+                .iter()
+                .filter(|m| req.miji.iter().any(|id| id == &m.id))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    let miji_refs: Vec<&jpcg_core::type_set::modifier::MijiDef> = active_miji.iter().collect();
     let skills: Vec<TimingSkill> = req
         .skills
         .iter()
         .map(|dto| {
             let skill = conv::skill_dto_to_skilltype(dto);
-            match &combat {
+            // 先套 overlay 时序字段（cast_time/cooldown 等以 combat 为准），
+            // 再套秘籍/奇穴修正项，避免定值覆盖掉秘籍的读条/调息修正。
+            let mut ts = match &combat {
                 Some(data) => TimingSkill::from_combat(&skill, data),
                 None => TimingSkill {
                     skill,
+                    qifeng_gain: 0,
+                    spend_all_qifeng: false,
                     form: None,
                     gcd_lane: String::new(),
                     on_cast: Default::default(),
                 },
-            }
+            };
+            ts.skill =
+                jpcg_core::type_set::modifier::resolve_skill(&ts.skill, &miji_refs, &qixue_refs);
+            ts
         })
         .collect();
-    let forms: Vec<FormDef> = req.forms.into_iter().map(FormDef::from).collect();
+    let forms: Vec<FormDef> = if req.forms.is_empty() {
+        default_forms.into_iter().map(FormDef::from).collect()
+    } else {
+        req.forms.into_iter().map(FormDef::from).collect()
+    };
     let timed_buffs: Vec<TimedBuffDef> = req
         .timed_buffs
         .into_iter()
@@ -79,6 +120,35 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
             TimelineActionDTO::SwitchForm { form } => TimelineAction::SwitchForm(form),
         })
         .collect();
+    // 门控用的激活奇穴集合：请求里的 id + 对应奇穴名（技能 `jihuoqixue` 可能写 id 或名称）
+    let mut combat_qixue_names: Vec<String> = req.qixue.clone();
+    if let Some(data) = combat.as_ref() {
+        for q in data.qixue.iter() {
+            if req.qixue.iter().any(|id| id == &q.id) {
+                combat_qixue_names.push(q.name.clone());
+            }
+        }
+    }
+    // 第 3 层钩子：把激活奇穴的 hooks 转成带作用技能的 ActiveHook
+    let hooks: Vec<timeline::ActiveHook> = active_qixue
+        .iter()
+        .flat_map(|q| {
+            let targets: Vec<timeline::SkillKey> = if !q.applies_to.is_empty() {
+                q.applies_to.clone()
+            } else if q.replaces_skill_id != 0 {
+                vec![(q.replaces_skill_id, q.replaces_sub_id)]
+            } else {
+                Vec::new()
+            };
+            q.hooks
+                .iter()
+                .cloned()
+                .map(move |hook| timeline::ActiveHook {
+                    targets: targets.clone(),
+                    hook,
+                })
+        })
+        .collect();
     let window = if req.window > 0.0 { req.window } else { 300.0 };
 
     let result = timeline::simulate(&TimelineInput {
@@ -90,6 +160,8 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         skills,
         forms,
         timed_buffs,
+        active_qixue: combat_qixue_names,
+        hooks,
         actions,
         window,
     });
@@ -162,6 +234,8 @@ mod tests {
             }],
             forms: Vec::new(),
             timed_buffs: Vec::new(),
+            qixue: Vec::new(),
+            miji: Vec::new(),
             actions: vec![
                 TimelineActionDTO::Cast {
                     skill_id: 1,

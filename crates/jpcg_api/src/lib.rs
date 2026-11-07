@@ -495,6 +495,12 @@ pub struct SkillCombatDTO {
     pub cd_haste: Option<bool>,
     pub channel: Option<bool>,
     pub buff_id: Option<String>,
+    /// 激活所需奇穴 id（空 = 不限）
+    pub jihuoqixue: Option<String>,
+    /// 施放获得曲风点数（空 = 0）
+    pub qifeng_gain: Option<u8>,
+    /// 施放消耗全部曲风（空 = false）
+    pub spend_all_qifeng: Option<bool>,
 }
 
 /// 定时 buff 效果条目（百分比）
@@ -527,6 +533,20 @@ pub struct TimedBuffDefDTO {
 }
 
 /// 技能修正项（秘籍 / 奇穴共用）
+/// 奇穴运行时钩子（第 3 层）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QixueHookDTO {
+    FlatDamageOnCast {
+        damage: f32,
+        #[serde(default)]
+        per_qifeng_spent: bool,
+    },
+    DamagePctPerQifeng {
+        pct: f32,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillModifierDTO {
@@ -538,9 +558,12 @@ pub enum SkillModifierDTO {
     HuixiaoUpAdd(u32),
     WushifangyuAdd(u32),
     CastTimeMul(f32),
+    CastTimeAdd(f32),
     CooldownMul(f32),
     DotDurationMul(f32),
     DotIntervalMul(f32),
+    CooldownAdd(f32),
+    DotTicksAdd(i32),
 }
 
 /// 秘籍定义（`[[miji]]`）
@@ -563,6 +586,16 @@ pub struct QixueDefDTO {
     pub slot: u8,
     pub replaces_skill_id: u32,
     pub replaces_sub_id: u32,
+    /// 作用技能列表（(skill_id, sub_id)；空 = 用 replaces_skill_id/sub_id）
+    pub applies_to: Vec<(u32, u32)>,
+    /// 该奇穴解锁的技能（(skill_id, sub_id)）
+    pub grants_skills: Vec<(u32, u32)>,
+    /// 运行时钩子（第 3 层）
+    #[serde(default)]
+    pub hooks: Vec<QixueHookDTO>,
+    /// 暂不建模（PvE/待补数据）
+    #[serde(default)]
+    pub shelved: bool,
     /// 替换后的独立技能条目（None = 只施加 modifiers）
     pub replacement: Option<SkillPoolItemDTO>,
     pub modifiers: Vec<SkillModifierDTO>,
@@ -626,6 +659,12 @@ pub struct TimelineRequestDTO {
     /// 数值集 id（None = 默认值集）
     #[serde(default)]
     pub value_set: Option<String>,
+    /// 激活的奇穴 id 列表（可选；激活后按 [[qixue]] 的 modifiers 生效）
+    #[serde(default)]
+    pub qixue: Vec<String>,
+    /// 激活的秘籍 id 列表（可选；激活后按 [[miji]] 的 modifiers 生效）
+    #[serde(default)]
+    pub miji: Vec<String>,
     /// 战斗时序 overlay（可选；提供时按 overlay 套形态 / GCD 通道 / on_cast）
     #[serde(default)]
     pub combat: Option<CombatDataDTO>,
