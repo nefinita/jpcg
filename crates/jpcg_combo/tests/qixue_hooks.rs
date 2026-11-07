@@ -33,6 +33,8 @@ fn req_full(
         },
         value_set: None,
         combat: Some(combat),
+        samples: 0,
+        seed: None,
     }
 }
 
@@ -649,4 +651,304 @@ fn channel_damage_is_included_in_total() {
         assert!(e.cumulative >= last);
         last = e.cumulative;
     }
+}
+
+#[test]
+fn desktop_entry_uses_full_backend_definitions_and_rejects_invalid_selection() {
+    let mut request = req(vec![], vec![cast(14064, 14474, "宫")]);
+    request.xinfa.profession = "mowen".into();
+    let baseline = jpcg_combo::timeline_host::calculate_timeline_from_store(request.clone())
+        .expect("backend definitions");
+    // 即使展示 DTO / 技能属性被篡改，桌面入口也只使用后端定义。
+    request.skills.clear();
+    request.combat = None;
+    let result = jpcg_combo::timeline_host::calculate_timeline_from_store(request.clone())
+        .expect("backend definitions");
+    assert_eq!(result.total_damage, baseline.total_damage);
+    assert!(!result.events.is_empty());
+    request.qixue = vec!["not-a-real-qixue".into()];
+    assert!(jpcg_combo::timeline_host::calculate_timeline_from_store(request).is_err());
+}
+
+#[test]
+fn kill_probability_matches_deterministic_total() {
+    // 单技能无质（has_critical_strike）场景下，击杀率应严格由确定性总伤决定。
+    let mut request = req(vec![], vec![cast(14065, 14311, "商")]);
+    request.player.jichu_gongji = 8438;
+    request.window = 10.0;
+    request.samples = 2000;
+    request.seed = Some(7);
+    let det = jpcg_combo::timeline_host::calculate_timeline(request.clone()).expect("det");
+    // 目标血量高于总伤 → 永不击杀；低于总伤 → 必杀
+    let total = det.total_damage as u32;
+    request.hostile.target_hp = total + 10_000;
+    let low = jpcg_combo::timeline_host::calculate_timeline(request.clone()).expect("low");
+    assert_eq!(low.final_kill_prob, 0.0, "血量高于总伤应为 0");
+    request.hostile.target_hp = total / 2;
+    let high = jpcg_combo::timeline_host::calculate_timeline(request.clone()).expect("high");
+    assert_eq!(high.final_kill_prob, 1.0, "血量远低于总伤应为 1");
+    assert!(!high.kill_prob_curve.is_empty());
+    // samples=0 保持纯确定性：不产生击杀率
+    let mut d = request.clone();
+    d.samples = 0;
+    let pure = jpcg_combo::timeline_host::calculate_timeline(d).expect("pure");
+    assert_eq!(pure.final_kill_prob, 0.0);
+    assert!(pure.kill_prob_curve.is_empty());
+}
+
+fn fixed_skill(id: u32, name: &str, base: u32) -> SkillPoolItemDTO {
+    SkillPoolItemDTO {
+        skill_name: name.into(),
+        skill_id: id,
+        sub_id: 0,
+        base_damage1: base,
+        base_damage2: base,
+        atk_xishu: 0.0,
+        watk_xishu: 0,
+        hit_up: 0,
+        huixin_up: 0,
+        huixiao_up: 0,
+        wushifangyu: 0,
+        wushihuajin: 0,
+        dot_flag: 0,
+        has_critical_strike: false,
+        cast_time: 0.0,
+        gcd_kind: 0,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn kill_flag_scopes_kill_probability_with_full_hp_reset() {
+    // 确定性技能（g==h）：3 段固定伤害。开始 flag 后前两段不计入击杀推进（满血重置）。
+    let skill = fixed_skill(1, "测试技能", 100);
+    let make = |actions: Vec<TimelineActionDTO>| TimelineRequestDTO {
+        skills: vec![skill.clone()],
+        forms: vec![],
+        timed_buffs: vec![],
+        actions,
+        window: 30.0,
+        player: PlayerConfigDTO::default(),
+        hostile: HostileConfigDTO {
+            target_hp: 0,
+            ..Default::default()
+        },
+        xinfa: XinfaConfigDTO::default(),
+        buff: BuffConfigDTO::default(),
+        coeff: CoefficientConfigDTO {
+            pvp_global_jianshang: 1.0,
+            ..Default::default()
+        },
+        value_set: None,
+        combat: None,
+        qixue: vec![],
+        miji: vec![],
+        initial_instrument: None,
+        initial_qifeng: String::new(),
+        samples: 2000,
+        seed: Some(42),
+    };
+    let three = vec![
+        cast(1, 0, "测试技能"),
+        cast(1, 0, "测试技能"),
+        cast(1, 0, "测试技能"),
+    ];
+    let mut base_req = make(three.clone());
+    base_req.hostile.target_hp = 0;
+    let base = jpcg_combo::timeline_host::calculate_timeline(base_req.clone()).expect("base");
+    let total = base.total_damage;
+    assert!(total > 0.0);
+
+    // 无 flag：3 段全打，target_hp = total → 必杀
+    let mut no_flag = make(three.clone());
+    no_flag.hostile.target_hp = total as u32;
+    let r = jpcg_combo::timeline_host::calculate_timeline(no_flag).expect("no_flag");
+    assert_eq!(r.final_kill_prob, 1.0, "3 段固定伤害应必杀");
+
+    // 开始 flag 在第 2 段之后 → 只有第 3 段计入（满血重置），target=total 打不死
+    let mut with_start = make(vec![
+        cast(1, 0, "测试技能"),
+        cast(1, 0, "测试技能"),
+        TimelineActionDTO::Flag {
+            flag: "start".into(),
+        },
+        cast(1, 0, "测试技能"),
+    ]);
+    with_start.hostile.target_hp = total as u32;
+    let rs = jpcg_combo::timeline_host::calculate_timeline(with_start).expect("with_start");
+    assert_eq!(
+        rs.final_kill_prob, 0.0,
+        "前两段被开始 flag 排除，仅剩 1/3 伤害"
+    );
+    assert_eq!(rs.total_damage, base.total_damage, "总伤不受 flag 影响");
+    assert!(rs.kill_start.is_some());
+}
+
+#[test]
+fn kill_flag_validation_rejects_duplicates_and_bad_order() {
+    let data = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    unsafe { std::env::set_var("JPCG_DATA_DIR", &data) };
+    let skill = fixed_skill(1, "测试技能", 100);
+    let mut req = TimelineRequestDTO {
+        skills: vec![skill],
+        forms: vec![],
+        timed_buffs: vec![],
+        actions: vec![],
+        window: 30.0,
+        player: PlayerConfigDTO::default(),
+        hostile: HostileConfigDTO::default(),
+        xinfa: XinfaConfigDTO::default(),
+        buff: BuffConfigDTO::default(),
+        coeff: CoefficientConfigDTO::default(),
+        value_set: None,
+        combat: None,
+        qixue: vec![],
+        miji: vec![],
+        initial_instrument: None,
+        initial_qifeng: String::new(),
+        samples: 0,
+        seed: None,
+    };
+    // 两个 start
+    req.actions = vec![
+        TimelineActionDTO::Flag {
+            flag: "start".into(),
+        },
+        cast(1, 0, "测试技能"),
+        TimelineActionDTO::Flag {
+            flag: "start".into(),
+        },
+    ];
+    assert!(jpcg_combo::timeline_host::calculate_timeline_from_store(req.clone()).is_err());
+    // 开始晚于结束
+    req.actions = vec![
+        TimelineActionDTO::Flag { flag: "end".into() },
+        cast(1, 0, "测试技能"),
+        TimelineActionDTO::Flag {
+            flag: "start".into(),
+        },
+    ];
+    assert!(jpcg_combo::timeline_host::calculate_timeline_from_store(req.clone()).is_err());
+}
+
+#[test]
+fn window_dps_uses_actual_damage_span() {
+    // 3 次瞬发（GCD 1.5）→ 最后一次命中在 3.0s；区间 DPS 应为 total/3，而不是 total/300。
+    let request = TimelineRequestDTO {
+        skills: vec![fixed_skill(1, "测试技能", 100)],
+        forms: vec![],
+        timed_buffs: vec![],
+        actions: vec![
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+        ],
+        window: 300.0,
+        player: PlayerConfigDTO::default(),
+        hostile: HostileConfigDTO::default(),
+        xinfa: XinfaConfigDTO::default(),
+        buff: BuffConfigDTO::default(),
+        coeff: CoefficientConfigDTO {
+            pvp_global_jianshang: 1.0,
+            ..Default::default()
+        },
+        value_set: None,
+        combat: None,
+        qixue: vec![],
+        miji: vec![],
+        initial_instrument: None,
+        initial_qifeng: String::new(),
+        samples: 0,
+        seed: None,
+    };
+    let result = jpcg_combo::timeline_host::calculate_timeline(request).expect("dps");
+    assert!(result.total_damage > 0.0);
+    assert!(
+        (result.window_dps - result.total_damage / 3.0).abs() < 1.0,
+        "window_dps={} total={}（应按 3s 跨度而不是 300s 窗口）",
+        result.window_dps,
+        result.total_damage
+    );
+}
+
+#[test]
+fn haste_overflow_beyond_cap_does_not_change_dps() {
+    // jiasu_xishu = 101.079；25% 上限 = 2527 点。2727 点属于溢出，应和 2527 完全相同。
+    let make = |jiasu: u32| TimelineRequestDTO {
+        skills: vec![fixed_skill(1, "测试技能", 100)],
+        forms: vec![],
+        timed_buffs: vec![],
+        actions: vec![
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+        ],
+        window: 300.0,
+        player: PlayerConfigDTO {
+            jiasu_dengji: jiasu,
+            ..Default::default()
+        },
+        hostile: HostileConfigDTO::default(),
+        xinfa: XinfaConfigDTO::default(),
+        buff: BuffConfigDTO::default(),
+        coeff: CoefficientConfigDTO {
+            jiasu_xishu: 101.079,
+            pvp_global_jianshang: 1.0,
+            ..Default::default()
+        },
+        value_set: None,
+        combat: None,
+        qixue: vec![],
+        miji: vec![],
+        initial_instrument: None,
+        initial_qifeng: String::new(),
+        samples: 0,
+        seed: None,
+    };
+    let at_cap = jpcg_combo::timeline_host::calculate_timeline(make(2527)).expect("cap");
+    let overflow = jpcg_combo::timeline_host::calculate_timeline(make(2727)).expect("overflow");
+    assert!(
+        (at_cap.total_damage - overflow.total_damage).abs() < 0.01,
+        "total: cap={} overflow={}",
+        at_cap.total_damage,
+        overflow.total_damage
+    );
+    assert!(
+        (at_cap.window_dps - overflow.window_dps).abs() < 0.01,
+        "dps: cap={} overflow={}",
+        at_cap.window_dps,
+        overflow.window_dps
+    );
+}
+
+#[test]
+fn prepared_optimizer_request_matches_desktop_full_qixue_definitions() {
+    let mut request = req(
+        vec!["dongquan".into(), "dongquan-gong".into()],
+        vec![cast(14064, 14474, "宫"); 3],
+    );
+    request.xinfa.profession = "mowen".into();
+    request.window = 30.0;
+    request.samples = 100;
+    request.seed = Some(42);
+    let prepared = jpcg_combo::timeline_host::prepare_timeline_from_store(request.clone()).unwrap();
+    assert!(
+        prepared
+            .combat
+            .as_ref()
+            .unwrap()
+            .qixue
+            .iter()
+            .any(|q| q.id == "dongquan-gong")
+    );
+    let optimizer = jpcg_combo::timeline_host::calculate_timeline(prepared).unwrap();
+    let desktop = jpcg_combo::timeline_host::calculate_timeline_from_store(request).unwrap();
+    assert_eq!(optimizer.total_damage, desktop.total_damage);
+    assert_eq!(optimizer.window_dps, desktop.window_dps);
+    assert_eq!(optimizer.final_kill_prob, desktop.final_kill_prob);
+    assert_eq!(
+        optimizer.steps.iter().map(|s| s.time).collect::<Vec<_>>(),
+        desktop.steps.iter().map(|s| s.time).collect::<Vec<_>>()
+    );
+    assert!(optimizer.steps[1].time.unwrap() - optimizer.steps[0].time.unwrap() >= 12.0);
 }

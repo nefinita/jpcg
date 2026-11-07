@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
-import type { FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions, ValueSetDTO } from "../types";
+import { useState, useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import type { PanelStatsDTO, FormData, UpdateProgressEvent, UpdateCheckResult, BuffConfigDTO, ModuleVersions, ValueSetDTO } from "../types";
 import {
   XINFA_LIST as XINFA_FALLBACK, PLAYER_FIELDS, HOSTILE_FIELDS, STORAGE_KEYS,
   BUFF_FIELDS, COEFFICIENT_FIELDS, DEFAULT_BUFF, DEFAULT_COEFFICIENT,
@@ -7,6 +7,7 @@ import {
 import * as api from "../api/commands";
 import { readPreference, writePreference } from "../hooks/usePersistentState";
 import { defaultManualForm } from "../state/cockpit";
+import { toCalculateRequest } from "../utils/normalize";
 import styles from "./ConfigPanel.module.css";
 
 export interface FormChangeOptions {
@@ -520,16 +521,17 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
 
   useEffect(() => { onReady?.(valueSetReady && !coefficientBaselinePending && (manualMode || (!!appliedValueSet?.available && (form.value_set == null || appliedValueSet.id === form.value_set)))); }, [valueSetReady, coefficientBaselinePending, manualMode, appliedValueSet, form.value_set, onReady]);
 
-  const playerStats = React.useMemo(() => {
-    const pct = (v: number) => (v * 100).toFixed(1) + "%";
-    const huixinRate = normalizeNum(form.player.huixin_dengji) / (normalizeNum(form.coefficient.huixin_xishu) || 197703);
-    const pofangRate = normalizeNum(form.player.pofang_dengji) / (normalizeNum(form.coefficient.pofang_xishu) || 225957.6);
-    return {
-      huixinRate: pct(huixinRate + normalizeNum(form.buff.huixin_pct) / 100),
-      pofangRate: pct(pofangRate + normalizeNum(form.buff.pofang_pct) / 100),
-      jianshang: normalizeNum(form.hostile.jianshang_bili) + "%",
-    };
-  }, [form, normalizeNum]);
+  const [panel, setPanel] = useState<{ form: FormData; stats: PanelStatsDTO } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void Promise.resolve().then(() => api.panelStats(toCalculateRequest(form)))
+        .then((stats) => { if (!cancelled) setPanel(stats ? { form, stats } : null); })
+        .catch(() => { if (!cancelled) setPanel(null); });
+    }, 125);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [form]);
+  const stats = panel?.form === form ? panel.stats : null;
 
   return (
     <div className={styles.card}>
@@ -628,9 +630,9 @@ export default function ConfigPanel({ onCalculate, calculating, addToast, setSta
       </div>
 
       <div className={styles.statBar}>
-        <span>会心率: {playerStats.huixinRate}</span>
-        <span>破防率: {playerStats.pofangRate}</span>
-        <span>减伤: {playerStats.jianshang}</span>
+        <span>会心率: {stats ? `${stats.huixin_pct.toFixed(1)}%` : "—"}</span>
+        <span>破防率: {stats ? `${stats.pofang_pct.toFixed(1)}%` : "—"}</span>
+        <span>减伤: {stats ? `${stats.jianshang_pct}%` : "—"}</span>
       </div>
 
       <div className={styles.section}>

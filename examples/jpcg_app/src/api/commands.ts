@@ -1,5 +1,6 @@
 import type {
   CalculateRequest,
+  PanelStatsDTO,
   SkillResultDTO,
   ForumFileInfo,
   UpdateCheckResult,
@@ -9,7 +10,6 @@ import type {
   SkillPoolItemDTO,
   ComboStepDTO,
   ComboPresetDTO,
-  ComboResultDTO,
   XinfaSummaryDTO,
   SkillEditorDataDTO,
   DerivativesOutputDTO,
@@ -196,28 +196,19 @@ export function listenUpdateProgress(callback: (event: UpdateProgressEvent) => v
   return () => unlisten?.();
 }
 
-export async function loadSkillPool(profession: string): Promise<SkillPoolItemDTO[]> {
-  return invoke("load_skill_pool", { profession });
+/** 配装自动调优进度（payload 为 0..100 的整数百分比）。 */
+export function listenGearOptimizeProgress(callback: (pct: number) => void): () => void {
+  const listen = getListen();
+  if (!listen) return () => {};
+  let unlisten: (() => void) | null = null;
+  let cancelled = false;
+  listen("gear-optimize-progress", (e) => { if (!cancelled) callback(Number(e.payload) || 0); })
+    .then((fn) => { if (cancelled) fn(); else unlisten = fn; });
+  return () => { cancelled = true; unlisten?.(); };
 }
 
-export async function calculateCombo(
-  steps: ComboStepDTO[],
-  player: PlayerConfigDTO,
-  hostile: HostileConfigDTO,
-  xinfa: XinfaConfigDTO,
-  buff: BuffConfigDTO,
-  coefficient: CoefficientConfigDTO,
-  valueSet?: string | null,
-): Promise<ComboResultDTO> {
-  return invoke("calculate_combo_cmd", {
-    steps,
-    player,
-    hostile,
-    xinfa,
-    buff,
-    coefficient,
-    valueSet: valueSet ?? null,
-  });
+export async function loadSkillPool(profession: string): Promise<SkillPoolItemDTO[]> {
+  return invoke("load_skill_pool", { profession });
 }
 
 /** 读取某门派的战斗时序 overlay + 技能池（#92 时间轴预览） */
@@ -309,6 +300,9 @@ function _sanitizeNumbers(obj: Record<string, unknown>): Record<string, unknown>
 async function mockResponse(command: string, args?: Record<string, unknown>): Promise<unknown> {
   await new Promise((r) => setTimeout(r, 200));
   switch (command) {
+    case "panel_stats":
+      // 浏览器仅演示固定结果，不能以 JS 实现另一套属性公式。
+      return { huixin_pct: 30, pofang_pct: 45, jianshang_pct: 0 };
     case "calculate_damage": {
       const req = args?.req as CalculateRequest | undefined;
       const base = (req?.player?.jichu_gongji ?? 1000) * 2;
@@ -538,6 +532,9 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
           switches: [] as TimelineStepSwitchDTO[],
         };
       });
+      const hp = req?.hostile?.target_hp ?? 0;
+      const final_kill_prob = hp > 0 ? Math.min(1, total / hp) : 0;
+      const kill_prob_curve = castActions.map((_, i) => [i + 1, final_kill_prob] as [number, number]);
       return {
         events,
         steps,
@@ -546,29 +543,9 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         skipped_actions: 0,
         final_instrument: initialInstrument,
         final_qifeng: initialQifeng,
+        final_kill_prob,
+        kill_prob_curve,
       } as TimelineResultDTO;
-    }
-    case "calculate_combo_cmd": {
-      const steps = (args?.steps as ComboStepDTO[]) || [];
-      let cum = 0;
-      return {
-        total_expected_damage_wan: 42.5,
-        final_kill_prob: 0.85,
-        kill_prob_curve: [[1, 5], [2, 15], [3, 35], [4, 60], [5, 85]],
-        steps: steps.map((s, i) => {
-          cum += 85000 + Math.random() * 30000;
-          return {
-            skill_name: s.skill.skill_name,
-            g_damage: 50000 + Math.floor(Math.random() * 20000),
-            h_damage: 120000 + Math.floor(Math.random() * 50000),
-            q_damage: 65000 + Math.floor(Math.random() * 20000),
-            crit_rate: 0.35,
-            cumulative_mean_wan: cum / 10000,
-            kill_prob: Math.min(1, (i + 1) * 0.2),
-            has_critical_strike: s.skill.has_critical_strike,
-          };
-        }),
-      };
     }
     case "list_combo_presets":
       return ["莫问PVP连招", "霸刀爆发", "测试连招"];
@@ -694,4 +671,13 @@ export async function exportGear(loadout: import("../types/gear").GearLoadout): 
 export async function importGear(toml: string): Promise<import("../types/gear").GearComposition> {
   if (!isTauri()) throw new Error("配装导入需要桌面应用");
   return invoke("import_gear", { toml });
+}
+
+export async function optimizeGear(request: import("../types/gear").GearOptimizeRequest): Promise<import("../types/gear").GearOptimizeResult> {
+  if (!isTauri()) throw new Error("配装调优需要桌面应用");
+  return invoke("optimize_gear", { request });
+}
+
+export async function panelStats(req: CalculateRequest): Promise<PanelStatsDTO> {
+  return invoke("panel_stats", { req });
 }

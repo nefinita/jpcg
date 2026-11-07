@@ -480,7 +480,7 @@
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 0.8rem;
-  color: #b45309;
+  color: var(--warning-text);
   background: rgba(245, 158, 11, 0.12);
   border: 1px solid rgba(245, 158, 11, 0.25);
 }
@@ -1591,4 +1591,67 @@
   opacity: 0.9;
   border-style: dashed;
   font-style: normal;
+}
+
+/* 小屏可收起奇穴盘，把高度留给排轴与结果。 */
+.qixueHead { cursor: pointer; }
+.qixueGrid { max-height: 32vh; overflow-y: auto; }
+:global([data-theme="dark"]) .qixueChipActive { color: #f6d68b; }
+
+.killBtn {
+  align-self: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.killBtn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--primary-500);
+}
+.killBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.curveOverlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+.curveCard {
+  width: min(560px, calc(100vw - 48px));
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-elevated);
+  padding: 14px 16px 16px;
+}
+.curveCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.flagCard {
+  border-style: dashed;
+  border-color: var(--primary-500);
+  background: var(--bg-elevated);
+  justify-content: space-between;
+  gap: 8px;
+}
+.flagLabel {
+  font-weight: 700;
+  color: var(--primary-600);
+  white-space: nowrap;
 }

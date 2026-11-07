@@ -30,6 +30,122 @@ pub fn load_combat_bundle(profession: String) -> Result<jpcg_api::CombatBundleDT
     Ok(jpcg_api::CombatBundleDTO { skills, combat })
 }
 
+/// 桌面/FFI 入口：展示 DTO 不能作为计算定义，使用本机完整数据并校验选择。
+pub fn calculate_timeline_from_store(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    calculate_timeline(prepare_timeline_from_store(req)?)
+}
+
+/// 搜索开始时冻结完整定义，候选评估只替换玩家属性，不反复读取展示 DTO。
+pub fn prepare_timeline_from_store(
+    mut req: TimelineRequestDTO,
+) -> Result<TimelineRequestDTO, String> {
+    let profession = req.xinfa.profession.clone();
+    let bundle = load_combat_bundle(profession.clone())?;
+    validate_selection(&bundle.combat, &req.qixue, &req.miji)?;
+    validate_flags(&req.actions)?;
+    // 同一格的多个效果必须一起启用，外部调用者不能只传半组。
+    req.qixue = bundle
+        .combat
+        .qixue
+        .iter()
+        .filter(|q| {
+            req.qixue.contains(&q.id) || q.group_ids.iter().any(|id| req.qixue.contains(id))
+        })
+        .flat_map(|q| {
+            if q.group_ids.is_empty() {
+                vec![q.id.clone()]
+            } else {
+                q.group_ids.clone()
+            }
+        })
+        .collect();
+    req.skills = bundle.skills;
+    let combat = load_combat(profession)?;
+    req.forms = combat.form.clone();
+    req.timed_buffs = combat.buff.clone();
+    req.combat = Some(combat);
+    Ok(req)
+}
+
+/// 计算开始/结束 flag 各最多一个，且开始必须早于结束。
+fn validate_flags(actions: &[TimelineActionDTO]) -> Result<(), String> {
+    let mut start: Option<usize> = None;
+    let mut end: Option<usize> = None;
+    for (i, a) in actions.iter().enumerate() {
+        if let TimelineActionDTO::Flag { flag } = a {
+            match flag.as_str() {
+                "start" => {
+                    if start.is_some() {
+                        return Err("计算开始 flag 只能有一个".into());
+                    }
+                    start = Some(i);
+                }
+                "end" => {
+                    if end.is_some() {
+                        return Err("计算结束 flag 只能有一个".into());
+                    }
+                    end = Some(i);
+                }
+                other => return Err(format!("未知 flag：{other}")),
+            }
+        }
+    }
+    if let (Some(s), Some(e)) = (start, end)
+        && s >= e
+    {
+        return Err("计算开始 flag 必须早于计算结束 flag".into());
+    }
+    Ok(())
+}
+
+/// 按后端生成的格子计数；同格多个效果 id 不重复占槽。
+fn validate_selection(
+    data: &CombatDataDTO,
+    qixue: &[String],
+    miji: &[String],
+) -> Result<(), String> {
+    use std::collections::{HashMap, HashSet};
+    let mut selected = HashSet::new();
+    for id in qixue {
+        let index = data
+            .qixue
+            .iter()
+            .position(|q| q.id == *id || q.group_ids.contains(id))
+            .ok_or_else(|| format!("未知奇穴：{id}"))?;
+        if data.qixue[index].shelved {
+            return Err(format!("奇穴暂未建模：{id}"));
+        }
+        selected.insert(index);
+    }
+    let mut slots = HashSet::new();
+    let mut mixed = 0;
+    for index in selected {
+        let q = &data.qixue[index];
+        if q.slot >= data.meta.mixed_slot_from {
+            mixed += 1;
+        } else if !slots.insert(q.slot) {
+            return Err(format!("第 {} 重只能选择一个奇穴", q.slot));
+        }
+    }
+    if mixed > data.meta.mixed_qixue_cap {
+        return Err("混选奇穴超过上限".into());
+    }
+    let mut counts = HashMap::new();
+    for id in miji.iter().collect::<HashSet<_>>() {
+        let m = data
+            .miji
+            .iter()
+            .find(|m| m.id == *id)
+            .ok_or_else(|| format!("未知秘籍：{id}"))?;
+        let count = counts.entry((m.skill_id, m.sub_id)).or_insert(0usize);
+        *count += 1;
+        if *count > usize::from(data.meta.miji_per_skill_cap) {
+            return Err(format!("技能 {} 的秘籍超过上限", m.skill_id));
+        }
+    }
+    Ok(())
+}
+
 /// 时间轴模拟（DTO 请求 → 结果 DTO）
 pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
     let (player, hostile, xinfa, buff, coeff) = super::host::into_core(
@@ -132,6 +248,9 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
                 None => TimelineAction::cast(skill_id, sub_id),
             },
             TimelineActionDTO::SwitchForm { form } => TimelineAction::SwitchForm(form),
+            TimelineActionDTO::Flag { flag } => TimelineAction::Flag {
+                start: flag == "start",
+            },
         })
         .collect();
     // 门控用的激活奇穴集合：请求里的 id + 对应奇穴名（技能 `jihuoqixue` 可能写 id 或名称）
@@ -180,6 +299,8 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         hooks,
         actions,
         window,
+        samples: req.samples,
+        seed: req.seed,
     });
 
     Ok(TimelineResultDTO::from(result))
@@ -231,6 +352,10 @@ impl From<timeline::TimelineResult> for TimelineResultDTO {
             skipped_actions: r.skipped_actions,
             final_instrument: r.final_instrument,
             final_qifeng: r.final_qifeng,
+            final_kill_prob: r.final_kill_prob,
+            kill_prob_curve: r.kill_prob_curve,
+            kill_start: r.kill_start,
+            kill_end: r.kill_end,
         }
     }
 }
@@ -255,6 +380,7 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 hit_time,
                 gcd_secs,
                 gcd_ready_at,
+                ..
             } => TimelineEventKindDTO::Cast {
                 skill_name,
                 damage,
@@ -266,6 +392,7 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 skill_name,
                 index,
                 damage,
+                ..
             } => TimelineEventKindDTO::ChannelTick {
                 skill_name,
                 index,
@@ -276,6 +403,7 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 index,
                 damage,
                 advanced,
+                ..
             } => TimelineEventKindDTO::DotTick {
                 skill_name,
                 index,
@@ -356,7 +484,67 @@ mod tests {
             },
             value_set: None,
             combat: None,
+            samples: 0,
+            seed: None,
         }
+    }
+
+    #[test]
+    fn rejects_invalid_selections_and_counts_grouped_effects_once() {
+        use jpcg_api::{CombatMetaDTO, MijiDefDTO, QixueDefDTO};
+        let mut data = CombatDataDTO {
+            meta: CombatMetaDTO {
+                mixed_slot_from: 7,
+                mixed_qixue_cap: 1,
+                miji_per_skill_cap: 1,
+                ..Default::default()
+            },
+            qixue: vec![
+                QixueDefDTO {
+                    id: "a".into(),
+                    slot: 1,
+                    ..Default::default()
+                },
+                QixueDefDTO {
+                    id: "b".into(),
+                    slot: 1,
+                    ..Default::default()
+                },
+                QixueDefDTO {
+                    id: "c".into(),
+                    slot: 7,
+                    group_ids: vec!["c".into(), "c2".into()],
+                    ..Default::default()
+                },
+                QixueDefDTO {
+                    id: "d".into(),
+                    slot: 8,
+                    ..Default::default()
+                },
+            ],
+            miji: vec![
+                MijiDefDTO {
+                    id: "m1".into(),
+                    skill_id: 1,
+                    ..Default::default()
+                },
+                MijiDefDTO {
+                    id: "m2".into(),
+                    skill_id: 1,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let ids = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(validate_selection(&data, &ids(&["a", "b"]), &[]).is_err());
+        assert!(validate_selection(&data, &ids(&["c", "d"]), &[]).is_err());
+        assert!(validate_selection(&data, &ids(&["c", "c2"]), &[]).is_ok());
+        assert!(validate_selection(&data, &ids(&["unknown"]), &[]).is_err());
+        assert!(validate_selection(&data, &[], &ids(&["m1", "m2"])).is_err());
+        assert!(validate_selection(&data, &[], &ids(&["unknown"])).is_err());
+        data.qixue[0].shelved = true;
+        assert!(validate_selection(&data, &ids(&["a"]), &[]).is_err());
     }
 
     #[test]

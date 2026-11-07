@@ -152,7 +152,7 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
         "calculate_timeline" => {
             let req: jpcg_api::TimelineRequestDTO =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            let out = crate::timeline_host::calculate_timeline(req)?;
+            let out = crate::timeline_host::calculate_timeline_from_store(req)?;
             serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
         _ => Err(format!("未知方法: {}", method)),
@@ -358,7 +358,11 @@ mod tests {
         }"#;
         let out = call("calculate_timeline", req);
         assert!(out.contains("window_dps"), "应返回窗口 DPS: {}", out);
-        assert!(out.contains("\"kind\":\"cast\""), "应返回施放事件: {}", out);
+        assert!(
+            out.contains("\"skipped_actions\":2"),
+            "客户端伪造技能不能参与计算: {}",
+            out
+        );
         assert!(out.contains("total_damage"));
     }
 

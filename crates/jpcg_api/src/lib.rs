@@ -102,7 +102,7 @@ pub struct XinfaConfigDTO {
     pub gcd_base: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalculateRequest {
     pub player: PlayerConfigDTO,
     pub hostile: HostileConfigDTO,
@@ -112,6 +112,14 @@ pub struct CalculateRequest {
     /// 数值集 id（None = 使用默认值集，见 data/values/index.toml 的 default）
     #[serde(default)]
     pub value_set: Option<String>,
+}
+
+/// 属性面板结果；百分数单位（10 表示 10%），不含技能专属增益。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PanelStatsDTO {
+    pub huixin_pct: f32,
+    pub pofang_pct: f32,
+    pub jianshang_pct: u32,
 }
 
 /// 完整配置数据（对应 saved_config.toml 的加载结果）
@@ -298,6 +306,8 @@ pub struct ComboStepResultDTO {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComboResultDTO {
+    #[serde(default)]
+    pub total_lost_hp_damage: f64,
     pub steps: Vec<ComboStepResultDTO>,
     pub total_expected_damage_wan: f64,
     pub final_kill_prob: f64,
@@ -699,6 +709,10 @@ pub enum TimelineActionDTO {
     SwitchForm {
         form: String,
     },
+    /// 计算开始/结束标记（只影响击杀率测量窗口；"start" | "end"）
+    Flag {
+        flag: String,
+    },
 }
 
 /// 时间轴计算请求
@@ -737,6 +751,12 @@ pub struct TimelineRequestDTO {
     /// 战斗时序 overlay（可选；提供时按 overlay 套形态 / GCD 通道 / on_cast）
     #[serde(default)]
     pub combat: Option<CombatDataDTO>,
+    /// 击杀率蒙特卡洛样本数（0 = 不跑 MC，纯确定性）
+    #[serde(default)]
+    pub samples: u32,
+    /// 击杀率随机种子（None = 每次随机）
+    #[serde(default)]
+    pub seed: Option<u64>,
 }
 
 /// 时间轴事件
@@ -806,6 +826,17 @@ pub struct TimelineResultDTO {
     /// 序列执行完后的器形 / 曲风（后端算好，前端直接显示）
     pub final_instrument: String,
     pub final_qifeng: String,
+    /// 窗口内击杀概率 0..1（samples=0 或未提供血量时为 0）
+    #[serde(default)]
+    pub final_kill_prob: f64,
+    /// 累计击杀概率曲线：(动作序号 1..=n, 概率 0..1)
+    #[serde(default)]
+    pub kill_prob_curve: Vec<(usize, f64)>,
+    /// 击杀率测量窗口起止时刻（flag 解析后的结果；None = 未提供该 flag）
+    #[serde(default)]
+    pub kill_start: Option<f32>,
+    #[serde(default)]
+    pub kill_end: Option<f32>,
 }
 
 /// 单个动作的执行结果

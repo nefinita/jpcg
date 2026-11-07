@@ -1,5 +1,8 @@
 use crate::model::*;
+use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 impl Constraints {
     fn validate(&self, catalog: &Catalog, loadout: &Loadout) -> Result<(), String> {
@@ -29,6 +32,14 @@ impl Constraints {
                 return Err("锁定/禁用的模板不存在".into());
             }
         }
+        for (set, min) in &self.required_sets {
+            if !catalog.sets.iter().any(|s| s.id == *set) {
+                return Err(format!("必须套装不存在：{set}"));
+            }
+            if *min == 0 || *min > 6 {
+                return Err(format!("必须套装件数超出范围：{set}={min}"));
+            }
+        }
         Ok(())
     }
     fn permits(&self, c: &Choice) -> bool {
@@ -49,6 +60,11 @@ impl Constraints {
                 .is_none_or(|s| !s.contains(&c.source))
     }
     fn satisfied(&self, composed: &Composed) -> Result<bool, String> {
+        for (set, min) in &self.required_sets {
+            if composed.set_counts.get(set).copied().unwrap_or(0) < *min {
+                return Ok(false);
+            }
+        }
         for (name, bounds) in &self.stats {
             let value = effective_value(composed, name)?;
             if bounds.min.is_some_and(|min| value < min)
@@ -96,6 +112,117 @@ fn dominates(a: &Candidate, b: &Candidate) -> bool {
         && x.huajin >= y.huajin
 }
 
+fn stats_ge(a: &Stats, b: &Stats) -> bool {
+    a.zhushuxing >= b.zhushuxing
+        && a.tizhi >= b.tizhi
+        && a.liliang >= b.liliang
+        && a.shenfa >= b.shenfa
+        && a.gengu >= b.gengu
+        && a.yuanqi >= b.yuanqi
+        && a.gongji >= b.gongji
+        && a.qixue >= b.qixue
+        && a.qixue_additional >= b.qixue_additional
+        && a.huixin >= b.huixin
+        && a.huixiao >= b.huixiao
+        && a.pofang >= b.pofang
+        && a.jiasu >= b.jiasu
+        && a.yujin >= b.yujin
+        && a.huajin >= b.huajin
+        && a.wuqi_shanghai >= b.wuqi_shanghai
+}
+
+fn template_total(t: &Template) -> Stats {
+    let mut total = t.stats.clone();
+    for extra in &t.sockets {
+        if total.add(extra).is_err() {
+            // 溢出视为不可支配（保守）
+            return Stats {
+                zhushuxing: u32::MAX,
+                ..Stats::default()
+            };
+        }
+    }
+    total
+}
+
+/// 每个槽位的候选组合；剪掉「被同槽/同来源/同变体的升级档逐项 >= 支配」的基础档。
+/// 避免预算截断时 odometer 前缀把基础档当成最优先、结果反而更差。
+fn build_candidates(
+    catalog: &Catalog,
+    req: &OptimizeRequest,
+) -> Result<(Vec<Vec<Choice>>, u64), String> {
+    let mut droppable: BTreeSet<(Slot, Source, u8)> = BTreeSet::new();
+    for up in &catalog.templates {
+        if up.school != req.loadout.school
+            || up.choice.tier != Tier::Upgraded
+            || !req.constraints.permits(&up.choice)
+        {
+            continue;
+        }
+        let base = catalog.templates.iter().find(|b| {
+            b.school == up.school
+                && b.choice.slot == up.choice.slot
+                && b.choice.source == up.choice.source
+                && b.choice.variant == up.choice.variant
+                && b.choice.tier == Tier::Base
+        });
+        if let Some(base) = base
+            && stats_ge(&template_total(up), &template_total(base))
+        {
+            droppable.insert((up.choice.slot, up.choice.source, up.choice.variant));
+        }
+    }
+    let mut candidates = Vec::new();
+    let mut combinations = 1u64;
+    for slot in Slot::ALL {
+        let mut choices: Vec<_> = catalog
+            .templates
+            .iter()
+            .filter(|t| {
+                t.school == req.loadout.school
+                    && t.choice.slot == slot
+                    && req.constraints.permits(&t.choice)
+            })
+            .filter(|t| {
+                !(t.choice.tier == Tier::Base
+                    && droppable.contains(&(t.choice.slot, t.choice.source, t.choice.variant)))
+            })
+            .map(|t| t.choice.clone())
+            .collect();
+        choices.sort();
+        if choices.is_empty() {
+            return Err(format!("槽位 {slot:?} 无候选（锁定或来源约束冲突）"));
+        }
+        combinations = combinations
+            .checked_mul(choices.len() as u64)
+            .ok_or("组合数溢出")?;
+        candidates.push(choices);
+    }
+    Ok((candidates, combinations))
+}
+
+/// 组合遍历下标：空间不超预算时全遍历；否则确定性均匀抽样（splitmix64），避免前缀偏差。
+fn combination_indices(combinations: u64, budget: u64) -> Vec<u64> {
+    if combinations <= budget {
+        return (0..combinations).collect();
+    }
+    let mut state = 0x9E37_79B9_7F4A_7C15u64;
+    let mut seen = std::collections::HashSet::with_capacity(budget as usize);
+    let mut out = Vec::with_capacity(budget as usize);
+    while (out.len() as u64) < budget {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        let idx = z % combinations;
+        if seen.insert(idx) {
+            out.push(idx);
+        }
+    }
+    out
+}
+
 /// 有界穷举：小空间给全局最优证明；大空间明确报告截断。回调返回 false 可取消。
 /// 遍历固定槽位/来源/档位顺序，所有硬约束在目标函数前检查。基线可不满足新约束。
 pub fn optimize_with(
@@ -120,28 +247,7 @@ pub fn optimize_with(
         score: baseline_score,
         composed,
     };
-    let mut candidates = Vec::new();
-    let mut combinations = 1u64;
-    for slot in Slot::ALL {
-        let mut choices: Vec<_> = catalog
-            .templates
-            .iter()
-            .filter(|t| {
-                t.school == req.loadout.school
-                    && t.choice.slot == slot
-                    && req.constraints.permits(&t.choice)
-            })
-            .map(|t| t.choice.clone())
-            .collect();
-        choices.sort();
-        if choices.is_empty() {
-            return Err(format!("槽位 {slot:?} 无候选（锁定或来源约束冲突）"));
-        }
-        combinations = combinations
-            .checked_mul(choices.len() as u64)
-            .ok_or("组合数溢出")?;
-        candidates.push(choices);
-    }
+    let (candidates, combinations) = build_candidates(catalog, req)?;
     let mut result = OptimizeResult {
         best: None,
         baseline,
@@ -180,22 +286,21 @@ pub fn optimize_with(
         result.best = Some(result.baseline.clone());
         result.pareto.push(result.baseline.clone());
     }
-    let mut indices = [0usize; 12];
-    loop {
+    let visited = combination_indices(combinations, req.max_combinations);
+    result.complete = combinations <= req.max_combinations;
+    result.stop_reason = if result.complete {
+        "exhausted"
+    } else {
+        "budget_exhausted"
+    }
+    .into();
+    for flat in visited {
         if !on_progress(result.progress) {
             result.stop_reason = "cancelled".into();
             break;
         }
-        if result.progress.visited >= req.max_combinations {
-            result.stop_reason = "budget_exhausted".into();
-            break;
-        }
         let mut loadout = req.loadout.clone();
-        loadout.choices = candidates
-            .iter()
-            .zip(indices)
-            .map(|(v, i)| v[i].clone())
-            .collect();
+        loadout.choices = decode_flat(flat, &candidates);
         let composed = catalog.compose_validated(&loadout, rules.as_ref())?;
         result.progress.visited += 1;
         let armor2 = composed
@@ -226,20 +331,6 @@ pub fn optimize_with(
                 result.pareto.retain(|p| !dominates(&candidate, p));
                 result.pareto.push(candidate);
             }
-        }
-        let mut digit = 12;
-        while digit > 0 {
-            digit -= 1;
-            indices[digit] += 1;
-            if indices[digit] < candidates[digit].len() {
-                break;
-            }
-            indices[digit] = 0;
-        }
-        if indices.iter().all(|i| *i == 0) {
-            result.complete = true;
-            result.stop_reason = "exhausted".into();
-            break;
         }
     }
     result.delta = result
@@ -303,13 +394,124 @@ fn request(config: &jpcg_api::CalculateRequest, composed: &Composed) -> jpcg_api
     }
 }
 
+/// 给定模板最优配装后，对附魔/五彩石做坐标下降（逐部位取最优，多轮直至不再提升）。
+/// 附魔/五彩石是逐件附加属性，与模板选择解耦；旧属性模式不支持五维的附魔/五彩石会被跳过而非报错。
+fn enchant_phase(
+    catalog: &Catalog,
+    req: &OptimizeRequest,
+    rules: Option<&jpcg_api::AttributeRules>,
+    base: &Loadout,
+    score_fn: impl Fn(&Composed) -> Result<f64, String>,
+) -> Result<Candidate, String> {
+    let mut loadout = base.clone();
+    let mut composed = catalog.compose_validated(&loadout, rules)?;
+    let mut best_score = if req.constraints.satisfied(&composed)? {
+        score_fn(&composed)?
+    } else {
+        f64::NEG_INFINITY
+    };
+    // 同一部位可选：移除（None）或任一附魔；五彩石同理。
+    loop {
+        let mut improved = false;
+        for slot in Slot::ALL {
+            let current = loadout.enchants.get(&slot).cloned();
+            let mut options: Vec<Option<String>> = vec![None];
+            options.extend(
+                catalog
+                    .enchants
+                    .iter()
+                    .filter(|e| e.slot == slot)
+                    .map(|e| Some(e.id.clone())),
+            );
+            let mut best_local = best_score;
+            let mut best_choice: Option<Option<String>> = None;
+            for opt in options {
+                if opt == current {
+                    continue;
+                }
+                let mut trial = loadout.clone();
+                match &opt {
+                    Some(id) => {
+                        trial.enchants.insert(slot, id.clone());
+                    }
+                    None => {
+                        trial.enchants.remove(&slot);
+                    }
+                }
+                let Ok(trial_composed) = catalog.compose_validated(&trial, rules) else {
+                    continue;
+                };
+                if !req.constraints.satisfied(&trial_composed)? {
+                    continue;
+                }
+                let value = score_fn(&trial_composed)?;
+                if value > best_local {
+                    best_local = value;
+                    best_choice = Some(opt);
+                }
+            }
+            if let Some(opt) = best_choice {
+                match &opt {
+                    Some(id) => {
+                        loadout.enchants.insert(slot, id.clone());
+                    }
+                    None => {
+                        loadout.enchants.remove(&slot);
+                    }
+                }
+                composed = catalog.compose_validated(&loadout, rules)?;
+                best_score = best_local;
+                improved = true;
+            }
+        }
+        if !catalog.wucai.is_empty() {
+            let current = loadout.wucai.clone();
+            let mut options: Vec<Option<String>> = vec![None];
+            options.extend(catalog.wucai.iter().map(|w| Some(w.id.clone())));
+            let mut best_local = best_score;
+            let mut best_choice: Option<Option<String>> = None;
+            for opt in options {
+                if opt == current {
+                    continue;
+                }
+                let mut trial = loadout.clone();
+                trial.wucai = opt.clone();
+                let Ok(trial_composed) = catalog.compose_validated(&trial, rules) else {
+                    continue;
+                };
+                if !req.constraints.satisfied(&trial_composed)? {
+                    continue;
+                }
+                let value = score_fn(&trial_composed)?;
+                if value > best_local {
+                    best_local = value;
+                    best_choice = Some(opt);
+                }
+            }
+            if let Some(opt) = best_choice {
+                loadout.wucai = opt;
+                composed = catalog.compose_validated(&loadout, rules)?;
+                best_score = best_local;
+                improved = true;
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+    Ok(Candidate {
+        score: best_score,
+        composed,
+    })
+}
+
 pub fn optimize(
     catalog: &Catalog,
     req: &OptimizeRequest,
     on_progress: impl FnMut(Progress) -> bool,
 ) -> Result<OptimizeResult, String> {
-    catalog.validate()?;
-    validate_context(catalog, req)?;
+    let prepared = prepare_request(catalog, req)?;
+    let req = &prepared;
     let skill_table = jpcg_core::skill_editor::load_skills(&req.loadout.school);
     let x = &skill_table.xinfa;
     let dto = &req.config.xinfa_config;
@@ -322,7 +524,7 @@ pub fn optimize(
         return Err("技能数据缺失或心法系数与现有计算器数据不一致".into());
     }
     let mut cache = BTreeMap::new();
-    optimize_with(
+    let mut result = optimize_with(
         catalog,
         req,
         |composed| {
@@ -337,7 +539,45 @@ pub fn optimize(
             Ok(value)
         },
         on_progress,
-    )
+    )?;
+    // 附魔/五彩石：模板最优后再选，避免组合爆炸。
+    if (!catalog.enchants.is_empty() || !catalog.wucai.is_empty())
+        && let Some(candidate) = result.best.take()
+    {
+        let rules = crate::attributes::load_rules(&req.loadout)?;
+        let final_candidate = enchant_phase(
+            catalog,
+            req,
+            rules.as_ref(),
+            &candidate.composed.loadout,
+            |composed| score(req, composed, &skill_table.skill, &skill_table.xinfa),
+        )?;
+        result.best = Some(final_candidate);
+        result.delta = result
+            .best
+            .as_ref()
+            .map(|b| b.score - result.baseline.score);
+    }
+    Ok(result)
+}
+
+fn prepare_request(catalog: &Catalog, req: &OptimizeRequest) -> Result<OptimizeRequest, String> {
+    catalog.validate()?;
+    req.constraints.validate(catalog, &req.loadout)?;
+    if req.max_combinations == 0 || req.max_combinations > 1_000_000 {
+        return Err("max_combinations 必须为1..=1000000".into());
+    }
+    validate_context(catalog, req)?;
+    let mut prepared = req.clone();
+    if let Objective::Timeline { request, .. } = &mut prepared.objective {
+        request.xinfa = req.config.xinfa_config.clone();
+        request.hostile = req.config.hostile.clone();
+        request.buff = req.config.buff.clone();
+        request.coeff = req.config.coefficient.clone();
+        request.value_set = req.config.value_set.clone();
+        *request = jpcg_combo::timeline_host::prepare_timeline_from_store(request.clone())?;
+    }
+    Ok(prepared)
 }
 
 fn validate_context(catalog: &Catalog, req: &OptimizeRequest) -> Result<(), String> {
@@ -414,6 +654,20 @@ fn validate_context(catalog: &Catalog, req: &OptimizeRequest) -> Result<(), Stri
                 return Err("击杀率需目标气血".into());
             }
         }
+        Objective::Timeline { request, metric } => {
+            if request.actions.is_empty() || request.actions.len() > 256 || request.samples > 50_000
+            {
+                return Err("时间轴需1..256个动作及不超过50000次采样".into());
+            }
+            if *metric == crate::TimelineMetric::KillProbability {
+                if request.samples == 0 {
+                    return Err("击杀率目标需 samples > 0".into());
+                }
+                if request.hostile.target_hp == 0 && request.hostile.max_hp == 0 {
+                    return Err("击杀率目标需目标血量".into());
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -481,5 +735,239 @@ fn score(
             )?;
             Ok(result.final_kill_prob)
         }
+        Objective::Timeline { request, metric } => {
+            let mut r = request.clone();
+            r.player = crate::player(composed);
+            let result = jpcg_combo::timeline_host::calculate_timeline(r)?;
+            Ok(match metric {
+                crate::TimelineMetric::TotalDamage => result.total_damage,
+                crate::TimelineMetric::WindowDps => result.window_dps,
+                crate::TimelineMetric::KillProbability => result.final_kill_prob,
+            })
+        }
     }
+}
+
+// ============ 全核并行调优 ============
+
+/// 并行调优进度：原子字段供 Tauri 主线程轮询并发事件（worker 内不 emit）。
+#[derive(Default)]
+pub struct OptimizeProgress {
+    pub visited: AtomicU64,
+    pub evaluated: AtomicU64,
+    pub total: AtomicU64,
+    pub cancel: AtomicBool,
+    pub done: AtomicBool,
+}
+
+impl OptimizeProgress {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 0..=100 的整数百分比（分母为实际要遍历的组合数，已按预算裁剪）。
+    pub fn percent(&self) -> u64 {
+        let total = self.total.load(Ordering::Relaxed).max(1);
+        (self.visited.load(Ordering::Relaxed).saturating_mul(100) / total).min(100)
+    }
+
+    pub fn cancel(&self) {
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+}
+
+fn decode_flat(mut flat: u64, candidates: &[Vec<Choice>]) -> Vec<Choice> {
+    let mut idx = vec![0usize; candidates.len()];
+    for i in (0..candidates.len()).rev() {
+        let len = candidates[i].len() as u64;
+        idx[i] = (flat % len) as usize;
+        flat /= len;
+    }
+    candidates
+        .iter()
+        .zip(idx)
+        .map(|(c, i)| c[i].clone())
+        .collect()
+}
+
+fn armor2_count(catalog: &Catalog, composed: &Composed) -> usize {
+    composed
+        .active_bonuses
+        .iter()
+        .filter(|b| {
+            b.threshold == 2
+                && catalog
+                    .sets
+                    .iter()
+                    .any(|s| s.id == b.set && s.kind == SetKind::Armor)
+        })
+        .count()
+}
+
+/// 全核并行有界优化：候选按 flat index 并行评估，线程本地缓存去重；进度/取消经原子共享。
+pub fn optimize_parallel(
+    catalog: &Catalog,
+    req: &OptimizeRequest,
+    progress: &OptimizeProgress,
+) -> Result<OptimizeResult, String> {
+    let prepared = prepare_request(catalog, req)?;
+    let req = &prepared;
+    let skill_table = jpcg_core::skill_editor::load_skills(&req.loadout.school);
+    let x = &skill_table.xinfa;
+    let dto = &req.config.xinfa_config;
+    if skill_table.skill.is_empty()
+        || x.xinfa_nom != dto.xinfa_nom
+        || x.atk_up != dto.atk_up
+        || x.pofang_up != dto.pofang_up
+        || x.huixin_up != dto.huixin_up
+    {
+        return Err("技能数据缺失或心法系数与现有计算器数据不一致".into());
+    }
+    let rules = crate::attributes::load_rules(&req.loadout)?;
+    let baseline_composed = catalog.compose_validated(&req.loadout, rules.as_ref())?;
+    let baseline_score = score(
+        req,
+        &baseline_composed,
+        &skill_table.skill,
+        &skill_table.xinfa,
+    )?;
+    let baseline = Candidate {
+        score: baseline_score,
+        composed: baseline_composed,
+    };
+    let (candidates, combinations) = build_candidates(catalog, req)?;
+    let indices = combination_indices(combinations, req.max_combinations);
+    progress
+        .total
+        .store(indices.len() as u64, Ordering::Relaxed);
+    progress.visited.store(0, Ordering::Relaxed);
+    progress.evaluated.store(0, Ordering::Relaxed);
+    progress.done.store(false, Ordering::Relaxed);
+    progress.cancel.store(false, Ordering::Relaxed);
+
+    let baseline_armor2 = armor2_count(catalog, &baseline.composed);
+    let mut result = OptimizeResult {
+        best: None,
+        baseline: baseline.clone(),
+        delta: None,
+        pareto: vec![],
+        progress: Progress {
+            visited: 0,
+            evaluated: 0,
+            combinations,
+        },
+        complete: false,
+        stop_reason: String::new(),
+        warnings: Vec::new(),
+    };
+    if req
+        .loadout
+        .choices
+        .iter()
+        .all(|c| req.constraints.permits(c))
+        && (req.constraints.allow_cross_source_2plus2 || baseline_armor2 <= 1)
+        && req.constraints.satisfied(&result.baseline.composed)?
+    {
+        result.best = Some(result.baseline.clone());
+        result.pareto.push(result.baseline.clone());
+    }
+    let shared: Mutex<(Option<Candidate>, Vec<Candidate>)> =
+        Mutex::new((result.best.clone(), result.pareto.clone()));
+
+    indices
+        .into_par_iter()
+        .map_init(
+            BTreeMap::<String, f64>::new,
+            |cache, flat| -> Result<(), String> {
+                if progress.cancel.load(Ordering::Relaxed) {
+                    return Ok(());
+                }
+                progress.visited.fetch_add(1, Ordering::Relaxed);
+                let mut loadout = req.loadout.clone();
+                loadout.choices = decode_flat(flat, &candidates);
+                let composed = catalog.compose_validated(&loadout, rules.as_ref())?;
+                let armor2 = armor2_count(catalog, &composed);
+                if !(req.constraints.allow_cross_source_2plus2 || armor2 <= 1) {
+                    return Ok(());
+                }
+                if !req.constraints.satisfied(&composed)? {
+                    return Ok(());
+                }
+                let key = serde_json::to_string(&(&composed.stats, &composed.cooldowns))
+                    .map_err(|e| e.to_string())?;
+                let value = if let Some(v) = cache.get(&key) {
+                    *v
+                } else {
+                    let v = score(req, &composed, &skill_table.skill, &skill_table.xinfa)?;
+                    cache.insert(key, v);
+                    progress.evaluated.fetch_add(1, Ordering::Relaxed);
+                    v
+                };
+                let candidate = Candidate {
+                    score: value,
+                    composed,
+                };
+                let mut guard = shared.lock().map_err(|_| "并行状态锁污染".to_string())?;
+                if guard.0.as_ref().is_none_or(|b| value > b.score) {
+                    guard.0 = Some(candidate.clone());
+                }
+                if !guard.1.iter().any(|p| dominates(p, &candidate)) {
+                    guard.1.retain(|p| !dominates(&candidate, p));
+                    guard.1.push(candidate);
+                }
+                Ok(())
+            },
+        )
+        .try_for_each(|r| r)?;
+
+    let (best, pareto) = shared
+        .into_inner()
+        .map_err(|_| "并行状态锁污染".to_string())?;
+    result.best = best;
+    result.pareto = pareto;
+    // 附魔/五彩石：模板最优后再贪心选择，避免组合爆炸。
+    if (!catalog.enchants.is_empty() || !catalog.wucai.is_empty())
+        && let Some(candidate) = result.best.take()
+    {
+        let evaluated = &progress.evaluated;
+        let final_candidate = enchant_phase(
+            catalog,
+            req,
+            rules.as_ref(),
+            &candidate.composed.loadout,
+            |composed| {
+                evaluated.fetch_add(1, Ordering::Relaxed);
+                score(req, composed, &skill_table.skill, &skill_table.xinfa)
+            },
+        )?;
+        result.best = Some(final_candidate);
+    }
+    result.progress = Progress {
+        visited: progress.visited.load(Ordering::Relaxed),
+        evaluated: progress.evaluated.load(Ordering::Relaxed),
+        combinations,
+    };
+    let cancelled = progress.cancel.load(Ordering::Relaxed);
+    result.complete = combinations <= req.max_combinations && !cancelled;
+    result.stop_reason = if cancelled {
+        "cancelled".into()
+    } else if result.complete {
+        "exhausted".into()
+    } else {
+        "budget_exhausted".into()
+    };
+    result.delta = result
+        .best
+        .as_ref()
+        .map(|b| b.score - result.baseline.score);
+    result.warnings = result.baseline.composed.warnings.clone();
+    if let Some(best) = &result.best {
+        for warning in &best.composed.warnings {
+            if !result.warnings.contains(warning) {
+                result.warnings.push(warning.clone());
+            }
+        }
+    }
+    progress.done.store(true, Ordering::Relaxed);
+    Ok(result)
 }

@@ -24,6 +24,7 @@ clap = { workspace = true, optional = true }
 jpcg_api.workspace = true
 jpcg_core = { workspace = true, optional = true }
 jpcg_combo = { workspace = true, optional = true }
+rayon.workspace = true
 
 [lints]
 workspace = true

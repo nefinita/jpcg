@@ -1,5 +1,5 @@
 /** 与 jpcg_gear::model（#94）保持同名形状；不另定义配装规则或计算公式。 */
-import type { PlayerConfigDTO } from "./index";
+import type { PlayerConfigDTO, CalculateRequest, ComboStepDTO, TimelineRequestDTO } from "./index";
 export const GEAR_SLOTS = ["tou", "yi", "yao", "shou", "ku", "xie", "wuqi", "anqi", "xianglian", "yaozhui", "jie1", "jie2"] as const;
 export type GearSlot = typeof GEAR_SLOTS[number];
 export type GearSource = "mingjian" | "weiwang" | "baowu";
@@ -23,3 +23,47 @@ export interface GearAttributePanel { rule_id: string; source: string; verified_
 export interface GearComposed { loadout: GearLoadout; profile: GearSchool; stats: GearStats; active_bonuses: { set: string; pieces: number; threshold: number; tier: GearTier }[]; cooldowns: { skill_id: number; seconds: number }[]; warnings: string[]; panel?: GearAttributePanel | null }
 export interface GearComposition { composed: GearComposed; player: PlayerConfigDTO }
 export const emptyGearStats = (): Required<GearStats> => ({ zhushuxing: 0, gongji: 0, qixue: 0, huixin: 0, huixiao: 0, pofang: 0, jiasu: 0, yujin: 0, huajin: 0, wuqi_shanghai: 0, tizhi: 0, liliang: 0, shenfa: 0, gengu: 0, yuanqi: 0, qixue_additional: 0 });
+
+// ---- #90 配装优化契约（与 jpcg_gear::model 同名形状） ----
+export interface GearBounds { min?: number; max?: number }
+export interface GearConstraints {
+  sources: GearSource[];
+  allow_upgraded: boolean;
+  locked: GearChoice[];
+  banned: GearChoice[];
+  required_sources: Record<string, GearSource>;
+  banned_sources: Record<string, GearSource[]>;
+  stats: Record<string, GearBounds>;
+  allow_cross_source_2plus2: boolean;
+  required_sets?: Record<string, number>;
+}
+export type GearTimelineMetric = "total_damage" | "window_dps" | "kill_probability";
+/** 自动调优的选项（目标指标 + 约束）。 */
+export interface OptimizeOptions {
+  metric: "kill_probability" | "window_dps";
+  arena4: boolean;
+  hasteMin: number | null;
+}
+export type GearObjective =
+  | { kind: "expected"; weights: Record<string, number> }
+  | { kind: "kill_probability"; steps: ComboStepDTO[]; samples: number; seed: number; allow_unapplied_cd?: boolean }
+  | { kind: "timeline"; request: TimelineRequestDTO; metric: GearTimelineMetric };
+export interface GearOptimizeRequest {
+  loadout: GearLoadout;
+  config: CalculateRequest;
+  objective: GearObjective;
+  constraints: GearConstraints;
+  max_combinations: number;
+}
+export interface GearCandidate { composed: GearComposed; score: number }
+export interface GearProgress { visited: number; evaluated: number; combinations: number }
+export interface GearOptimizeResult {
+  best: GearCandidate | null;
+  baseline: GearCandidate;
+  delta: number | null;
+  pareto: GearCandidate[];
+  progress: GearProgress;
+  complete: boolean;
+  stop_reason: string;
+  warnings: string[];
+}

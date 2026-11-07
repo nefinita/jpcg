@@ -146,30 +146,14 @@ export interface ComboStepDTO {
   overrides: StepOverrideDTO | null;
 }
 
+/** 排轴器序列项：技能步 或 计算开始/结束标记 */
+export type SequenceItem =
+  | { kind: "skill"; skill: SkillPoolItemDTO; overrides: StepOverrideDTO | null }
+  | { kind: "flag"; flag: "start" | "end" };
+
 export interface ComboPresetDTO {
   name: string;
   steps: ComboStepDTO[];
-}
-
-export interface ComboStepResultDTO {
-  skill_name: string;
-  g_damage: number;
-  h_damage: number;
-  q_damage: number;
-  crit_rate: number;
-  cumulative_mean_wan: number;
-  kill_prob: number;
-  dot_jumps: number[];
-  has_critical_strike: boolean;
-  zhenshishanghai: number;
-  lost_hp_zhenshi_damage: number;
-}
-
-export interface ComboResultDTO {
-  steps: ComboStepResultDTO[];
-  total_expected_damage_wan: number;
-  final_kill_prob: number;
-  kill_prob_curve: [number, number][];
 }
 
 export interface UpdateCheckResult {
@@ -459,7 +443,8 @@ export interface CombatBundleDTO {
 
 export type TimelineActionDTO =
   | { kind: "cast"; skill_id: number; sub_id: number; skill_name?: string }
-  | { kind: "switch_form"; form: string };
+  | { kind: "switch_form"; form: string }
+  | { kind: "flag"; flag: "start" | "end" };
 
 export interface TimelineRequestDTO {
   skills: SkillPoolItemDTO[];
@@ -480,6 +465,9 @@ export interface TimelineRequestDTO {
   miji?: string[];
   /** 激活的奇穴 id 列表 */
   qixue?: string[];
+  /** 击杀率蒙特卡洛样本数（0 = 纯确定性） */
+  samples?: number;
+  seed?: number | null;
 }
 
 // 与 Rust `TimelineEventKindDTO` 的 #[serde(tag = "kind")] 内部标签形状一致：
@@ -527,4 +515,14 @@ export interface TimelineResultDTO {
   skipped_actions: number;
   final_instrument?: string;
   final_qifeng?: string;
+  /** 窗口内击杀概率 0..1 */
+  final_kill_prob?: number;
+  /** 累计击杀概率曲线：[动作序号, 概率] */
+  kill_prob_curve?: [number, number][];
+  /** 击杀率测量窗口起止（flag 解析时刻；None = 未提供该 flag） */
+  kill_start?: number | null;
+  kill_end?: number | null;
 }
+
+/** 后端属性面板结果：百分数单位，10 表示 10%。 */
+export interface PanelStatsDTO { huixin_pct: number; pofang_pct: number; jianshang_pct: number }

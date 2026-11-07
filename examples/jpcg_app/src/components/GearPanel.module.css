@@ -15,3 +15,74 @@
 @media(max-width:600px) { .cards { grid-template-columns: 1fr; } }
 
 .sockets { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+
+.optimizeBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.optimizeBar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.optimizeBar select,
+.optimizeBar input[type="number"] {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.optimizeBar input[type="number"] { width: 72px; }
+
+.optResult {
+  margin: 10px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  font-size: 12px;
+}
+.optResultHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text-secondary);
+}
+.optResultHead strong { color: var(--text-primary); }
+.optResultHead em { font-style: normal; color: var(--primary-600); margin-left: 4px; }
+.optResultSlots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 16px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+}
+.optResultSlots span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.optResultSlots b {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 1px;
+}
+.optResultWarnings {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}

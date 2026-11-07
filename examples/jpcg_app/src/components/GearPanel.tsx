@@ -1,4 +1,5 @@
-import type { GearCatalog, GearChoice, GearComposition, GearLoadout } from "../types/gear";
+import { useState } from "react";
+import type { GearCatalog, GearChoice, GearComposition, GearLoadout, OptimizeOptions, GearOptimizeResult } from "../types/gear";
 import { GEAR_SLOTS, emptyGearStats } from "../types/gear";
 import { choiceKey, slotNames, sourceNames, greenNames, statNames, PROFESSION_ATTRIBUTE_RULES } from "../state/gear";
 import styles from "./GearPanel.module.css";
@@ -7,11 +8,14 @@ const convertedFields = ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue
 /** 跨门派装备的显示名；后端 schools 里暂无 name 字段。 */
 const SCHOOL_NAMES: Record<string, string> = { mowen: "莫问", bingxin: "冰心" };
 
-export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, pending }: {
+export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, optimizing, optProgress, optResult, pending }: {
   catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
   onChange: (loadout: GearLoadout) => void; onReset: () => void; onExport: () => void;
-  onImport: (file: File) => Promise<void>; pending: boolean;
+  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
+  optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
 }) {
+  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: false, hasteMin: null });
+  const arenaSet = catalog.sets.find((s) => s.source === "mingjian" && s.kind === "armor");
   const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
   const panel = loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
     && composition?.composed.loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES ? composition.composed.panel : undefined;
@@ -22,6 +26,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
     <header className={styles.header}>
       <div><h2>当前配装</h2><p>{catalog.version.sample ? "合成测试样例 · 非游戏装备数值" : `赛季 ${catalog.version.season}`} · {catalog.version.revision}</p></div>
       <div className={styles.actions}>
+        <button onClick={() => onOptimize(opts)} disabled={optimizing || pending}>{optimizing ? (optProgress != null ? `调优中 ${optProgress}%` : "调优中…") : "自动调优"}</button>
         <button onClick={onReset}>重置配装</button>
         <button onClick={onExport} disabled={stale}>导出配装</button>
         <label>导入配装<input type="file" accept=".toml" onChange={(e) => {
@@ -30,6 +35,64 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
         }} /></label>
       </div>
     </header>
+    <div className={styles.optimizeBar} aria-label="调优设置">
+      <label>调优目标
+        <select value={opts.metric} onChange={(e) => setOpts((p) => ({ ...p, metric: e.target.value as OptimizeOptions["metric"] }))}>
+          <option value="kill_probability">击杀率</option>
+          <option value="window_dps">区间 DPS</option>
+        </select>
+      </label>
+      <label><input type="checkbox" checked={opts.arena4} disabled={!arenaSet}
+        onChange={(e) => setOpts((p) => ({ ...p, arena4: e.target.checked }))} /> 必须竞技场四件套</label>
+      <label>加速 ≥
+        <input type="number" min={0} step={1} value={opts.hasteMin ?? ""}
+          onChange={(e) => setOpts((p) => ({ ...p, hasteMin: e.target.value === "" ? null : Number(e.target.value) }))} />
+      </label>
+    </div>
+    {optResult && <div className={styles.optResult} aria-label="调优结果">
+      <div className={styles.optResultHead}>
+        <strong>调优结果 · {optResult.metric === "kill_probability" ? "击杀率" : "区间 DPS"}</strong>
+        <span>
+          {optResult.metric === "kill_probability"
+            ? `${((optResult.result.best?.score ?? 0) * 100).toFixed(1)}%`
+            : Math.round(optResult.result.best?.score ?? 0).toLocaleString()}
+          {optResult.result.delta != null && <em>（{optResult.result.delta >= 0 ? "+" : ""}
+            {optResult.metric === "kill_probability"
+              ? `${(optResult.result.delta * 100).toFixed(2)} 个百分点`
+              : Math.round(optResult.result.delta).toLocaleString()}）</em>}
+        </span>
+        <span>
+          {optResult.result.complete ? "已遍历全部组合"
+            : optResult.result.stop_reason === "budget_exhausted" ? "预算内最优"
+            : optResult.result.stop_reason === "cancelled" ? "已取消" : optResult.result.stop_reason}
+          {" · "}评估 {optResult.result.progress.evaluated} / {optResult.result.progress.combinations}
+        </span>
+      </div>
+      {optResult.result.best && <div className={styles.optResultSlots}>
+        {GEAR_SLOTS.map((slot) => {
+          const best = optResult.result.best!.composed.loadout;
+          const choice = best.choices.find((c) => c.slot === slot);
+          const template = choice
+            ? catalog.templates.find((t) => t.choice.slot === slot && choiceKey(t.choice) === choiceKey(choice))
+            : undefined;
+          const enchantId = best.enchants?.[slot];
+          const enchant = enchantId ? catalog.enchants?.find((e) => e.slot === slot && e.id === enchantId) : undefined;
+          const wucai = slot === "wuqi" && best.wucai ? catalog.wucai?.find((w) => w.id === best.wucai) : undefined;
+          const detail = [
+            template ? `${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "—",
+            enchant ? `附魔：${enchant.name}` : "",
+            wucai ? wucai.name : "",
+          ].filter(Boolean).join(" · ");
+          return <span key={slot} title={`${slotNames[slot]}：${detail}`}>
+            <b>{slotNames[slot]}</b>
+            {detail}
+          </span>;
+        })}
+      </div>}
+      {optResult.result.warnings.length > 0 && <ul className={styles.optResultWarnings}>
+        {optResult.result.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+      </ul>}
+    </div>}
     {stale && <div role="alert" className={styles.notice}>保存的配装与当前模板版本不一致。<button onClick={onReset}>按当前模板重置</button></div>}
     <div className={styles.base}>
       <label>属性换算规则 <select aria-label="属性换算规则" value={loadout.attribute_rules ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, attribute_rules: event.target.value || null })}>

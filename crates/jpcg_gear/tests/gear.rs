@@ -561,3 +561,22 @@ fn pareto_keeps_damage_survival_tradeoff_and_removes_dominated_results() {
         out.pareto[1].composed.stats.qixue
     );
 }
+
+#[test]
+fn parallel_and_serial_reject_invalid_budgets_and_constraints_identically() {
+    let c = catalog();
+    for budget in [0, 1_000_001] {
+        let mut req = request();
+        req.max_combinations = budget;
+        let serial = optimize(&c, &req, |_| true).unwrap_err();
+        let parallel = optimize_parallel(&c, &req, &OptimizeProgress::new()).unwrap_err();
+        assert_eq!(serial, parallel);
+        assert!(serial.contains("max_combinations"));
+    }
+    let mut req = request();
+    req.constraints.required_sets.insert("不存在".into(), 4);
+    assert_eq!(
+        optimize(&c, &req, |_| true).unwrap_err(),
+        optimize_parallel(&c, &req, &OptimizeProgress::new()).unwrap_err()
+    );
+}

@@ -50,6 +50,11 @@ pub fn dispatch(catalog: &Catalog, method: &str, input: &str) -> Result<Value, S
             let loadout: Loadout = toml::from_str(&request.toml).map_err(|e| e.to_string())?;
             serde_json::to_value(compose(catalog, &loadout)?)
         }
+        "optimize" => {
+            let request: crate::OptimizeRequest =
+                serde_json::from_str(input).map_err(|e| e.to_string())?;
+            serde_json::to_value(crate::optimize(catalog, &request, |_| true)?)
+        }
         _ => return Err(format!("未知配装方法: {method}")),
     };
     value.map_err(|e| e.to_string())

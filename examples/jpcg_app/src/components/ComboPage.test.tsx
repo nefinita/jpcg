@@ -46,7 +46,7 @@ it("草稿序列/步调整/名称/搜索按心法隔离，重挂载恢复且不�
   const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data;
   expect(saved.sequence[0].overrides.base_damage_override).toBe(123);
   expect(saved.presetName).toBe("未完成草稿"); expect(saved.collapsedGroups).toEqual([]);
-  await mount("qixiu"); expect(host.textContent).toContain("从下方技能池添加技能"); await click("测试技·二");
+  await mount("qixiu"); expect(host.textContent).toContain("从左侧技能目录添加技能"); await click("测试技·二");
   await mount("mowen", 1); expect(host.querySelector('input[type="search"]')!.getAttribute("value")).toBe("测试");
   expect(host.textContent).toContain("测试技·一");
   await click(" 保存"); expect((host.querySelector('input[placeholder="连招名称"]') as HTMLInputElement).value).toBe("未完成草稿");
@@ -57,7 +57,7 @@ it("加载预设只更新当前草稿，修改后不自动写回预设", async (
   await mount();
   await act(async () => { const select = host.querySelector("select")!; select.value = "已保存"; select.dispatchEvent(new Event("change", { bubbles: true })); });
   await click("清空"); await mount("mowen", 1);
-  expect(host.textContent).toContain("从下方技能池添加技能"); expect(host.querySelector("select")!.value).toBe("已保存");
+  expect(host.textContent).toContain("从左侧技能目录添加技能"); expect(host.querySelector("select")!.value).toBe("已保存");
   expect(api.saveComboPreset).not.toHaveBeenCalled();
 });
 
@@ -177,4 +177,39 @@ it("秘籍与奇穴选择写入草稿并可在重挂载后恢复", async () => {
   expect(board.querySelector('button[aria-pressed="true"]')?.textContent).toBe("洞天");
   const gear = [...host.querySelectorAll("button")].find((b) => b.textContent === "0/4" || b.textContent === "1/4");
   expect(gear?.textContent).toBe("1/4");
+});
+
+it("输入变化清空已完成时间轴，失败可重试且不显示旧伤害", async () => {
+  vi.useFakeTimers();
+  try {
+    vi.mocked(api.calculateTimeline).mockResolvedValue({ events: [], steps: [], total_damage: 123456, window_dps: 411, skipped_actions: 0 });
+    await mount(); await click("测试技·一");
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    expect(host.textContent).toContain("123,456");
+    vi.mocked(api.calculateTimeline).mockRejectedValue(new Error("后端拒绝选择"));
+    await click("测试技·二");
+    expect(host.textContent).not.toContain("123,456");
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("后端拒绝选择");
+    vi.mocked(api.calculateTimeline).mockResolvedValue({ events: [], steps: [], total_damage: 654321, window_dps: 2181, skipped_actions: 0 });
+    await click("重试模拟");
+    expect(host.textContent).toContain("654,321");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  } finally { vi.useRealTimers(); }
+});
+
+it("输入切换后迟到的成功结果不能覆盖新结果", async () => {
+  vi.useFakeTimers();
+  try {
+    let resolveOld!: (value: Awaited<ReturnType<typeof api.calculateTimeline>>) => void;
+    vi.mocked(api.calculateTimeline).mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+    await mount(); await click("测试技·一");
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    vi.mocked(api.calculateTimeline).mockResolvedValue({ events: [], steps: [], total_damage: 654321, window_dps: 2181, skipped_actions: 0 });
+    await click("测试技·二");
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    await act(async () => { resolveOld({ events: [], steps: [], total_damage: 123456, window_dps: 411, skipped_actions: 0 }); });
+    expect(host.textContent).toContain("654,321");
+    expect(host.textContent).not.toContain("123,456");
+  } finally { vi.useRealTimers(); }
 });

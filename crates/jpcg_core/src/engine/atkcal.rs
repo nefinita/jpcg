@@ -134,11 +134,11 @@ impl<'a> JpcgConfig<'a> {
     /// 目标已损失生命 = max_hp - 结算后当前血量（封顶 max_hp），× lost_hp_zhenshishanghai 系数。
     /// 语义 A（结算后）：current_hp_after 为本步伤害扣完后剩余血量。
     pub fn lost_hp_append(&self, max_hp: u32, current_hp_after: u32) -> f64 {
-        if self.skilltype.lost_hp_zhenshishanghai <= 0.0 {
-            return 0.0;
-        }
-        let lost = (max_hp as f64 - current_hp_after as f64).max(0.0);
-        lost * self.skilltype.lost_hp_zhenshishanghai as f64
+        lost_hp_append_damage(
+            self.skilltype.lost_hp_zhenshishanghai,
+            max_hp as f64,
+            current_hp_after as f64,
+        )
     }
 
     /// 期望通道 + 可选 hp：q_cal() 基础上结算追加真伤。
@@ -808,4 +808,12 @@ mod converted_derivative_tests {
         let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
         assert_eq!(calc.q_cal().q_damage, 1310);
     }
+}
+
+/// 时间轴与连招共享追加真伤公式：本次直接伤害结算后按已损血量追加。
+pub fn lost_hp_append_damage(coefficient: f32, max_hp: f64, current_hp_after: f64) -> f64 {
+    if coefficient <= 0.0 {
+        return 0.0;
+    }
+    (max_hp - current_hp_after).clamp(0.0, max_hp) * coefficient as f64
 }

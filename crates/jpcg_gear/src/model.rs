@@ -293,6 +293,9 @@ pub struct Composed {
     pub active_bonuses: Vec<ActiveBonus>,
     pub cooldowns: Vec<Cooldown>,
     pub warnings: Vec<String>,
+    /// 各套装实际穿戴件数（同门派套装；跨门派装备不计）。
+    #[serde(default)]
+    pub set_counts: BTreeMap<String, usize>,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -311,6 +314,9 @@ pub struct Constraints {
     pub banned_sources: BTreeMap<Slot, Vec<Source>>,
     pub stats: BTreeMap<String, Bounds>,
     pub allow_cross_source_2plus2: bool,
+    /// 必须凑齐的套装件数（set id → 最少件数），如竞技场四件套 { "jingji-armor": 4 }。
+    #[serde(default)]
+    pub required_sets: BTreeMap<String, usize>,
 }
 impl Default for Constraints {
     fn default() -> Self {
@@ -323,6 +329,7 @@ impl Default for Constraints {
             banned_sources: BTreeMap::new(),
             stats: BTreeMap::new(),
             allow_cross_source_2plus2: true,
+            required_sets: BTreeMap::new(),
         }
     }
 }
@@ -338,8 +345,22 @@ pub enum Objective {
         #[serde(default)]
         allow_unapplied_cd: bool,
     },
+    /// 按时间轴连招（含奇穴/秘籍/DOT/引导/曲风/充能/flag）打分；player 由配装合成覆盖。
+    Timeline {
+        request: jpcg_api::TimelineRequestDTO,
+        metric: TimelineMetric,
+    },
 }
-#[derive(Debug, Serialize, Deserialize)]
+
+/// 时间轴连招优化的目标指标。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimelineMetric {
+    TotalDamage,
+    WindowDps,
+    KillProbability,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OptimizeRequest {
     pub loadout: Loadout,

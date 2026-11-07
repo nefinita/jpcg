@@ -136,6 +136,23 @@ mod tests {
     }
 
     #[test]
+    fn panel_uses_engine_quantization_and_percentage_units() {
+        let mut req = request();
+        req.player.huixin_dengji = 250;
+        req.player.pofang_dengji = 333;
+        req.coefficient.huixin_xishu = 1000.0;
+        req.coefficient.pofang_xishu = 1000.0;
+        req.buff.huixin_pct = 5.0;
+        req.buff.pofang_pct = 1.0;
+        req.hostile.jianshang_bili = 10;
+        let stats = panel_stats(req);
+        assert!((stats.huixin_pct - 30.0).abs() < 0.0001);
+        // 引擎截断语义：floor(333*1024/1000)=340 + floor(1*1024/100)=10 → 350。
+        assert_eq!(stats.pofang_pct, 350.0 / 1024.0 * 100.0);
+        assert_eq!(stats.jianshang_pct, 10);
+    }
+
+    #[test]
     fn single_skill_host_keeps_converted_attack_and_haste() {
         let (player, _, _, _, _) = into_core(request());
         assert_eq!(player.jiasu_dengji, 1234);
@@ -149,5 +166,18 @@ mod tests {
                 .unwrap_err()
                 .contains("重新合成配装")
         );
+    }
+}
+
+/// 面板展示与伤害引擎共用换算常数、破防整数精度；不在前端重算。
+pub fn panel_stats(req: CalculateRequest) -> jpcg_api::PanelStatsDTO {
+    let (player, hostile, _, buff, coeff) = into_core(req);
+    let pofang = player
+        .guo_pofang_with(&coeff)
+        .saturating_add((buff.pofang_pct * 1024.0 / 100.0) as u32);
+    jpcg_api::PanelStatsDTO {
+        huixin_pct: (player.guo_huixin_with(&coeff) + buff.huixin_pct / 100.0) * 100.0,
+        pofang_pct: pofang as f32 / 1024.0 * 100.0,
+        jianshang_pct: hostile.jianshang_bili,
     }
 }

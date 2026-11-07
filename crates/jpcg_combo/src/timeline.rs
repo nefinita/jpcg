@@ -12,6 +12,8 @@
 //   - 旧 engine.rs（按步累加）保持不动，作为兼容层。
 // ============================================================================
 
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use std::collections::HashMap;
 
 use jpcg_core::engine::atkcal::JpcgConfig;
@@ -152,6 +154,10 @@ pub enum TimelineAction {
         skill_name: Option<String>,
     },
     SwitchForm(String),
+    /// 计算开始/结束标记（start = 开始，false = 结束）
+    Flag {
+        start: bool,
+    },
 }
 
 impl TimelineAction {
@@ -162,6 +168,11 @@ impl TimelineAction {
             sub_id,
             skill_name: None,
         }
+    }
+
+    /// 计算开始/结束标记
+    pub fn flag(start: bool) -> Self {
+        TimelineAction::Flag { start }
     }
 
     /// 按技能 id + 名称施放（用于同名 id 的多变体，如「入月·9层」）
@@ -198,6 +209,39 @@ pub struct TimelineInput {
     pub hooks: Vec<ActiveHook>,
     /// 模拟窗口（秒）
     pub window: f32,
+    /// 击杀率蒙特卡洛样本数（0 = 不跑 MC，保持纯确定性）
+    pub samples: u32,
+    /// 击杀率随机种子（None = 每次随机；固定便于回归）
+    pub seed: Option<u64>,
+}
+
+/// 单个伤害事件的会心分布（供击杀率蒙特卡洛掷点；确定性总伤用 `q`）。
+#[derive(Debug, Clone, Copy)]
+pub struct DamageDice {
+    pub g: u32,
+    pub h: u32,
+    /// 会心率 0..=1
+    pub rate: f32,
+    /// 无质：伤害固定 = 期望 q，不掷会心
+    pub fixed: bool,
+    pub q: u32,
+    pub lost_hp_factor: f32,
+}
+
+impl DamageDice {
+    fn roll(self, rng: &mut impl Rng) -> u32 {
+        if self.fixed {
+            self.q
+        } else if self.rate <= 0.0 || self.g == self.h {
+            self.g
+        } else if self.rate >= 1.0 {
+            self.h
+        } else if rng.random::<f64>() < self.rate as f64 {
+            self.h
+        } else {
+            self.g
+        }
+    }
 }
 
 /// 事件类型
@@ -212,12 +256,14 @@ pub enum TimelineEventKind {
         gcd_secs: f32,
         /// 该 GCD 通道就绪时刻
         gcd_ready_at: f32,
+        dice: DamageDice,
     },
     /// 引导/倒读条单段结算（`index` 从 1 开始；如徵 3 段）
     ChannelTick {
         skill_name: String,
         index: u32,
         damage: u32,
+        dice: DamageDice,
     },
     /// dot 单跳结算（`index` 从 1 开始）
     DotTick {
@@ -226,6 +272,7 @@ pub enum TimelineEventKind {
         damage: u32,
         /// 是否被洞天/羽提前（UI 可标注）
         advanced: bool,
+        dice: DamageDice,
     },
     /// 器形切换（琴 / 剑）
     FormSwitch { from: String, to: String },
@@ -285,6 +332,13 @@ pub struct TimelineResult {
     /// 序列执行完后的器形 / 曲风
     pub final_instrument: String,
     pub final_qifeng: String,
+    /// 窗口内击杀概率（0..1；samples=0 或未提供血量时为 0）
+    pub final_kill_prob: f64,
+    /// 累计击杀概率曲线：(动作序号 1..=n, 概率 0..1)
+    pub kill_prob_curve: Vec<(usize, f64)>,
+    /// 击杀率测量窗口起止（flag 解析后的时刻；None = 未提供该 flag）
+    pub kill_start: Option<f32>,
+    pub kill_end: Option<f32>,
 }
 
 // ============ 内部运行态 ============
@@ -326,8 +380,8 @@ struct DotInstance {
 }
 
 impl DotInstance {
-    fn per_tick_damage(&self, hostile: &HostilepileConfig, index: usize) -> u32 {
-        let cfg = JpcgConfig::new_with_config(
+    fn tick_dice(&self, hostile: &HostilepileConfig, index: usize) -> DamageDice {
+        let calc = JpcgConfig::new_with_config(
             &self.player,
             hostile,
             &self.skill,
@@ -335,8 +389,35 @@ impl DotInstance {
             &self.buff,
             &self.coeff,
         );
-        let damage = cfg.q_cal();
-        damage.dot_jumps.get(index).copied().unwrap_or(0)
+        let damage = calc.q_cal();
+        let crit_rate = (calc.guo_huixin() + self.skill.huixin_up as f32 / 100.0).clamp(0.0, 1.0);
+        let fixed = self.skill.has_critical_strike;
+        if damage.dot_jumps.is_empty() {
+            DamageDice {
+                g: damage.g_damage,
+                h: damage.h_damage,
+                rate: crit_rate,
+                fixed,
+                q: damage.q_damage,
+                lost_hp_factor: self.skill.lost_hp_zhenshishanghai,
+            }
+        } else {
+            let base_q = damage.dot_jumps.first().copied().unwrap_or(1);
+            let jq = damage.dot_jumps.get(index).copied().unwrap_or(0);
+            let ratio = if base_q > 0 {
+                jq as f32 / base_q as f32
+            } else {
+                1.0
+            };
+            DamageDice {
+                g: (damage.g_damage as f32 * ratio) as u32,
+                h: (damage.h_damage as f32 * ratio) as u32,
+                rate: crit_rate,
+                fixed,
+                q: jq,
+                lost_hp_factor: self.skill.lost_hp_zhenshishanghai,
+            }
+        }
     }
 }
 
@@ -631,15 +712,17 @@ impl<'a> Sim<'a> {
         let cast_time = sk.skill.cast_time_with_haste(rate);
         let hit_time = start + cast_time;
         let buff_cfg = self.buff_at(start);
-        let damage = JpcgConfig::new_with_config(
+        let calc = JpcgConfig::new_with_config(
             &self.input.player,
             &self.input.hostile,
             &sk.skill,
             &self.input.xinfa,
             &buff_cfg,
             &self.input.coeff,
-        )
-        .q_cal();
+        );
+        let damage = calc.q_cal();
+        let crit_rate = (calc.guo_huixin() + sk.skill.huixin_up as f32 / 100.0).clamp(0.0, 1.0);
+        let fixed = sk.skill.has_critical_strike;
 
         // DOT 技能的 q_damage 已是全部跳数之和，伤害由 DotTick 事件按实际跳点计入；
         // 这里只记起手事件，避免与 dot 跳点重复累加。
@@ -686,6 +769,12 @@ impl<'a> Sim<'a> {
         let channel_ticks = sk.skill.channel_ticks.max(1) as u32;
         let channel_cast = sk.skill.channel && channel_ticks > 1;
         let per_tick_damage = ((base_direct as f32) * (1.0 + pct_bonus / 100.0)).max(0.0) as u32;
+        let g_final =
+            ((damage.g_damage as f32) * (1.0 + pct_bonus / 100.0) + flat_bonus).max(0.0) as u32;
+        let h_final =
+            ((damage.h_damage as f32) * (1.0 + pct_bonus / 100.0) + flat_bonus).max(0.0) as u32;
+        let g_tick = ((damage.g_damage as f32) * (1.0 + pct_bonus / 100.0)).max(0.0) as u32;
+        let h_tick = ((damage.h_damage as f32) * (1.0 + pct_bonus / 100.0)).max(0.0) as u32;
         // 施放后更新曲风：先结清消耗，再加获得（上限 9）
         self.qifeng_points = if sk.spend_all_qifeng {
             sk.qifeng_gain.min(MAX_QIFENG)
@@ -707,6 +796,37 @@ impl<'a> Sim<'a> {
                 hit_time,
                 gcd_secs,
                 gcd_ready_at,
+                dice: if channel_cast {
+                    DamageDice {
+                        g: 0,
+                        h: 0,
+                        rate: 0.0,
+                        fixed: true,
+                        q: 0,
+                        lost_hp_factor: 0.0,
+                    }
+                } else {
+                    DamageDice {
+                        g: if damage.dot_jumps.is_empty() {
+                            g_final
+                        } else {
+                            flat_bonus.max(0.0) as u32
+                        },
+                        h: if damage.dot_jumps.is_empty() {
+                            h_final
+                        } else {
+                            flat_bonus.max(0.0) as u32
+                        },
+                        rate: crit_rate,
+                        fixed,
+                        q: direct_damage,
+                        lost_hp_factor: if damage.dot_jumps.is_empty() {
+                            sk.skill.lost_hp_zhenshishanghai
+                        } else {
+                            0.0
+                        },
+                    }
+                },
             },
         });
 
@@ -720,12 +840,31 @@ impl<'a> Sim<'a> {
                 } else {
                     0
                 };
+                let tick_g = if k == 1 {
+                    g_tick + flat_bonus.max(0.0) as u32
+                } else {
+                    g_tick
+                };
+                let tick_h = if k == 1 {
+                    h_tick + flat_bonus.max(0.0) as u32
+                } else {
+                    h_tick
+                };
+                let tick_q = per_tick_damage + bonus;
                 self.events.push(TimelineEvent {
                     time: t,
                     kind: TimelineEventKind::ChannelTick {
                         skill_name: sk.skill.skill_name.clone(),
                         index: k,
-                        damage: per_tick_damage + bonus,
+                        damage: tick_q,
+                        dice: DamageDice {
+                            g: tick_g,
+                            h: tick_h,
+                            rate: crit_rate,
+                            fixed,
+                            q: tick_q,
+                            lost_hp_factor: sk.skill.lost_hp_zhenshishanghai,
+                        },
                     },
                 });
             }
@@ -960,6 +1099,10 @@ impl<'a> Sim<'a> {
         let mut now: f32 = 0.0;
         let mut skipped = 0u32;
         let mut steps: Vec<TimelineStep> = Vec::new();
+        let mut start_flag_time: Option<f32> = None;
+        let mut end_flag_time: Option<f32> = None;
+        // 待吸附的 flag：(step 下标, 是否开始)；时刻由下一个施放的起手决定
+        let mut pending_flags: Vec<(usize, bool)> = Vec::new();
 
         for action in &self.input.actions {
             let ev_start = self.events.len();
@@ -988,6 +1131,10 @@ impl<'a> Sim<'a> {
                         skipped += 1;
                     }
                 }
+                TimelineAction::Flag { start } => {
+                    // flag 不是技能：不占 GCD、不产生事件；时刻吸附到下一个施放的起手
+                    pending_flags.push((steps.len(), *start));
+                }
                 TimelineAction::Cast {
                     skill_id,
                     sub_id,
@@ -1012,6 +1159,16 @@ impl<'a> Sim<'a> {
                                 skipped_reason = "超出模拟窗口".to_string();
                                 skipped += 1;
                             } else {
+                                for (flag_step_idx, is_start) in pending_flags.drain(..) {
+                                    if is_start {
+                                        if start_flag_time.is_none() {
+                                            start_flag_time = Some(start);
+                                        }
+                                    } else if end_flag_time.is_none() {
+                                        end_flag_time = Some(start);
+                                    }
+                                    steps[flag_step_idx].time = Some(start);
+                                }
                                 now = self.cast(index, start);
                             }
                         }
@@ -1071,6 +1228,17 @@ impl<'a> Sim<'a> {
             steps.push(step);
         }
 
+        // 没有后续施放时，末尾标记落在当前动作结束处，不隐式扩展到 300 秒。
+        for (index, is_start) in pending_flags {
+            let time = now.min(self.input.window);
+            if is_start {
+                start_flag_time = Some(time);
+            } else {
+                end_flag_time = Some(time);
+            }
+            steps[index].time = Some(time);
+        }
+
         // ---- 应用「下一跳立刻生效」：把目标 DOT 的最早未跳时间改到触发时刻 ----
         self.accel_events.sort_by(|a, b| a.0.total_cmp(&b.0));
         // 每个 DOT 记录「下一条要被炸的跳」下标；每来一次触发事件就消费一跳，
@@ -1108,14 +1276,15 @@ impl<'a> Sim<'a> {
                 if t > self.input.window {
                     continue;
                 }
-                let dmg = dot.per_tick_damage(&self.input.hostile, i);
+                let dice = dot.tick_dice(&self.input.hostile, i);
                 self.events.push(TimelineEvent {
                     time: t,
                     kind: TimelineEventKind::DotTick {
                         skill_name: dot.skill_name.clone(),
                         index: *dot.tick_labels.get(i).unwrap_or(&(i as u32 + 1)),
-                        damage: dmg,
+                        damage: dice.q,
                         advanced: *dot.advanced.get(i).unwrap_or(&false),
+                        dice,
                     },
                 });
             }
@@ -1123,7 +1292,49 @@ impl<'a> Sim<'a> {
 
         self.events.sort_by(|a, b| a.time.total_cmp(&b.time));
 
+        // 期望通道也逐次扣血结算追加真伤；实际命中时间决定顺序。
+        if let Some(max_hp) = full_hp(&self.input.hostile) {
+            let mut hp = if self.input.hostile.max_hp > 0 && self.input.hostile.current_hp > 0 {
+                (self.input.hostile.current_hp as f64).min(max_hp)
+            } else {
+                max_hp
+            };
+            let mut hits: Vec<(usize, f32)> = self
+                .events
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| {
+                    let time = match &e.kind {
+                        TimelineEventKind::Cast { hit_time, .. } => *hit_time,
+                        TimelineEventKind::ChannelTick { .. }
+                        | TimelineEventKind::DotTick { .. } => e.time,
+                        _ => return None,
+                    };
+                    (time <= self.input.window).then_some((i, time))
+                })
+                .collect();
+            hits.sort_by(|a, b| a.1.total_cmp(&b.1));
+            for (i, _) in hits {
+                match &mut self.events[i].kind {
+                    TimelineEventKind::Cast { damage, dice, .. }
+                    | TimelineEventKind::ChannelTick { damage, dice, .. }
+                    | TimelineEventKind::DotTick { damage, dice, .. } => {
+                        hp = (hp - *damage as f64).max(0.0);
+                        let extra = jpcg_core::engine::atkcal::lost_hp_append_damage(
+                            dice.lost_hp_factor,
+                            max_hp,
+                            hp,
+                        ) as u32;
+                        *damage = damage.saturating_add(extra);
+                        hp = (hp - extra as f64).max(0.0);
+                    }
+                    _ => {}
+                }
+            }
+        }
         let mut total = 0f64;
+        // 区间 DPS 的分母是「实际伤害跨度」，不是固定模拟窗口（否则 10 秒的连招会被 300 秒稀释）。
+        let mut last_damage_time = 0.0f32;
         for e in &self.events {
             match &e.kind {
                 // 读条/引导的伤害在命中时刻结算：只有命中落在窗口内才计入总伤
@@ -1132,22 +1343,91 @@ impl<'a> Sim<'a> {
                 } => {
                     if *hit_time <= self.input.window {
                         total += *damage as f64;
+                        if *damage > 0 {
+                            last_damage_time = last_damage_time.max(*hit_time);
+                        }
                     }
                 }
                 TimelineEventKind::ChannelTick { damage, .. } => {
                     if e.time <= self.input.window {
                         total += *damage as f64;
+                        if *damage > 0 {
+                            last_damage_time = last_damage_time.max(e.time);
+                        }
                     }
                 }
-                TimelineEventKind::DotTick { damage, .. } => total += *damage as f64,
+                TimelineEventKind::DotTick { damage, .. } => {
+                    total += *damage as f64;
+                    if *damage > 0 {
+                        last_damage_time = last_damage_time.max(e.time);
+                    }
+                }
                 _ => {}
             }
         }
-        let window_dps = if self.input.window > 0.0 {
-            total / self.input.window as f64
-        } else {
-            0.0
-        };
+        // 至少 1 秒，避免单次瞬发除零；正常连招取最后一个伤害事件时刻。
+        let span = last_damage_time.max(1.0);
+        let window_dps = total / span as f64;
+
+        // ---- 击杀率蒙特卡洛：在 [start,end] 内独立结算（开始时刻满血重置） ----
+        let kill_start = start_flag_time.unwrap_or(0.0);
+        let kill_end = end_flag_time.unwrap_or(self.input.window);
+        let mut final_kill_prob = 0.0f64;
+        let mut kill_prob_curve: Vec<(usize, f64)> = Vec::new();
+        if self.input.samples > 0 && !steps.is_empty() {
+            if let Some(hp0) = full_hp(&self.input.hostile) {
+                let mut damage_events: Vec<(f32, DamageDice)> = self
+                    .events
+                    .iter()
+                    .filter_map(|e| match &e.kind {
+                        TimelineEventKind::Cast { hit_time, dice, .. } => Some((*hit_time, *dice)),
+                        TimelineEventKind::ChannelTick { dice, .. } => Some((e.time, *dice)),
+                        TimelineEventKind::DotTick { dice, .. } => Some((e.time, *dice)),
+                        _ => None,
+                    })
+                    .filter(|(t, _)| {
+                        kill_end > kill_start && *t >= kill_start - 1e-4 && *t <= kill_end + 1e-4
+                    })
+                    .collect();
+                damage_events.sort_by(|a, b| a.0.total_cmp(&b.0));
+                let n = self.input.samples.max(1) as usize;
+                let mut rng = match self.input.seed {
+                    Some(seed) => StdRng::seed_from_u64(seed),
+                    None => StdRng::from_os_rng(),
+                };
+                let mut kills_at = vec![0u64; steps.len()];
+                for _ in 0..n {
+                    let mut cur = hp0;
+                    let mut killed: Option<f32> = None;
+                    for (t, dice) in &damage_events {
+                        cur = (cur - dice.roll(&mut rng) as f64).max(0.0);
+                        let extra = jpcg_core::engine::atkcal::lost_hp_append_damage(
+                            dice.lost_hp_factor,
+                            hp0,
+                            cur,
+                        );
+                        cur = (cur - extra).max(0.0);
+                        if cur <= 0.0 {
+                            killed = Some(*t);
+                            break;
+                        }
+                    }
+                    if let Some(kt) = killed {
+                        let idx = steps
+                            .iter()
+                            .position(|s| s.time.is_some_and(|tm| tm >= kt))
+                            .unwrap_or(steps.len() - 1);
+                        kills_at[idx] += 1;
+                    }
+                }
+                let mut acc = 0u64;
+                for (i, _) in steps.iter().enumerate() {
+                    acc += kills_at[i];
+                    kill_prob_curve.push((i + 1, acc as f64 / n as f64));
+                }
+                final_kill_prob = kill_prob_curve.last().map(|(_, p)| *p).unwrap_or(0.0);
+            }
+        }
 
         let final_instrument = self.instrument.clone();
         let final_qifeng = self.qifeng_id.clone();
@@ -1159,6 +1439,10 @@ impl<'a> Sim<'a> {
             total_damage: total,
             window_dps,
             skipped_actions: skipped,
+            final_kill_prob,
+            kill_prob_curve,
+            kill_start: start_flag_time,
+            kill_end: end_flag_time,
         }
     }
 }
@@ -1166,6 +1450,17 @@ impl<'a> Sim<'a> {
 /// 运行时序模拟
 /// 战斗内曲风初始值：非战斗获取不建模，进场按满点 9 处理。
 pub const MAX_QIFENG: u8 = 9;
+
+/// 击杀率测量起始满血量：max_hp>0 → max；否则 target_hp → target_hp；都 0 → 无击杀语义。
+fn full_hp(hostile: &HostilepileConfig) -> Option<f64> {
+    if hostile.max_hp > 0 {
+        Some(hostile.max_hp as f64)
+    } else if hostile.target_hp > 0 {
+        Some(hostile.target_hp as f64)
+    } else {
+        None
+    }
+}
 
 pub fn simulate(input: &TimelineInput) -> TimelineResult {
     Sim::new(input).run()
@@ -1261,6 +1556,8 @@ mod tests {
             hooks: Vec::new(),
             actions,
             window,
+            samples: 0,
+            seed: None,
         }
     }
 

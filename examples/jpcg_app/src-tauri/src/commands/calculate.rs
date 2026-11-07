@@ -14,3 +14,15 @@ fn calculate_impl(req: CalculateRequest) -> Result<Vec<SkillResultDTO>, String> 
 fn calculate_impl(req: CalculateRequest) -> Result<Vec<SkillResultDTO>, String> {
     crate::commands::ffi_bridge::call("calculate", &req)
 }
+
+#[tauri::command]
+pub async fn panel_stats(req: CalculateRequest) -> Result<PanelStatsDTO, String> {
+    #[cfg(feature = "static")]
+    {
+        Ok(jpcg_core::host::calc::panel_stats(req))
+    }
+    #[cfg(feature = "dynamic")]
+    {
+        crate::commands::ffi_bridge::call("panel_stats", &req)
+    }
+}

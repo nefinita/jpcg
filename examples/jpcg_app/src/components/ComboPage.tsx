@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type SetStateAction, type Dispatch } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, type SetStateAction, type Dispatch } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type {
-  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, ComboResultDTO, FormData, TimelineResultDTO, CombatBundleDTO, CombatDataDTO,
+  SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, SequenceItem, FormData, TimelineResultDTO, CombatBundleDTO, CombatDataDTO,
 } from "../types";
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
@@ -21,6 +21,7 @@ const QIFENG_NAMES: Record<string, string> = {
   pingsha: "平沙落雁",
 };
 const qifengName = (combat: CombatDataDTO, id: string): string => QIFENG_NAMES[id] ?? id ?? "—";
+type SkillStep = Extract<SequenceItem, { kind: "skill" }>;
 
 interface Props {
   xinfaName?: string;
@@ -40,7 +41,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   }, [setDraft]);
   const { sequence, presetName, poolQuery } = draft;
   const collapsedGroups = useMemo(() => new Set(draft.collapsedGroups), [draft.collapsedGroups]);
-  const setSequence = useCallback((update: SetStateAction<ComboStepDTO[]>) => setDraftField("sequence", update), [setDraftField]);
+  const setSequence = useCallback((update: SetStateAction<SequenceItem[]>) => setDraftField("sequence", update), [setDraftField]);
   const setPresetName = useCallback((value: string) => setDraftField("presetName", value), [setDraftField]);
   const setPoolQuery = useCallback((value: string) => setDraftField("poolQuery", value), [setDraftField]);
   const setCollapsedGroups = useCallback((update: SetStateAction<Set<string>>) => {
@@ -48,7 +49,6 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   }, [setDraftField]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [presets, setPresets] = useState<string[]>([]);
-  const [comboResult, setComboResult] = useState<ComboResultDTO | null>(null);
   const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
   const [combatBundle, setCombatBundle] = useState<CombatBundleDTO | null>(null);
   const [combatError, setCombatError] = useState<string | null>(null);
@@ -72,7 +72,6 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     setDraftField("qixue", (previous) => typeof update === "function"
       ? (update as (value: string[]) => string[])(previous ?? [])
       : update), [setDraftField]);
-  const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
   /** 秘籍配置弹窗（独立入口；左侧选技能，右侧配置 4 个槽） */
@@ -151,14 +150,6 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     writePreference(STORAGE_KEYS.favorites, JSON.stringify([...favs]));
   }, []);
 
-  const calculationRevision = useRef(0);
-  useEffect(() => {
-    ++calculationRevision.current;
-    setComboResult(null);
-    setComputing(false);
-    return () => { ++calculationRevision.current; };
-  }, [sequence, formData, selMiji, selQixue]);
-
   // 技能目录直接用后端打包好的 bundle.skills（已套 overlay），前端不再另取技能池
 
   const pool = combatBundle?.skills ?? [];
@@ -167,7 +158,13 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const skillKey = useCallback((s: SkillPoolItemDTO) => `${s.skill_id}-${s.sub_id ?? 0}`, []);
 
   const addToSequence = useCallback((skill: SkillPoolItemDTO) => {
-    setSequence((prev) => [...prev, { skill, overrides: null }]);
+    setSequence((prev) => [...prev, { kind: "skill", skill, overrides: null }]);
+  }, [setSequence]);
+
+  const addFlag = useCallback((flag: "start" | "end") => {
+    setSequence((prev) => (prev.some((s) => s.kind === "flag" && s.flag === flag)
+      ? prev
+      : [...prev, { kind: "flag", flag }]));
   }, [setSequence]);
 
   const removeFromSequence = useCallback((index: number) => {
@@ -176,7 +173,6 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
 
   const clearSequence = useCallback(() => {
     setSequence([]);
-    setComboResult(null);
   }, [setSequence]);
 
   const toggleFavorite = useCallback((s: SkillPoolItemDTO) => {
@@ -193,36 +189,12 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   }, [sequence, setSequence]);
 
   const updateOverride = useCallback((index: number, overrides: StepOverrideDTO) => {
-    setSequence((prev) => prev.map((s, i) => i === index ? { ...s, overrides } : s));
+    setSequence((prev) => prev.map((s, i) => (i === index && s.kind === "skill" ? { ...s, overrides } : s)));
   }, [setSequence]);
 
   const resetOverride = useCallback((index: number) => {
-    setSequence((prev) => prev.map((s, i) => i === index ? { ...s, overrides: null } : s));
+    setSequence((prev) => prev.map((s, i) => (i === index && s.kind === "skill" ? { ...s, overrides: null } : s)));
   }, [setSequence]);
-
-  const handleCalculate = useCallback(async () => {
-    if (sequence.length === 0 || !formData) return;
-    const revision = ++calculationRevision.current;
-    setComputing(true);
-    try {
-      const data = formData;
-      const req = toCalculateRequest(data);
-      const result = await api.calculateCombo(
-        sequence,
-        req.player,
-        req.hostile,
-        req.xinfa_config,
-        req.buff,
-        req.coefficient,
-        req.value_set,
-      );
-      if (revision === calculationRevision.current) setComboResult(result);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      if (revision === calculationRevision.current) setComputing(false);
-    }
-  }, [sequence, formData, selMiji, selQixue]);
 
   // 面板属性同步后加载门派 combat overlay，填充秘籍/奇穴可选项
   useEffect(() => {
@@ -251,11 +223,15 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   // 改动后自动重算（防抖 + revision 防旧结果覆盖），不再需要手动点按钮。
   const timelineRevision = useRef(0);
   const [timelineBusy, setTimelineBusy] = useState(false);
+  const [showCurve, setShowCurve] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
 
   const runTimeline = useCallback(async () => {
     if (!formData) return;
     const revision = ++timelineRevision.current;
     setTimelineBusy(true);
+    setTimelineError(null);
+    setTimelineResult(null);
     try {
       const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
       const req = toCalculateRequest(formData);
@@ -263,13 +239,15 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         skills: bundle.skills,
         forms: bundle.combat.form,
         timed_buffs: bundle.combat.buff,
-        actions: sequence.map((s) => ({
-          kind: "cast" as const,
-          skill_id: s.skill.skill_id,
-          sub_id: s.skill.sub_id ?? 0,
-          // 同一 (skill_id, sub_id) 可能对应多个变体（入月·N 层），必须带名字消歧
-          skill_name: s.skill.skill_name,
-        })),
+        actions: sequence.map((s) => (s.kind === "flag"
+          ? { kind: "flag" as const, flag: s.flag }
+          : {
+              kind: "cast" as const,
+              skill_id: s.skill.skill_id,
+              sub_id: s.skill.sub_id ?? 0,
+              // 同一 (skill_id, sub_id) 可能对应多个变体（入月·N 层），必须带名字消歧
+              skill_name: s.skill.skill_name,
+            })),
         window: 300,
         player: req.player,
         hostile: req.hostile,
@@ -282,18 +260,21 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         initial_qifeng: bundle.combat.qifeng?.[0] ?? "",
         miji: selMiji,
         qixue: selQixue,
+        samples: 50000,
       });
       if (revision === timelineRevision.current) setTimelineResult(result);
     } catch (err) {
-      if (revision === timelineRevision.current) console.error(err);
+      if (revision === timelineRevision.current) setTimelineError(err instanceof Error ? err.message : String(err));
     } finally {
       if (revision === timelineRevision.current) setTimelineBusy(false);
     }
   }, [formData, combatBundle, sequence, selMiji, selQixue]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     timelineRevision.current += 1;
-    setTimelineBusy(false);
+    setTimelineResult(null);
+    setTimelineError(null);
+    setTimelineBusy(Boolean(formData && sequence.length));
     if (!formData || sequence.length === 0) {
       setTimelineResult(null);
       return;
@@ -308,7 +289,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const handleSavePreset = useCallback(async () => {
     if (!presetName.trim()) return;
     try {
-      await api.saveComboPreset(presetName.trim(), sequence);
+      await api.saveComboPreset(presetName.trim(), sequence.filter((s): s is Extract<SequenceItem, { kind: "skill" }> => s.kind === "skill").map((s) => ({ skill: s.skill, overrides: s.overrides })));
       setDraftField("selectedPreset", presetName.trim());
       setSaveDialog(false);
       setPresets(await api.listComboPresets());
@@ -320,10 +301,9 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const handleLoadPreset = useCallback(async (name: string) => {
     try {
       const preset = await api.loadComboPreset(name);
-      setSequence(preset.steps);
+      setSequence(preset.steps.map((st) => ({ kind: "skill", skill: st.skill, overrides: st.overrides })));
       setPresetName(name);
       setDraftField("selectedPreset", name);
-      setComboResult(null);
     } catch (err) {
       console.error(err);
     }
@@ -453,7 +433,13 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   // 需先同步面板属性（未计算过时 formData 为 null，全 0 提交会让追加真伤恒为 0）
   const noForm = !formData;
   const targetHp = Number(formData?.hostile?.target_hp) || 0;
-  const hasLostHpSkills = sequence.some((s) => (s.skill.lost_hp_zhenshishanghai ?? 0) > 0);
+  const hasLostHpSkills = sequence.some((s) => s.kind === "skill" && (s.skill.lost_hp_zhenshishanghai ?? 0) > 0);
+  const hasStartFlag = sequence.some((s) => s.kind === "flag" && s.flag === "start");
+  const hasEndFlag = sequence.some((s) => s.kind === "flag" && s.flag === "end");
+  const curveData = (timelineResult?.kill_prob_curve ?? []).map(([step, prob]) => ({
+    step: `第${step}招`,
+    prob: Math.round(prob * 10000) / 100,
+  }));
 
   return (
     <div className={styles.page}>
@@ -463,14 +449,12 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           <span className={styles.headerMeta}>逐招排轴 · 时间轴模拟</span>
         </div>
         <div className={styles.headerActions}>
+          <button className={styles.btn} disabled={hasStartFlag} onClick={() => addFlag("start")}
+            title="计算开始：击杀率从下一个施放起手算起">计算开始</button>
+          <button className={styles.btn} disabled={hasEndFlag} onClick={() => addFlag("end")}
+            title="计算结束：击杀率算到下一个施放起手为止">计算结束</button>
           {sequence.length > 0 && (
             <>
-              {!configurationOnly && <>
-                <button className={styles.primaryBtn} onClick={handleCalculate} disabled={computing || noForm}
-                  title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
-                  {computing ? "计算中..." : "计算连招"}
-                </button>
-              </>}
               {timelineBusy && <span className={styles.autoBadge}>自动模拟中…</span>}
               <button className={styles.btn} onClick={clearSequence}>清空</button>
             </>
@@ -496,7 +480,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                 内防 <b>{(Number(formData.hostile?.neigong_fangyu) || 0).toLocaleString()}</b>
               </span>
               <span className={styles.axisChip}>
-                减伤 <b>{((Number(formData.hostile?.jianshang_bili) || 0) * 100).toFixed(0)}%</b>
+                减伤 <b>{(Number(formData.hostile?.jianshang_bili) || 0).toFixed(0)}%</b>
               </span>
             </>
           )}
@@ -641,13 +625,24 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           </div>
           <div className={styles.comboSequence}>
             {sequence.length === 0 ? (
-              <span className={styles.emptyHint}>从下方技能池添加技能到序列</span>
+              <span className={styles.emptyHint}>从左侧技能目录添加技能到序列</span>
             ) : (
               <DragDropContext onDragEnd={onDragEnd}>
                 <Droppable droppableId="sequence" direction="vertical">
                   {(provided) => (
                     <div className={styles.sequenceRow} ref={provided.innerRef} {...provided.droppableProps}>
-                      {sequence.map((item, i) => (
+                      {sequence.map((item, i) => (item.kind === "flag" ? (
+                        <Draggable key={`flag-${item.flag}-${i}`} draggableId={`seq-${i}`} index={i}>
+                          {(provided, snapshot) => (
+                            <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                              className={`${styles.stepCard} ${styles.flagCard} ${snapshot.isDragging ? styles.dragging : ""}`}>
+                              <span className={styles.flagLabel}>{item.flag === "start" ? "计算开始" : "计算结束"}</span>
+                              <span className={styles.stepTime}>{steps[i]?.time != null ? `${steps[i].time!.toFixed(2)}s` : "—"}</span>
+                              <button className={styles.smallBtn} onClick={() => removeFromSequence(i)} title="移除"><IconClose size={14} /></button>
+                            </div>
+                          )}
+                        </Draggable>
+                      ) : (
                         <Draggable key={`${item.skill.skill_id}-${item.skill.sub_id ?? 0}-${i}`} draggableId={`seq-${i}`} index={i}>
                           {(provided, snapshot) => (
                             <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
@@ -696,7 +691,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                             </div>
                           )}
                         </Draggable>
-                      ))}
+                      )))}
                       {provided.placeholder}
                     </div>
                   )}
@@ -719,7 +714,12 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           <div className={styles.panelTitle}>
             模拟伤害记录<span className={styles.panelHint}>按时间轴结算顺序</span>
           </div>
-          {timelineResult ? (
+          {timelineError ? (
+            <div role="alert" className={styles.logEmpty}>
+              <p>模拟失败：{timelineError}</p>
+              <button type="button" onClick={() => void runTimeline()}>重试模拟</button>
+            </div>
+          ) : timelineResult ? (
             <>
               <div className={styles.logScroll}>
                 <TimelineDamageLog events={timelineResult.events} />
@@ -737,6 +737,17 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                   <b>{timelineResult.skipped_actions}</b>
                   <span>未执行动作</span>
                 </div>
+                <div className={styles.totalBox}>
+                  <b>{timelineResult.kill_prob_curve && timelineResult.kill_prob_curve.length > 0
+                    ? `${((timelineResult.final_kill_prob ?? 0) * 100).toFixed(1)}%`
+                    : "—"}</b>
+                  <span>击杀率</span>
+                </div>
+                <button type="button" className={styles.killBtn}
+                  disabled={!timelineResult.kill_prob_curve || timelineResult.kill_prob_curve.length === 0}
+                  onClick={() => setShowCurve(true)}>
+                  曲线
+                </button>
               </div>
             </>
           ) : (
@@ -749,16 +760,16 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
 
       {/* 奇穴盘：同重互斥，第七~九重为混选池（最多 3 个） */}
       {timelineQixue.length > 0 && (
-        <div className={styles.qixueBoard} data-testid="qixue-board">
-          <div className={styles.qixueHead}>
+        <details open className={styles.qixueBoard} data-testid="qixue-board">
+          <summary className={styles.qixueHead}>
             <span>奇穴盘</span>
             <span className={styles.qixueHint}>同重互斥 · 混选 9 选 3</span>
             <span className={styles.qixueLegend}>
               <i className={styles.qixueLegendDot} />
-              虚线 = 引擎未实装（仅记录选择）
+              虚线 = 引擎未实装，暂不可选
             </span>
-            <span className={styles.qixueCount}>已选 {selectedQixueCount} / 9</span>
-          </div>
+            <span className={styles.qixueCount}>已选 {selectedQixueCount} · 点击收起/展开</span>
+          </summary>
           <div className={styles.qixueGrid}>
             {qixueGroups.map((g) => (
               <div className={`${styles.qixueGroup} ${g.mixed ? styles.qixueGroupMixed : ""}`} key={g.label}>
@@ -775,7 +786,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                         type="button"
                         className={`${styles.qixueChip} ${active ? styles.qixueChipActive : ""} ${chip.shelved ? styles.qixueChipShelved : ""}`}
                         aria-pressed={active}
-                        title={chip.shelved ? "引擎暂未建模：仅记录选择，不参与计算" : undefined}
+                        disabled={chip.shelved && !active}
+                        title={chip.shelved ? "引擎暂未建模；已保存的选择请取消" : undefined}
                         onClick={() => toggleQixue(chip.slot, chip.ids, g.mixed)}
                       >
                         {chip.label}
@@ -787,11 +799,31 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
             ))}
 
           </div>
-        </div>
+        </details>
       )}
 
-      {/* 连招结果（图表） */}
-      {!configurationOnly && comboResult && <ComboResultDisplay result={comboResult} />}
+      {/* 击杀概率曲线（悬浮卡片） */}
+      {showCurve && (
+        <div className={styles.curveOverlay} onClick={() => setShowCurve(false)}>
+          <div className={styles.curveCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.curveCardHeader}>
+              <span>击杀概率曲线</span>
+              <button type="button" className={styles.btn} onClick={() => setShowCurve(false)}>关闭</button>
+            </div>
+            <div className={styles.chartContainer}>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={curveData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="step" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v: any) => Number(v) + "%"} />
+                  <Tooltip formatter={(v: any) => Number(v).toFixed(1) + "%"} />
+                  <Line type="monotone" dataKey="prob" stroke="var(--primary-500)" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 秘籍配置（独立入口：左侧技能，右侧 4 个槽位 + 候选） */}
       {mijiOpen && (
@@ -860,7 +892,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       {/* Step adjust modal */}
       {adjustTarget !== null && (
         <StepAdjustModal
-          step={sequence[adjustTarget]}
+          step={sequence[adjustTarget] as SkillStep}
           index={adjustTarget}
           onUpdate={updateOverride}
           onReset={resetOverride}
@@ -872,7 +904,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
 }
 
 function StepAdjustModal({ step, index, onUpdate, onReset, onClose }: {
-  step: ComboStepDTO; index: number;
+  step: SkillStep; index: number;
   onUpdate: (i: number, o: StepOverrideDTO) => void;
   onReset: (i: number) => void;
   onClose: () => void;
@@ -942,130 +974,5 @@ function StepAdjustModal({ step, index, onUpdate, onReset, onClose }: {
         </div>
       </div>
     </div>
-  );
-}
-
-function ComboResultDisplay({ result }: { result: ComboResultDTO }) {
-
-  const curveData = result.kill_prob_curve.map(([step, prob]) => ({
-    step: `第${step}步`,
-    prob: Math.round(prob * 100) / 100,
-  }));
-
-  const barData = result.steps.map((s) => ({
-    name: s.skill_name.length > 4 ? s.skill_name.slice(0, 4) + ".." : s.skill_name,
-    期望: Math.round(s.q_damage / 10000 * 10) / 10,
-    会心: Math.round(s.h_damage / 10000 * 10) / 10,
-    真伤: Math.round((s.lost_hp_zhenshi_damage ?? 0) / 10000 * 10) / 10,
-  }));
-
-  const zhenshiTotal = result.steps.reduce((sum, s) => sum + (s.lost_hp_zhenshi_damage ?? 0), 0);
-  const hasZhenshi = zhenshiTotal > 0;
-
-  return (
-    <section className={styles.comboResult}>
-      <div className={styles.comboResultSummary}>
-        <span>总期望: <strong>{result.total_expected_damage_wan.toFixed(1)}万</strong></span>
-        {hasZhenshi && <span>追加真伤: <strong>{(zhenshiTotal / 10000).toFixed(1)}万</strong></span>}
-        <span>击杀概率: <strong>{(result.final_kill_prob * 100).toFixed(1)}%</strong></span>
-        <span>技能数: {result.steps.length}</span>
-      </div>
-
-      <div className={styles.comboChartSection}>
-        <div className={styles.sectionLabel}>击杀概率曲线</div>
-        <div className={styles.chartContainer}>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={curveData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-              <XAxis dataKey="step" tick={{ fontSize: 10 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v: any) => Number(v) + "%"} />
-              <Tooltip formatter={(v: any) => Number(v).toFixed(1) + "%"} />
-              <Line type="monotone" dataKey="prob" stroke="var(--primary-500)" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className={styles.comboChartSection}>
-        <div className={styles.sectionLabel}>每步伤害对比</div>
-        <div className={styles.chartContainer}>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-              <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: any) => Number(v) + "万"} />
-              <Tooltip formatter={(v: any) => Number(v).toFixed(1) + "万"} />
-              <Bar dataKey="期望" fill="var(--primary-500)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="会心" fill="var(--accent-500)" radius={[3, 3, 0, 0]} />
-              {hasZhenshi && <Bar dataKey="真伤" fill="#ef8354" stackId="zhenshi" radius={[3, 3, 0, 0]} />}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className={styles.comboChartSection}>
-        <div className={styles.sectionLabel}>逐步骤详细数据</div>
-        <table className={styles.comboDetailTable}>
-          <thead>
-            <tr>
-              <th>技能</th><th>普伤</th><th>会心</th><th>期望</th>
-              {hasZhenshi && <th>追加真伤</th>}
-              <th>累计(万)</th><th>击杀概率</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.steps.map((s, i) => {
-              const isFixed = s.has_critical_strike || (s.zhenshishanghai ?? 0) > 0;
-              return (
-              <tr key={i}>
-                <td>
-                  {s.skill_name}
-                  {s.has_critical_strike && (
-                    <span className={styles.comboWuzhiTag}>无质</span>
-                  )}
-                  {(s.zhenshishanghai ?? 0) > 0 && (
-                    <span className={styles.comboWuzhiTag}>真实</span>
-                  )}
-                  {(s.lost_hp_zhenshi_damage ?? 0) > 0 && (
-                    <span className={styles.comboZhenshiTag}>追加真伤</span>
-                  )}
-                  {s.dot_jumps?.length > 0 && (
-                    <div className={styles.comboDotJumps}>
-                      {s.dot_jumps.map((j, k) => (
-                        <span key={k} title={`第${k + 1}跳`}>
-                          {k + 1}:{Math.round(j / 10000 * 10) / 10}万
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </td>
-                {isFixed ? (
-                  <>
-                    <td>-</td>
-                    <td>-</td>
-                  </>
-                ) : (
-                  <>
-                    <td>{Math.round(s.g_damage / 10000 * 10) / 10}万</td>
-                    <td>{Math.round(s.h_damage / 10000 * 10) / 10}万</td>
-                  </>
-                )}
-                <td>{Math.round(s.q_damage / 10000 * 10) / 10}万</td>
-                {hasZhenshi && (
-                  <td>
-                    {(s.lost_hp_zhenshi_damage ?? 0) > 0
-                      ? `${Math.round(s.lost_hp_zhenshi_damage / 10000 * 10) / 10}万`
-                      : "-"}
-                  </td>
-                )}
-                <td>{s.cumulative_mean_wan.toFixed(1)}</td>
-                <td>{(s.kill_prob * 100).toFixed(1)}%</td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }

@@ -363,6 +363,10 @@ impl Catalog {
                 count.1 += usize::from(choice.tier == Tier::Upgraded);
             }
         }
+        let set_counts: BTreeMap<String, usize> = counts
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), v.0))
+            .collect();
         let mut active_bonuses = Vec::new();
         let mut cooldowns = Vec::new();
         for (id, (pieces, upgraded)) in counts {
@@ -432,6 +436,7 @@ impl Catalog {
             active_bonuses,
             cooldowns,
             warnings,
+            set_counts,
         })
     }
 }
