@@ -11,11 +11,17 @@ export interface CalculationSnapshot {
   comboResult?: ComboResultDTO; comboDraft?: ComboDraft;
   loadout?: GearLoadout; composition?: GearComposition; inputKey?: string;
 }
+export interface ManualHydration {
+  xinfa: boolean;
+  coefficient: boolean;
+}
 export interface CockpitState {
   mode: "manual" | "gear";
   loadouts: Record<string, GearLoadout>;
   form: FormData;
   manualReady: boolean;
+  // 旧快照缺少此字段时沿用 manualReady；新快照分别恢复两项元数据。
+  manualHydration?: ManualHydration;
   calculation: CalculationSnapshot | null;
   baseline: CalculationSnapshot | null;
   combo?: { inputKey: string; result: ComboResultDTO };
@@ -77,6 +83,7 @@ function isSnapshot(x: unknown): x is CalculationSnapshot {
 export const cockpitSchema = {
   version: 2,
   validate: (x: unknown): x is CockpitState => record(x) && (x.mode === "manual" || x.mode === "gear") && record(x.loadouts) && Object.entries(x.loadouts).every(([school, loadout]) => isGearLoadout(loadout) && loadout.school === school) && typeof x.manualReady === "boolean"
+    && (x.manualHydration === undefined || (record(x.manualHydration) && typeof x.manualHydration.xinfa === "boolean" && typeof x.manualHydration.coefficient === "boolean"))
     && (x.combo === undefined || (record(x.combo) && typeof x.combo.inputKey === "string" && isComboResult(x.combo.result)))
     && isManualForm(x.form) && (x.calculation === null || isSnapshot(x.calculation)) && (x.baseline === null || isSnapshot(x.baseline)),
   // #95/v1 仍按手动模式恢复，既有表单/结果/基准不丢。
