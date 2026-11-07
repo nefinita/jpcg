@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useLayoutEffect, useRef } from "react";
 import type { FormData, DerivativesOutputDTO } from "../types";
 import * as api from "../api/commands";
 import { toCalculateRequest } from "../utils/normalize";
@@ -16,18 +16,31 @@ export default function OptimizePage({ formData }: Props) {
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [chartAttr, setChartAttr] = useState<string | null>(null);
 
+  // 页面保持挂载，输入切换后旧结果和在途响应都不再属于当前环境。
+  const calculationRevision = useRef(0);
+  useLayoutEffect(() => {
+    ++calculationRevision.current;
+    setOutput(null);
+    setError(null);
+    setLoading(false);
+    setExpandedSkill(null);
+    setChartAttr(null);
+    return () => { ++calculationRevision.current; };
+  }, [formData]);
+
   const handleCalculate = useCallback(async () => {
     if (!formData) return;
+    const revision = ++calculationRevision.current;
     setError(null);
     setLoading(true);
     try {
       const req = toCalculateRequest(formData);
       const data = await api.computeDerivatives(req);
-      setOutput(data);
+      if (revision === calculationRevision.current) setOutput(data);
     } catch (err) {
-      setError(String(err));
+      if (revision === calculationRevision.current) setError(String(err));
     } finally {
-      setLoading(false);
+      if (revision === calculationRevision.current) setLoading(false);
     }
   }, [formData]);
 
