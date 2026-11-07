@@ -12,7 +12,6 @@ import { STORAGE_KEYS } from "../utils/constants";
 import { comboDraftSchema, defaultComboDraft, type ComboDraft } from "../state/cockpit";
 import { formatTimelineEvent } from "./timelineFormat";
 import { TimelineDamageLog } from "./TimelineDamageLog";
-import { checkFormLegality } from "../utils/formLegality";
 import type { MijiDefDTO, QixueDefDTO } from "../types";
 import styles from "./ComboPage.module.css";
 
@@ -32,7 +31,6 @@ interface Props {
 }
 
 export default function ComboPage({ xinfaName, formData, draft: controlledDraft, onDraftChange, configurationOnly = false }: Props) {
-  const [skillPool, setSkillPool] = useState<SkillPoolItemDTO[]>([]);
   const [localDraft, setLocalDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(xinfaName ?? "mowen")}`, defaultComboDraft, comboDraftSchema);
   const draft = controlledDraft ?? localDraft;
   const setDraft = onDraftChange ?? setLocalDraft;
@@ -54,57 +52,85 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const [timelineResult, setTimelineResult] = useState<TimelineResultDTO | null>(null);
   const [combatBundle, setCombatBundle] = useState<CombatBundleDTO | null>(null);
   const [combatError, setCombatError] = useState<string | null>(null);
-  const legality = checkFormLegality(sequence, combatBundle?.combat);
+  // 步骤结果全部由后端给出（施放时刻 / GCD / 切换 / 合法性），前端只渲染
+  const steps = timelineResult?.steps ?? [];
+  const formName = useCallback(
+    (id: string) => combatBundle?.combat.form.find((f) => f.id === id)?.name ?? id,
+    [combatBundle],
+  );
 
-  // #92 秘籍/奇穴：可选列表来自门派 combat overlay，勾选后随请求下发
+  // #92 秘籍/奇穴：可选列表来自门派 combat overlay；勾选结果写进连招草稿（持久化）
   const [timelineMiji, setTimelineMiji] = useState<MijiDefDTO[]>([]);
   const [timelineQixue, setTimelineQixue] = useState<QixueDefDTO[]>([]);
-  const [selMiji, setSelMiji] = useState<string[]>([]);
-  const [selQixue, setSelQixue] = useState<string[]>([]);
+  const selMiji = draft.miji ?? [];
+  const selQixue = draft.qixue ?? [];
+  const setSelMiji = useCallback((update: SetStateAction<string[]>) =>
+    setDraftField("miji", (previous) => typeof update === "function"
+      ? (update as (value: string[]) => string[])(previous ?? [])
+      : update), [setDraftField]);
+  const setSelQixue = useCallback((update: SetStateAction<string[]>) =>
+    setDraftField("qixue", (previous) => typeof update === "function"
+      ? (update as (value: string[]) => string[])(previous ?? [])
+      : update), [setDraftField]);
   const [computing, setComputing] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
-  /** 当前展开秘籍选择器的技能（key = skill_id:sub_id） */
-  const [mijiPicker, setMijiPicker] = useState<string | null>(null);
+  /** 秘籍配置弹窗（独立入口；左侧选技能，右侧配置 4 个槽） */
+  const [mijiOpen, setMijiOpen] = useState(false);
+  const [mijiSkill, setMijiSkill] = useState<SkillPoolItemDTO | null>(null);
+  /** 技能目录过滤：全部 / 琴 / 剑 / 收藏 */
+  const [poolFilter, setPoolFilter] = useState<"all" | "qin" | "jian" | "fav">("all");
 
-  // 奇穴盘：第一重~第六重各选 1；第七~九重为混选池（最多 3 个）
+  // 奇穴盘：分组/顺序/合并全部由后端算好（group_label / group_ids），前端只渲染。
   const qixueGroups = useMemo(() => {
-    const singles = new Map<number, QixueDefDTO[]>();
-    const mixed: QixueDefDTO[] = [];
+    type Chip = { key: string; label: string; ids: string[]; shelved: boolean; slot: number };
+    const mixedFrom = combatBundle?.combat.meta.mixed_slot_from ?? 7;
+    const groups: { label: string; mixed: boolean; chips: Chip[] }[] = [];
     for (const q of timelineQixue) {
-      if (q.slot > 6) {
-        mixed.push(q);
-      } else {
-        const list = singles.get(q.slot) ?? [];
-        list.push(q);
-        singles.set(q.slot, list);
+      const label = q.group_label || `第${["一", "二", "三", "四", "五", "六"][q.slot - 1] ?? "?"}重`;
+      let group = groups[groups.length - 1];
+      if (!group || group.label !== label) {
+        group = { label, mixed: q.slot >= mixedFrom, chips: [] };
+        groups.push(group);
       }
+      group.chips.push({
+        key: q.id,
+        label: q.name,
+        ids: q.group_ids?.length ? q.group_ids : [q.id],
+        shelved: q.shelved ?? false,
+        slot: q.slot,
+      });
     }
-    const label = (slot: number) => `第${["一","二","三","四","五","六"][slot - 1]}重`;
-    const groups = [...singles.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([slot, items]) => ({ slot, items, label: label(slot), mixed: false }));
-    if (mixed.length > 0) groups.push({ slot: 7, items: mixed, label: "混选", mixed: true });
     return groups;
-  }, [timelineQixue]);
+  }, [timelineQixue, combatBundle]);
+  const selectedQixueCount = qixueGroups.reduce(
+    (n, g) => n + g.chips.filter((c) => c.ids.some((id) => selQixue.includes(id))).length,
+    0,
+  );
 
-  const toggleQixue = useCallback((slot: number, id: string, mixed: boolean) => {
+  const toggleQixue = useCallback((slot: number, ids: string[], mixed: boolean) => {
     setSelQixue((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      const sameSlot = new Set(timelineQixue.filter((q) => q.slot === slot).map((q) => q.id));
-      const others = prev.filter((x) => !sameSlot.has(x));
-      if (!mixed) return [...others, id];
-      const mixedIds = new Set(timelineQixue.filter((q) => q.slot > 6).map((q) => q.id));
-      if (others.filter((x) => mixedIds.has(x)).length >= 3) return prev;
-      return [...others, id];
+      const selected = ids.some((id) => prev.includes(id));
+      if (selected) return prev.filter((x) => !ids.includes(x));
+      if (!mixed) {
+        // 固定重数：同一重内互斥
+        const sameSlot = new Set(timelineQixue.filter((q) => q.slot === slot).map((q) => q.id));
+        return [...prev.filter((x) => !sameSlot.has(x)), ...ids];
+      }
+      // 混选池：上限由后端 meta 提供，按「格」计数（后端已把同一奇穴多条效果合并）
+      const mixedFrom = combatBundle?.combat.meta.mixed_slot_from ?? 7;
+      const cap = combatBundle?.combat.meta.mixed_qixue_cap ?? 3;
+      const next = [...prev, ...ids];
+      const picked = timelineQixue.filter(
+        (q) => q.slot >= mixedFrom && (q.group_ids ?? [q.id]).some((id) => next.includes(id)),
+      ).length;
+      if (picked > cap) return prev;
+      return next;
     });
-  }, [timelineQixue]);
+  }, [timelineQixue, combatBundle]);
+
   useEffect(() => {
     let cancelled = false;
-    setSkillPool([]);
-    if (xinfaName) {
-      api.loadSkillPool(xinfaName).then((pool) => { if (!cancelled) setSkillPool(pool); }).catch(() => {});
-    }
     api.listComboPresets().then((names) => { if (!cancelled) setPresets(names); }).catch(() => {});
     const stored = readPreference(STORAGE_KEYS.favorites);
     if (stored) {
@@ -133,7 +159,9 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     return () => { ++calculationRevision.current; };
   }, [sequence, formData, selMiji, selQixue]);
 
-  const pool = skillPool;
+  // 技能目录直接用后端打包好的 bundle.skills（已套 overlay），前端不再另取技能池
+
+  const pool = combatBundle?.skills ?? [];
 
   // 技能唯一标识（同 skill_id 不同 sub_id 形态区分）
   const skillKey = useCallback((s: SkillPoolItemDTO) => `${s.skill_id}-${s.sub_id ?? 0}`, []);
@@ -219,15 +247,20 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     };
   }, [formData?.xinfa_config.profession]);
 
-  // #92 时间轴预览：读门派 combat overlay → DTO 请求 → 时序引擎（窗口伤害 / DPS / 事件）
-  const handleTimeline = useCallback(async () => {
-    if (sequence.length === 0 || !formData) return;
-    setComputing(true);
+  // #92 时间轴模拟：读门派 combat overlay → DTO 请求 → 时序引擎（窗口伤害 / DPS / 事件）
+  // 改动后自动重算（防抖 + revision 防旧结果覆盖），不再需要手动点按钮。
+  const timelineRevision = useRef(0);
+  const [timelineBusy, setTimelineBusy] = useState(false);
+
+  const runTimeline = useCallback(async () => {
+    if (!formData) return;
+    const revision = ++timelineRevision.current;
+    setTimelineBusy(true);
     try {
       const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
       const req = toCalculateRequest(formData);
       const result = await api.calculateTimeline({
-        skills: bundle.skills.length > 0 ? bundle.skills : skillPool,
+        skills: bundle.skills,
         forms: bundle.combat.form,
         timed_buffs: bundle.combat.buff,
         actions: sequence.map((s) => ({
@@ -250,13 +283,27 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         miji: selMiji,
         qixue: selQixue,
       });
-      setTimelineResult(result);
+      if (revision === timelineRevision.current) setTimelineResult(result);
     } catch (err) {
-      console.error(err);
+      if (revision === timelineRevision.current) console.error(err);
     } finally {
-      setComputing(false);
+      if (revision === timelineRevision.current) setTimelineBusy(false);
     }
-  }, [sequence, formData, selMiji, selQixue]);
+  }, [formData, combatBundle, sequence, selMiji, selQixue]);
+
+  useEffect(() => {
+    timelineRevision.current += 1;
+    setTimelineBusy(false);
+    if (!formData || sequence.length === 0) {
+      setTimelineResult(null);
+      return;
+    }
+    const timer = setTimeout(() => { void runTimeline(); }, 350);
+    return () => {
+      clearTimeout(timer);
+      timelineRevision.current += 1;
+    };
+  }, [runTimeline, formData, sequence.length]);
 
   const handleSavePreset = useCallback(async () => {
     if (!presetName.trim()) return;
@@ -340,21 +387,32 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     return Number(player.zuizhong_gongji ?? 0) || Number(player.jichu_gongji ?? 0) || 0;
   })();
 
-  /** 某技能可选的秘籍（skill_id 匹配；sub_id=0 视为对所有变体生效） */
-  const mijiFor = useCallback((skill: SkillPoolItemDTO) =>
-    timelineMiji.filter((m) => m.skill_id === skill.skill_id
-      && ((m.sub_id ?? 0) === 0 || (m.sub_id ?? 0) === (skill.sub_id ?? 0))),
-  [timelineMiji]);
+  /** 某技能可选的秘籍：后端已在 SkillCombatDTO.miji_ids 里配对好，前端只做 id → 数据查找 */
+  const mijiFor = useCallback((skill: SkillPoolItemDTO) => {
+    const def = combatBundle?.combat.skill_combat.find(
+      (sc) => sc.skill_id === skill.skill_id && (sc.sub_id ?? 0) === (skill.sub_id ?? 0),
+    );
+    return (def?.miji_ids ?? [])
+      .map((id) => timelineMiji.find((m) => m.id === id))
+      .filter((m): m is NonNullable<typeof m> => !!m);
+  }, [combatBundle, timelineMiji]);
+
+  /** 秘籍效果文案（后端生成，前端只拼接展示） */
+  const mijiText = useCallback((m: MijiDefDTO) =>
+    m.effects && m.effects.length > 0 ? m.effects.join("，") : "无数值效果", []);
 
   /** 切换某技能的秘籍：同一技能最多 4 个（游戏内秘籍槽位） */
+  const mijiSkills = useMemo(() => pool.filter((s) => mijiFor(s).length > 0), [pool, mijiFor]);
+
   const toggleMiji = useCallback((skill: SkillPoolItemDTO, id: string) => {
     setSelMiji((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
+      const cap = combatBundle?.combat.meta.miji_per_skill_cap ?? 4;
       const equipped = mijiFor(skill).filter((m) => prev.includes(m.id)).length;
-      if (equipped >= 4) return prev;
+      if (equipped >= cap) return prev;
       return [...prev, id];
     });
-  }, [mijiFor]);
+  }, [mijiFor, combatBundle]);
 
   /** 技能卡的时序标签：吟唱 / 调息 / 充能 */
   const castLabel = useCallback((skill: SkillPoolItemDTO) => {
@@ -366,31 +424,31 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     return parts.join(" · ");
   }, []);
 
-  /** 每一步的模拟时间、GCD 与其前的器形/曲风切换事件 */
-  const stepMeta = useMemo(() => {
-    type Switch = { switchKind: "form" | "qifeng"; from: string; to: string; time: number };
-    const casts: { time: number; gcd: number }[] = [];
-    const switches: Switch[] = [];
-    for (const e of timelineResult?.events ?? []) {
-      if (e.kind.kind === "cast") casts.push({ time: e.time, gcd: e.kind.gcd_secs ?? 0 });
-      else if (e.kind.kind === "form_switch") switches.push({ switchKind: "form", from: e.kind.from, to: e.kind.to, time: e.time });
-      else if (e.kind.kind === "qifeng_switch") switches.push({ switchKind: "qifeng", from: e.kind.from, to: e.kind.to, time: e.time });
-    }
-    let castIdx = 0;
-    let swIdx = 0;
-    return sequence.map((_, i) => {
-      const legal = legality[i]?.legal ?? true;
-      const cast = legal && castIdx < casts.length ? casts[castIdx] : null;
-      const threshold = cast ? cast.time : Number.POSITIVE_INFINITY;
-      const before: Switch[] = [];
-      while (swIdx < switches.length && switches[swIdx].time <= threshold) {
-        before.push(switches[swIdx]);
-        swIdx += 1;
-      }
-      if (cast) castIdx += 1;
-      return { time: cast ? cast.time : null, gcd: cast?.gcd ?? 0, switches: before };
+  const tileSkills = useMemo(() => {
+    const all = groups
+      .flatMap(([, items]) => items)
+      // 奇穴门控技能：未激活对应奇穴时不出现在技能目录
+      .filter((s) => {
+        const def = combatBundle?.combat.skill_combat.find(
+          (sc) => sc.skill_id === s.skill_id && (sc.sub_id ?? 0) === (s.sub_id ?? 0),
+        );
+        // 后端已把门控奇穴解析成 qixue id，前端只做激活集合判断
+        const gate = def?.jihuoqixue_id ?? def?.jihuoqixue;
+        return !gate || selQixue.includes(gate);
+      });
+    if (poolFilter === "all") return all;
+    if (poolFilter === "fav") return all.filter((s) => favorites.has(skillKey(s)));
+    return all.filter((s) => {
+      const def = combatBundle?.combat.skill_combat.find(
+        (sc) => sc.skill_id === s.skill_id && (sc.sub_id ?? 0) === (s.sub_id ?? 0),
+      );
+      const instrument = def?.requires_instrument ?? "qin";
+      return instrument === poolFilter;
     });
-  }, [sequence, legality, timelineResult]);
+  }, [groups, poolFilter, favorites, skillKey, combatBundle, selQixue]);
+
+
+  const activeMijiSkill = mijiSkill ?? mijiSkills[0] ?? null;
 
   // 需先同步面板属性（未计算过时 formData 为 null，全 0 提交会让追加真伤恒为 0）
   const noForm = !formData;
@@ -412,14 +470,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                   title={noForm ? "请先在「计算器」页输入属性并点击计算，同步面板与目标血量" : ""}>
                   {computing ? "计算中..." : "计算连招"}
                 </button>
-                <button className={styles.btn} onClick={handleTimeline}
-                  disabled={computing || noForm || legality.some((s) => !s.legal)}
-                  title={legality.some((s) => !s.legal)
-                    ? "序列中存在当前形态不可用的技能，引擎会跳过；请先调整顺序或去掉这些技能"
-                    : "按当前序列跑时间轴（GCD / 读条 / CD / 形态 / buff / dot）"}>
-                  {computing ? "计算中..." : "时间轴预览"}
-                </button>
               </>}
+              {timelineBusy && <span className={styles.autoBadge}>自动模拟中…</span>}
               <button className={styles.btn} onClick={clearSequence}>清空</button>
             </>
           )}
@@ -429,10 +481,10 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       {combatBundle && (
         <div className={styles.axisBar} data-testid="axis-bar">
           <span className={styles.axisChip}>
-            器形 <b>{legality.length > 0 ? legality[legality.length - 1].form : (combatBundle.combat.form.find((f) => f.initial)?.name ?? "—")}</b>
+            器形 <b>{formName(timelineResult?.final_instrument || (combatBundle.combat.form.find((f) => f.initial)?.id ?? ""))}</b>
           </span>
           <span className={styles.axisChip}>
-            曲风 <b>{legality.length > 0 ? qifengName(combatBundle.combat, legality[legality.length - 1].qifeng) : qifengName(combatBundle.combat, combatBundle.combat.qifeng?.[0] ?? "")}</b>
+            曲风 <b>{qifengName(combatBundle.combat, timelineResult?.final_qifeng || combatBundle.combat.qifeng?.[0] || "")}</b>
           </span>
           {formData && (
             <>
@@ -476,9 +528,9 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         </div>
       )}
       {configurationOnly && <p className={styles.zhenshiHint}>草稿自动保存；切回计算驾驶台查看连招伤害与击杀率。</p>}
-      {!configurationOnly && legality.some((s) => !s.legal) && (
+      {!configurationOnly && steps.some((step) => !step.legal) && (
         <div className={styles.warnBanner}>
-          序列中有 {legality.filter((s) => !s.legal).length} 个技能在当前形态下不可用（已标红）；时间轴会跳过它们，建议调整顺序或换技能。
+          序列中有 {steps.filter((step) => !step.legal).length} 个技能在当前形态下不可用（已标红）；时间轴会跳过它们，建议调整顺序或换技能。
         </div>
       )}
       {!noForm && targetHp <= 0 && (
@@ -495,8 +547,14 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       <div className={styles.mainGrid}>
         {/* 左：技能目录 */}
         <aside className={styles.catalogPanel}>
-          <div className={styles.panelTitle}>
-            技能目录<span className={styles.panelHint}>点击加入排轴 · 右键收藏</span>
+          <div className={styles.catalogHeader}>
+            <div className={styles.panelTitle}>
+              技能目录<span className={styles.panelHint}>点击加入排轴 · 右键收藏</span>
+            </div>
+            <button type="button" className={styles.mijiEntryBtn}
+              onClick={() => { setMijiSkill(null); setMijiOpen(true); }}>
+              秘籍配置
+            </button>
           </div>
           <div className={styles.presetBar}>
             <select className={styles.presetSelect} value={presets.includes(draft.selectedPreset) ? draft.selectedPreset : ""} onChange={(e) => e.target.value && handleLoadPreset(e.target.value)}>
@@ -526,112 +584,53 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
               value={poolQuery}
               onChange={(e) => setPoolQuery(e.target.value)}
             />
-            <button className={styles.smallBtn} onClick={expandAll} title="展开全部组">展开</button>
-            <button className={styles.smallBtn} onClick={collapseAll} title="折叠全部组">折叠</button>
+          </div>
+          <div className={styles.filterRow}>
+            {([["all", "全部"], ["qin", "曲"], ["jian", "剑"], ["fav", "已收藏"]] as const).map(([key, label]) => (
+              <button key={key} type="button"
+                className={`${styles.filterChip} ${poolFilter === key ? styles.filterChipOn : ""}`}
+                onClick={() => setPoolFilter(key)}>
+                {label}
+              </button>
+            ))}
           </div>
           <div className={styles.comboPool}>
-            {groups.map(([name, items]) => {
-              const collapsed = collapsedGroups.has(name);
-              const hasMulti = items.length > 1;
-              return (
-                <div key={name} className={styles.poolGroup}>
-                  <button
-                    className={styles.poolGroupHeader}
-                    onClick={() => hasMulti && toggleGroup(name)}
-                    title={hasMulti ? "点击折叠/展开" : ""}
-                  >
-                    <span className={styles.poolGroupArrow}>{hasMulti ? (collapsed ? "▸" : "▾") : ""}</span>
-                    <span className={styles.poolGroupName}>{name}</span>
-                    {hasMulti && <span className={styles.poolGroupCount}>{items.length}种形态</span>}
-                  </button>
-                  {!collapsed && (
-                    <div className={styles.poolGroupItems}>
-                      {items.map((s, itemIndex) => {
-                        const key = skillKey(s);
-                        const fav = favorites.has(key);
-                        const def = combatBundle?.combat.skill_combat.find(
-                          (sc) => sc.skill_id === s.skill_id && (sc.sub_id ?? 0) === (s.sub_id ?? 0),
-                        );
-                        const instrument = def?.requires_instrument ?? null;
-                        const accent = instrument === "jian" ? styles.cardJian : styles.cardQin;
-                        const qifengNeed = def?.requires_qifeng ?? null;
-                        const miji = mijiFor(s);
-                        const bonus = attackValue > 0 ? Math.round(s.atk_xishu * attackValue) : 0;
-                        return (
-                          <div key={`${key}-${itemIndex}`}
-                            data-skill-card={key}
-                            data-skill-name={s.skill_name}
-                            className={`${styles.skillCard} ${accent} ${fav ? styles.favoriteCard : ""}`}
-                            onClick={() => addToSequence(s)}
-                            onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}
-                            title={`${s.skill_name} | 基础伤害 ${s.base_damage1}-${s.base_damage2} | 系数 ${s.atk_xishu}${fav ? " · 已收藏" : " · 右键标记收藏"}`}>
-                            {miji.length > 0 && <div className={styles.cardMijiSlots}>
-                              {[0, 1, 2, 3].map((slot) => {
-                                const equipped = miji.filter((m) => selMiji.includes(m.id))[slot];
-                                return (
-                                  <button
-                                    key={slot}
-                                    type="button"
-                                    className={`${styles.mijiSlot} ${equipped ? styles.mijiSlotOn : ""}`}
-                                    title={equipped ? `秘籍：${equipped.name}（点击卸下）` : `秘籍槽 ${slot + 1}（点击选择）`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (equipped) setSelMiji((prev) => prev.filter((x) => x !== equipped.id));
-                                      else setMijiPicker(mijiPicker === key ? null : key);
-                                    }}
-                                  >
-                                    {equipped ? equipped.name : "＋"}
-                                  </button>
-                                );
-                              })}
-                            </div>}
-                            <div className={styles.cardBody}>
-                            <div className={styles.cardHead}>
-                              <span className={styles.cardName}>{s.skill_name}</span>
-                              {qifengNeed && (
-                                <span className={styles.cardBadge}>需{combatBundle ? qifengName(combatBundle.combat, qifengNeed) : qifengNeed}</span>
-                              )}
-                              <span className={styles.cardTag}>{castLabel(s)}</span>
-                            </div>
-                            <div className={styles.cardDamage}>
-                              {s.base_damage1}–{s.base_damage2}
-                              {bonus > 0 && <span className={styles.cardBonus}> (+{bonus.toLocaleString()})</span>}
-                              {(s.dot_flag ?? 0) > 0 && <span className={styles.cardDot}> · 持续伤害</span>}
-                              {s.lost_hp_zhenshishanghai > 0 && (
-                                <span className={styles.comboZhenshiTag}>真伤{(s.lost_hp_zhenshishanghai * 100).toFixed(0)}%</span>
-                              )}
-                            </div>
-                            {fav && <span className={styles.starIcon}><IconStar size={12} /></span>}
-                            </div>
-                            {mijiPicker === key && (
-                              <div className={styles.mijiPicker} onClick={(e) => e.stopPropagation()}>
-                                <div className={styles.mijiPickerHead}>
-                                  <span>{s.skill_name} · 秘籍（{miji.filter((m) => selMiji.includes(m.id)).length}/4）</span>
-                                  <button type="button" className={styles.mijiPickerClose} onClick={() => setMijiPicker(null)}>×</button>
-                                </div>
-                                <div className={styles.mijiPickerList}>
-                                  {miji.map((m) => (
-                                    <button key={m.id} type="button"
-                                      className={`${styles.mijiOption} ${selMiji.includes(m.id) ? styles.mijiOptionOn : ""}`}
-                                      onClick={() => toggleMiji(s, m.id)}>
-                                      {m.name}
-                                    </button>
-                                  ))}
-                                  {miji.length === 0 && <span className={styles.mijiEmpty}>该技能没有秘籍</span>}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {groups.length === 0 && (
-              <span className={styles.emptyHint}>{pool.length === 0 ? "先选择心法加载技能池" : "没有匹配的技能"}</span>
-            )}
+            <div className={styles.tileGrid}>
+              {tileSkills.map((s, itemIndex) => {
+                const key = skillKey(s);
+                const fav = favorites.has(key);
+                const def = combatBundle?.combat.skill_combat.find(
+                  (sc) => sc.skill_id === s.skill_id && (sc.sub_id ?? 0) === (s.sub_id ?? 0),
+                );
+                const accent = def?.requires_instrument === "jian" ? styles.tileJian : styles.tileQin;
+                const qifengNeed = def?.requires_qifeng ?? null;
+                const miji = mijiFor(s);
+                const equipped = miji.filter((m) => selMiji.includes(m.id)).length;
+                return (
+                  <div key={`${key}-${itemIndex}`}
+                    data-skill-card={key}
+                    data-skill-name={s.skill_name}
+                    className={`${styles.skillTile} ${accent} ${fav ? styles.favoriteTile : ""}`}
+                    onClick={() => addToSequence(s)}
+                    onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}
+                    title={`${s.skill_name} | ${s.base_damage1}-${s.base_damage2}${qifengNeed ? ` | 需${qifengNeed}` : ""}${fav ? " · 已收藏" : " · 右键收藏"}`}>
+                    <span className={styles.tileName}>{s.skill_name}</span>
+                    <span className={styles.tileTag}>{castLabel(s)}</span>
+                    {miji.length > 0 && (
+                      <button type="button" className={`${styles.tileGear} ${equipped > 0 ? styles.tileGearOn : ""}`}
+                        title="秘籍配置"
+                        onClick={(e) => { e.stopPropagation(); setMijiSkill(s); setMijiOpen(true); }}>
+                        {equipped}/4
+                      </button>
+                    )}
+                    {fav && <span className={styles.tileStar}><IconStar size={10} /></span>}
+                  </div>
+                );
+              })}
+              {groups.length === 0 && (
+                <span className={styles.emptyHint}>{pool.length === 0 ? "先选择心法加载技能池" : "没有匹配的技能"}</span>
+              )}
+            </div>
           </div>
         </aside>
 
@@ -652,47 +651,42 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                         <Draggable key={`${item.skill.skill_id}-${item.skill.sub_id ?? 0}-${i}`} draggableId={`seq-${i}`} index={i}>
                           {(provided, snapshot) => (
                             <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
-                              className={`${styles.stepCard} ${snapshot.isDragging ? styles.dragging : ""} ${legality[i] && !legality[i].legal ? styles.illegalStep : ""}`}
-                              title={legality[i] && !legality[i].legal ? `当前形态「${legality[i].form}」下不可用，需要「${legality[i].requiredForm}」` : undefined}>
-                              {(stepMeta[i]?.switches ?? []).map((sw, si) => (
+                              className={`${styles.stepCard} ${snapshot.isDragging ? styles.dragging : ""} ${steps[i] && !steps[i].legal ? styles.illegalStep : ""}`}
+                              title={steps[i] && !steps[i].legal ? `${steps[i].skipped_reason}${steps[i].required_instrument ? `，需要器形「${formName(steps[i].required_instrument!)}」` : ""}${steps[i].required_qifeng ? `，需要曲风「${qifengName(combatBundle?.combat ?? ({} as never), steps[i].required_qifeng!)}」` : ""}` : undefined}>
+                              {(steps[i]?.switches ?? []).map((sw, si) => (
                                 <div key={`sw-${si}`} className={styles.stepSwitch}>
-                                  <span className={styles.stepSwitchKind}>{sw.switchKind === "form" ? "器形" : "曲风"}</span>
+                                  <span className={styles.stepSwitchKind}>{sw.switch_kind === "form" ? "器形" : "曲风"}</span>
                                   <span className={styles.stepSwitchArrow}>⇄</span>
                                   <span className={styles.stepSwitchTo}>
-                                    {sw.switchKind === "form"
-                                      ? (combatBundle?.combat.form.find((f) => f.id === sw.to)?.name ?? sw.to)
-                                      : (combatBundle ? qifengName(combatBundle.combat, sw.to) : sw.to)}
+                                    {sw.switch_kind === "form" ? formName(sw.to) : qifengName(combatBundle?.combat ?? ({} as never), sw.to)}
                                   </span>
                                 </div>
                               ))}
                               <div className={styles.stepRow}>
                                 <span className={styles.stepTime}>
-                                  {stepMeta[i]?.time != null ? `${stepMeta[i].time!.toFixed(2)}s` : "—"}
+                                  {steps[i]?.time != null ? `${steps[i].time!.toFixed(2)}s` : "—"}
                                 </span>
                                 <span className={styles.comboIndex}>{i + 1}</span>
                                 <span className={styles.comboMain}>
                                   <span className={styles.comboName}>{item.skill.skill_name}</span>
                                   <span className={styles.comboMeta}>
-                                    {legality[i]
-                                      ? `${legality[i].form} · ${combatBundle ? qifengName(combatBundle.combat, legality[i].qifeng) : legality[i].qifeng}`
+                                    {steps[i]
+                                      ? `${formName(steps[i].instrument)} · ${qifengName(combatBundle?.combat ?? ({} as never), steps[i].qifeng)}`
                                       : "—"}
                                   </span>
                                   {selMiji.length > 0 && (
                                     <span className={styles.stepMiji}>
-                                      {selMiji
-                                        .map((id) => timelineMiji.find((m) => m.id === id))
-                                        .filter((m): m is NonNullable<typeof m> => !!m
-                                          && m.skill_id === item.skill.skill_id
-                                          && ((m.sub_id ?? 0) === 0 || (m.sub_id ?? 0) === (item.skill.sub_id ?? 0)))
+                                      {mijiFor(item.skill)
+                                        .filter((m) => selMiji.includes(m.id))
                                         .map((m) => (
-                                          <span key={m.id} className={styles.mijiPillOn}>{m.name}</span>
+                                          <span key={m.id} className={styles.mijiPillOn}>{mijiText(m)}</span>
                                         ))}
                                     </span>
                                   )}
                                 </span>
-                                {legality[i] && !legality[i].legal && <span className={styles.illegalBadge}>非法</span>}
+                                {steps[i] && !steps[i].legal && <span className={styles.illegalBadge}>非法</span>}
                                 <span className={styles.stepGcd}>
-                                  {stepMeta[i]?.gcd ? `GCD ${stepMeta[i].gcd.toFixed(2)}s` : ""}
+                                  {steps[i]?.gcd_secs ? `GCD ${steps[i].gcd_secs.toFixed(2)}s` : ""}
                                 </span>
                                 <span className={styles.comboActions}>
                                   <button className={styles.smallBtn} onClick={() => setAdjustTarget(adjustTarget === i ? null : i)} title="调整系数"><IconGear size={14} /></button>
@@ -713,8 +707,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           {timelineResult && (
             <div className={styles.boardStats}>
               <span>当前序列 <b>{sequence.length}</b> 步</span>
-              <span>形态/曲风切换 <b>{stepMeta.reduce((n, m) => n + m.switches.length, 0)}</b> 次</span>
-              <span>非法步骤 <b>{legality.filter((s) => !s.legal).length}</b></span>
+              <span>形态/曲风切换 <b>{steps.reduce((n, step) => n + step.switches.length, 0)}</b> 次</span>
+              <span>非法步骤 <b>{steps.filter((step) => !step.legal).length}</b></span>
               <span>未执行动作 <b>{timelineResult.skipped_actions}</b></span>
             </div>
           )}
@@ -747,7 +741,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
             </>
           ) : (
             <div className={styles.logEmpty}>
-              点「时间轴预览」后，这里按时间列出每次施放/持续伤害与累计伤害
+              排轴、秘籍或奇穴一变，这里会自动按时间列出每次施放/持续伤害与累计伤害
             </div>
           )}
         </aside>
@@ -759,26 +753,35 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           <div className={styles.qixueHead}>
             <span>奇穴盘</span>
             <span className={styles.qixueHint}>同重互斥 · 混选 9 选 3</span>
-            <span className={styles.qixueCount}>已选 {selQixue.length} / 9</span>
+            <span className={styles.qixueLegend}>
+              <i className={styles.qixueLegendDot} />
+              虚线 = 引擎未实装（仅记录选择）
+            </span>
+            <span className={styles.qixueCount}>已选 {selectedQixueCount} / 9</span>
           </div>
           <div className={styles.qixueGrid}>
             {qixueGroups.map((g) => (
-              <div className={`${styles.qixueGroup} ${g.mixed ? styles.qixueGroupMixed : ""}`} key={g.slot}>
+              <div className={`${styles.qixueGroup} ${g.mixed ? styles.qixueGroupMixed : ""}`} key={g.label}>
                 <div className={styles.qixueGroupLabel}>
                   {g.label}
                   {g.mixed && <span className={styles.qixueGroupHint}>9 选 3</span>}
                 </div>
                 <div className={styles.qixueGroupChips}>
-                  {g.items.map((q) => (
-                    <button
-                      key={q.id}
-                      type="button"
-                      className={`${styles.qixueChip} ${selQixue.includes(q.id) ? styles.qixueChipActive : ""}`}
-                      onClick={() => toggleQixue(g.slot, q.id, g.mixed)}
-                    >
-                      {q.name}
-                    </button>
-                  ))}
+                  {g.chips.map((chip) => {
+                    const active = chip.ids.some((id) => selQixue.includes(id));
+                    return (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        className={`${styles.qixueChip} ${active ? styles.qixueChipActive : ""} ${chip.shelved ? styles.qixueChipShelved : ""}`}
+                        aria-pressed={active}
+                        title={chip.shelved ? "引擎暂未建模：仅记录选择，不参与计算" : undefined}
+                        onClick={() => toggleQixue(chip.slot, chip.ids, g.mixed)}
+                      >
+                        {chip.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -789,6 +792,70 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
 
       {/* 连招结果（图表） */}
       {!configurationOnly && comboResult && <ComboResultDisplay result={comboResult} />}
+
+      {/* 秘籍配置（独立入口：左侧技能，右侧 4 个槽位 + 候选） */}
+      {mijiOpen && (
+        <div className={styles.mijiOverlay} onClick={() => setMijiOpen(false)}>
+          <div className={styles.mijiModal} onClick={(e) => e.stopPropagation()} data-testid="miji-config">
+            <div className={styles.mijiModalHeader}>
+              <span>秘籍配置</span>
+              <button onClick={() => setMijiOpen(false)} aria-label="关闭">×</button>
+            </div>
+            <div className={styles.mijiModalBody}>
+              <div className={styles.mijiLayout}>
+                <div className={styles.mijiSkillList}>
+                  {mijiSkills.map((s) => {
+                    const active = activeMijiSkill
+                      && activeMijiSkill.skill_id === s.skill_id
+                      && (activeMijiSkill.sub_id ?? 0) === (s.sub_id ?? 0);
+                    const count = mijiFor(s).filter((m) => selMiji.includes(m.id)).length;
+                    return (
+                      <button key={skillKey(s)} type="button"
+                        className={`${styles.mijiSkillItem} ${active ? styles.mijiSkillItemOn : ""}`}
+                        onClick={() => setMijiSkill(s)}>
+                        <span>{s.skill_name}</span>
+                        <span className={styles.mijiSkillCount}>{count}/4</span>
+                      </button>
+                    );
+                  })}
+                  {mijiSkills.length === 0 && <span className={styles.mijiEmpty}>没有可配置秘籍的技能</span>}
+                </div>
+                <div className={styles.mijiDetail}>
+                  {activeMijiSkill ? (
+                    <>
+                      <div className={styles.mijiDetailTitle}>
+                        {activeMijiSkill.skill_name}
+                        <span>{mijiFor(activeMijiSkill).filter((m) => selMiji.includes(m.id)).length}/4</span>
+                      </div>
+                      <div className={styles.mijiConfigSlots}>
+                        {[0, 1, 2, 3].map((slot) => {
+                          const equipped = mijiFor(activeMijiSkill).filter((m) => selMiji.includes(m.id))[slot];
+                          return (
+                            <span key={slot} className={`${styles.mijiConfigSlot} ${equipped ? styles.mijiConfigSlotOn : ""}`}>
+                              {equipped ? mijiText(equipped) : `空槽 ${slot + 1}`}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <div className={styles.mijiConfigList}>
+                        {mijiFor(activeMijiSkill).map((m) => (
+                          <button key={m.id} type="button"
+                            className={`${styles.mijiOption} ${selMiji.includes(m.id) ? styles.mijiOptionOn : ""}`}
+                            onClick={() => toggleMiji(activeMijiSkill, m.id)}>
+                            {mijiText(m)}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <span className={styles.mijiEmpty}>选择左侧技能配置秘籍</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Step adjust modal */}
       {adjustTarget !== null && (

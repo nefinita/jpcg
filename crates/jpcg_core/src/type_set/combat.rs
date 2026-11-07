@@ -62,6 +62,10 @@ pub struct OnCast {
     pub gcd_lanes: Vec<String>,
     /// 施放后直接把指定技能顶进 GCD（把该技能置为不可用至本次 GCD 结束）
     pub lock_skills: Vec<SkillKey>,
+    /// 施放时让指定技能的持续伤害「下一跳」立刻生效（如羽：商/角下两跳）
+    pub advance_dot_targets: Vec<SkillKey>,
+    /// 施放时提前的跳数（0/1 = 1 跳）
+    pub advance_dot_ticks: u8,
 }
 
 /// 单个技能的时序 overlay（`[[skill_combat]]`）
@@ -97,6 +101,8 @@ pub struct SkillCombatDef {
     pub cd_haste: Option<bool>,
     /// 是否引导技能
     pub channel: Option<bool>,
+    /// 引导/倒读条跳数（如徵 3 段；None = 1 段）
+    pub channel_ticks: Option<u8>,
     /// 施放后施加的定时 buff id（空 = 不施加）
     pub buff_id: Option<String>,
     /// 技能激活所需奇穴 id（空 = 不限；用于奇穴主动技能门控）
@@ -105,6 +111,17 @@ pub struct SkillCombatDef {
     pub qifeng_gain: Option<u8>,
     /// 施放消耗全部曲风（None = false）
     pub spend_all_qifeng: Option<bool>,
+    /// ---- DOT（独立于本体伤害的持续伤害；None = 无 DOT） ----
+    /// 每跳间隔（秒）
+    pub dot_interval: Option<f32>,
+    /// 总持续时长（秒）
+    pub dot_duration: Option<f32>,
+    /// 每跳基础伤害下限
+    pub dot_tick_base1: Option<u32>,
+    /// 每跳基础伤害上限
+    pub dot_tick_base2: Option<u32>,
+    /// 每跳攻击系数（伤害 = base + 攻击力 × 系数）
+    pub dot_tick_xishu: Option<f32>,
 }
 
 impl SkillCombatDef {
@@ -138,6 +155,9 @@ impl SkillCombatDef {
         }
         if let Some(v) = self.channel {
             skill.channel = v;
+        }
+        if let Some(v) = self.channel_ticks {
+            skill.channel_ticks = v.max(1);
         }
         if let Some(v) = &self.buff_id {
             skill.buff_id = v.clone();
@@ -259,6 +279,30 @@ impl CombatData {
             {
                 errors.push(format!(
                     "skill_combat {}:{}: cooldown 非法",
+                    sc.skill_id, sc.sub_id
+                ));
+            }
+            if let Some(i) = sc.dot_interval
+                && (!i.is_finite() || i <= 0.0)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: dot_interval 必须为正数",
+                    sc.skill_id, sc.sub_id
+                ));
+            }
+            if let Some(d) = sc.dot_duration
+                && (!d.is_finite() || d < 0.0)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: dot_duration 非法",
+                    sc.skill_id, sc.sub_id
+                ));
+            }
+            if let Some(x) = sc.dot_tick_xishu
+                && (!x.is_finite() || x < 0.0)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: dot_tick_xishu 非法",
                     sc.skill_id, sc.sub_id
                 ));
             }

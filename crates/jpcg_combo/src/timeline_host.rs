@@ -9,7 +9,7 @@
 
 use jpcg_api::{
     CombatDataDTO, TimelineActionDTO, TimelineEventDTO, TimelineEventKindDTO, TimelineRequestDTO,
-    TimelineResultDTO,
+    TimelineResultDTO, TimelineStepDTO, TimelineStepSwitchDTO,
 };
 use jpcg_core::type_set::buff::TimedBuffDef;
 use jpcg_core::type_set::combat::{CombatData, FormDef};
@@ -87,12 +87,25 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
                     spend_all_qifeng: false,
                     requires_instrument: None,
                     requires_qifeng: None,
+                    dot_tick: None,
                     gcd_lane: String::new(),
                     on_cast: Default::default(),
                 },
             };
             ts.skill =
                 jpcg_core::type_set::modifier::resolve_skill(&ts.skill, &miji_refs, &qixue_refs);
+            // 独立 DOT 也要吃秘籍/奇穴修正（殊曲缩短间隔、冻泉加跳数等），
+            // 但 DOT 的每跳技能是合成条目，需要单独 resolve 后回写时长/间隔。
+            if let Some(spec) = &mut ts.dot_tick {
+                let resolved = jpcg_core::type_set::modifier::resolve_skill(
+                    &spec.skill,
+                    &miji_refs,
+                    &qixue_refs,
+                );
+                spec.interval = resolved.dot_interval;
+                spec.duration = resolved.dot_duration;
+                spec.skill = resolved;
+            }
             ts
         })
         .collect();
@@ -174,18 +187,67 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
 
 impl From<timeline::TimelineResult> for TimelineResultDTO {
     fn from(r: timeline::TimelineResult) -> Self {
+        let mut cumulative = 0.0f64;
+        let events = r
+            .events
+            .into_iter()
+            .map(|e| {
+                cumulative += event_damage(&e.kind);
+                let mut dto = event_to_dto(e);
+                dto.cumulative = cumulative;
+                dto
+            })
+            .collect();
+        let steps = r
+            .steps
+            .into_iter()
+            .map(|step| TimelineStepDTO {
+                time: step.time,
+                gcd_secs: step.gcd_secs,
+                gcd_ready_at: step.gcd_ready_at,
+                legal: step.legal,
+                instrument: step.instrument,
+                qifeng: step.qifeng,
+                skipped_reason: step.skipped_reason,
+                required_instrument: step.required_instrument,
+                required_qifeng: step.required_qifeng,
+                switches: step
+                    .switches
+                    .into_iter()
+                    .map(|sw| TimelineStepSwitchDTO {
+                        switch_kind: sw.switch_kind,
+                        from: sw.from,
+                        to: sw.to,
+                        time: sw.time,
+                    })
+                    .collect(),
+            })
+            .collect();
         TimelineResultDTO {
-            events: r.events.into_iter().map(event_to_dto).collect(),
+            events,
+            steps,
             total_damage: r.total_damage,
             window_dps: r.window_dps,
             skipped_actions: r.skipped_actions,
+            final_instrument: r.final_instrument,
+            final_qifeng: r.final_qifeng,
         }
+    }
+}
+
+fn event_damage(kind: &TimelineEventKind) -> f64 {
+    match kind {
+        TimelineEventKind::Cast { damage, .. } => *damage as f64,
+        TimelineEventKind::ChannelTick { damage, .. } => *damage as f64,
+        TimelineEventKind::DotTick { damage, .. } => *damage as f64,
+        _ => 0.0,
     }
 }
 
 fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
     TimelineEventDTO {
         time: e.time,
+        cumulative: 0.0,
         kind: match e.kind {
             TimelineEventKind::Cast {
                 skill_name,
@@ -200,14 +262,25 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 gcd_secs,
                 gcd_ready_at,
             },
+            TimelineEventKind::ChannelTick {
+                skill_name,
+                index,
+                damage,
+            } => TimelineEventKindDTO::ChannelTick {
+                skill_name,
+                index,
+                damage,
+            },
             TimelineEventKind::DotTick {
                 skill_name,
                 index,
                 damage,
+                advanced,
             } => TimelineEventKindDTO::DotTick {
                 skill_name,
                 index,
                 damage,
+                advanced,
             },
             TimelineEventKind::QifengSwitch { from, to } => {
                 TimelineEventKindDTO::QifengSwitch { from, to }

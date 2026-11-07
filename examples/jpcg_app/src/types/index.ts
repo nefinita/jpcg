@@ -354,6 +354,12 @@ export interface SkillCombatDTO {
   sub_id: number;
   requires_instrument: string | null;
   requires_qifeng: string | null;
+  /** 激活该技能所需的奇穴 id/名称（空 = 不需要奇穴） */
+  jihuoqixue?: string | null;
+  /** 后端解析出的门控奇穴 qixue id */
+  jihuoqixue_id?: string | null;
+  /** 后端配对好的秘籍 id 列表 */
+  miji_ids?: string[];
   gcd_lane: string;
   on_cast: OnCastDTO;
   cast_time: number | null;
@@ -364,6 +370,7 @@ export interface SkillCombatDTO {
   recharge: number | null;
   cd_haste: boolean | null;
   channel: boolean | null;
+  channel_ticks?: number | null;
   buff_id: string | null;
 }
 
@@ -390,19 +397,48 @@ export interface CombatMetaDTO {
   profession: string;
   version: string;
   note: string;
+  miji_per_skill_cap?: number;
+  mixed_qixue_cap?: number;
+  mixed_slot_from?: number;
 }
+
+export type SkillModifierDTO =
+  | { base_damage_add: number }
+  | { base_damage_mul: number }
+  | { atk_xishu_add: number }
+  | { hit_up_add: number }
+  | { huixin_up_add: number }
+  | { huixiao_up_add: number }
+  | { wushifangyu_add: number }
+  | { cast_time_mul: number }
+  | { cast_time_add: number }
+  | { cooldown_mul: number }
+  | { dot_duration_mul: number }
+  | { dot_interval_mul: number }
+  | { cooldown_add: number }
+  | { dot_ticks_add: number }
+  | { dot_up_add: number };
 
 export interface MijiDefDTO {
   id: string;
   name: string;
   skill_id?: number;
   sub_id?: number;
+  modifiers?: SkillModifierDTO[];
+  /** 后端生成的效果文案（前端只渲染） */
+  effects?: string[];
 }
 
 export interface QixueDefDTO {
   id: string;
   name: string;
   slot: number;
+  /** 引擎暂未建模（仅记录选择，不参与计算） */
+  shelved?: boolean;
+  /** 后端算好的显示分组（第一重~第六重 / 混选） */
+  group_label?: string;
+  /** 同组一起开关的多个 id（如冻泉 + 冻泉·宫） */
+  group_ids?: string[];
 }
 
 export interface CombatDataDTO {
@@ -450,7 +486,8 @@ export interface TimelineRequestDTO {
 // 真实 JSON 形如 { "kind": "cast", "skill_name": ..., "damage": ..., "hit_time": ... }
 export type TimelineEventKindDTO =
   | { kind: "cast"; skill_name: string; damage: number; hit_time: number; gcd_secs?: number; gcd_ready_at?: number }
-  | { kind: "dot_tick"; skill_name: string; index: number; damage: number }
+  | { kind: "channel_tick"; skill_name: string; index: number; damage: number }
+  | { kind: "dot_tick"; skill_name: string; index: number; damage: number; advanced?: boolean }
   | { kind: "form_switch"; from: string; to: string }
   | { kind: "qifeng_switch"; from: string; to: string }
   | { kind: "buff_gain"; buff_id: string; stacks: number };
@@ -458,11 +495,36 @@ export type TimelineEventKindDTO =
 export interface TimelineEventDTO {
   time: number;
   kind: TimelineEventKindDTO;
+  /** 后端算好的累计伤害 */
+  cumulative?: number;
+}
+
+export interface TimelineStepSwitchDTO {
+  switch_kind: "form" | "qifeng";
+  from: string;
+  to: string;
+  time: number;
+}
+
+export interface TimelineStepDTO {
+  time: number | null;
+  gcd_secs: number;
+  gcd_ready_at: number;
+  legal: boolean;
+  instrument: string;
+  qifeng: string;
+  skipped_reason: string;
+  required_instrument?: string | null;
+  required_qifeng?: string | null;
+  switches: TimelineStepSwitchDTO[];
 }
 
 export interface TimelineResultDTO {
   events: TimelineEventDTO[];
+  steps?: TimelineStepDTO[];
   total_damage: number;
   window_dps: number;
   skipped_actions: number;
+  final_instrument?: string;
+  final_qifeng?: string;
 }

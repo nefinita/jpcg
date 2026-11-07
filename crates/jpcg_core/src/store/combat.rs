@@ -56,7 +56,14 @@ pub(crate) fn load_combat_from(dirs: &[PathBuf], profession: &str) -> Result<Com
 #[allow(dead_code)]
 pub fn load_skills_with_combat(profession: &str) -> Result<(Vec<Skilltype>, CombatData), String> {
     let toml_cfg = super::load_config(profession);
-    let skills = toml_cfg.skill;
+    let mut skills = toml_cfg.skill;
+    // 所有门派都注入「停手」空位技能（无伤害、占普通 GCD）
+    if !skills
+        .iter()
+        .any(|s| s.skill_id == crate::type_set::skilltype::IDLE_SKILL_ID)
+    {
+        skills.push(crate::type_set::skilltype::Skilltype::idle());
+    }
     let data = load_combat_from(&super::paths::combat_dirs(), profession)?;
     data.validate_against_skills(&skills)?;
     Ok((data.apply_overlay(&skills), data))

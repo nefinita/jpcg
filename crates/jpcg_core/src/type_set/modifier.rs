@@ -47,6 +47,8 @@ pub enum SkillModifier {
     CooldownAdd(f32),
     /// Dot 跳数 +v（按 interval 折算到持续时间）
     DotTicksAdd(i32),
+    /// Dot 每跳伤害递增比例 +v（如殊曲 +0.12 = 每跳 +12%）
+    DotUpAdd(f32),
 }
 
 impl SkillModifier {
@@ -91,6 +93,9 @@ impl SkillModifier {
                         (skill.dot_duration + v as f32 * skill.dot_interval).max(0.0);
                 }
             }
+            SkillModifier::DotUpAdd(v) => {
+                skill.dot_up = (skill.dot_up + v).max(0.0);
+            }
         }
     }
 }
@@ -132,6 +137,8 @@ pub enum QixueHook {
     },
     /// 每点当前曲风使本次伤害提高 pct%
     DamagePctPerQifeng { pct: f32 },
+    /// 该技能每次 DOT 跳，使 targets 指定技能的「下一跳」立刻生效（提前，不补跳）
+    AccelerateDot { targets: Vec<(u32, u32)> },
 }
 
 /// 奇穴定义（把默认技能替换为奇穴技能条目）

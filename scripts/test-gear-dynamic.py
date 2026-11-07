@@ -9,6 +9,7 @@ import sys
 import tomllib
 
 root = Path(__file__).resolve().parent.parent
+fixture_root = root / "crates/jpcg_gear/tests/fixtures/synthetic"
 if len(sys.argv) == 1:
     for case in ("root", "shuxing", "missing"):
         subprocess.run([sys.executable, __file__, case], check=True)
@@ -16,7 +17,7 @@ if len(sys.argv) == 1:
     print("PASS gear dynamic: catalog, composition, TOML, strict path errors, attribute conversion")
     sys.exit(0)
 case = sys.argv[1]
-os.environ["JPCG_DATA_DIR"] = str(root / "data" / ("shuxing" if case == "shuxing" else "absent")) if case != "root" else str(root / "data")
+os.environ["JPCG_DATA_DIR"] = str(fixture_root / ("shuxing" if case == "shuxing" else "absent")) if case != "root" else str(fixture_root)
 filename = "jpcg_gear.dll" if sys.platform == "win32" else "libjpcg_gear.dylib" if sys.platform == "darwin" else "libjpcg_gear.so"
 lib = ctypes.CDLL(str(root / "target/debug" / filename))
 lib.jpcg_gear_call.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
@@ -39,7 +40,7 @@ if case == "missing":
 else:
     catalog = call("catalog", {})["result"]
     assert catalog["version"]["sample"] is True
-    loadout = tomllib.loads((root / "data/gear/sample-loadout.toml").read_text())
+    loadout = tomllib.loads((fixture_root / "gear/sample-loadout.toml").read_text())
     composition = call("compose", loadout)["result"]
     assert composition["player"]["jcsx"] == "根骨"
     assert composition["player"]["jichu_gongji"] == composition["composed"]["stats"]["gongji"]
