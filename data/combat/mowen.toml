@@ -59,15 +59,21 @@ qifeng_gain = 1
 cast_time = 0.0
 cooldown = 0.0
 # 对目标 DOT：每 3 秒 1 跳，持续 18 秒（伤害在 shuxing 表）
+dot_interval = 3.0
+dot_duration = 18.0
+dot_tick_base1 = 1
+dot_tick_base2 = 1
+dot_tick_xishu = 0.088884  # 每跳 +750（750 / 8438）
 
 [[skill_combat]]
 skill_id = 14067
 sub_id = 14227
 requires_instrument = "qin"
 qifeng_gain = 1
-cast_time = 0.0
+cast_time = 2.8125  # 倒读条：约 45 帧内 3 段
+channel = true
+channel_ticks = 3
 cooldown = 0.0
-# 2.81 秒内 3 段
 
 # 变徵：高山流水曲下 徵 的变体
 [[skill_combat]]
@@ -75,7 +81,9 @@ skill_id = 14299
 sub_id = 18859
 requires_instrument = "qin"
 requires_qifeng = "gaoshan"
-cast_time = 0.0
+cast_time = 2.8125  # 变徵同样是倒读条 3 段（可移动吟唱）
+channel = true
+channel_ticks = 3
 cooldown = 0.0
 
 [[skill_combat]]
@@ -86,6 +94,11 @@ qifeng_gain = 1
 cast_time = 0.0
 cooldown = 0.0
 # 平沙落雁曲下额外禁轻功 2 秒
+dot_interval = 3.0
+dot_duration = 18.0
+dot_tick_base1 = 1
+dot_tick_base2 = 1
+dot_tick_xishu = 0.086632  # 每跳 +731（731 / 8438）
 
 [[skill_combat]]
 skill_id = 14068
@@ -95,6 +108,8 @@ qifeng_gain = 1
 charges = 3
 recharge = 6.0
 cd_haste = true
+# 羽：命中后使自身「商」「角」的下两跳持续伤害立刻生效
+on_cast = { advance_dot_targets = [[14065, 14311], [14066, 14312]], advance_dot_ticks = 2 }
 # 3 层充能，6 秒恢复一层（受加速影响）
 
 # ----------------------------------------------------------------------------
@@ -316,16 +331,50 @@ jihuoqixue = "taichanglv"
 
 # 殊曲（第二重）：商/角 持续间隔 -1 秒（3s→2s），每跳效果 +12%
 [[qixue]]
+id = "dongtian"
+name = "洞天"
+slot = 1
+replaces_skill_id = 14299
+replaces_sub_id = 18859
+replacement = { skill_name = "洞天", skill_id = 14299, sub_id = 18859, base_damage1 = 4851, base_damage2 = 4851, atk_xishu = 0.0, dot_flag = 1, dot_interval = 0.5, dot_duration = 1.5, cast_time = 0.0, gcd_kind = 0 }
+hooks = [{ accelerate_dot = { targets = [[14065, 14311], [14066, 14312]] } }]
+
+# 超然：孤影化双 调息 150 → 60 秒，且受加速率影响（cd_haste 暂未建模单技能加成）
+
+[[qixue]]
+id = "juexian"
+name = "绝弦"
+slot = 1
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "ruyue"
+name = "入月"
+slot = 1
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "luming"
+name = "鹿鸣"
+slot = 1
+shelved = true
+
+[[qixue]]
 id = "shuqu"
 name = "殊曲"
 slot = 2
 applies_to = [[14065, 14311], [14066, 14312]]
 modifiers = [
   { dot_interval_mul = -33.3333 },
-  { hit_up_add = 12 },
+  { dot_up_add = 0.12 },
 ]
 
 # 削竹（第二重）：剑·徵 伤害 +16%（2 层充能/8 秒属第 2 层，暂未启用）
+
 [[qixue]]
 id = "xiaozhu"
 name = "削竹"
@@ -336,6 +385,40 @@ modifiers = [
 ]
 
 # 参连（第三重）：无视目标 60% 内功防御等级（1024 制 60% ≈ 614）
+
+[[qixue]]
+id = "zuijian"
+name = "醉剑"
+slot = 2
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "ningmei"
+name = "凝眉"
+slot = 3
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "luanyu"
+name = "鸾羽"
+slot = 3
+replaces_skill_id = 14076
+replacement = { skill_name = "飞鸾动羽", skill_id = 14076, sub_id = 0, base_damage1 = 999, base_damage2 = 999, atk_xishu = 0.0, cast_time = 0.0, cooldown = 40.0, gcd_kind = 0 }
+
+# 鹿鸣：PvE 奇穴（宫 6 秒调息 + 持续运功消耗曲风），暂不建模，先占位
+
+[[qixue]]
+id = "daoyi"
+name = "捣衣"
+slot = 3
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
 [[qixue]]
 id = "canlian"
 name = "参连"
@@ -350,6 +433,7 @@ modifiers = [
 ]
 
 # 冻泉（第四重）：商/角 +4 跳；宫/变宫 调息 12 秒
+
 [[qixue]]
 id = "dongquan"
 name = "冻泉"
@@ -369,6 +453,23 @@ modifiers = [
 ]
 
 # 凌冬（第四重）：徵/变徵 调息 18 秒（6 段递增伤害属第 3 层）
+
+[[qixue]]
+id = "tingpai"
+name = "停拍"
+slot = 4
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "guanzhu"
+name = "贯珠"
+slot = 4
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
 [[qixue]]
 id = "lingdong"
 name = "凌冬"
@@ -379,17 +480,46 @@ modifiers = [
 ]
 
 # 兼山（混选）：云生结海 调息 +20 秒
+
 [[qixue]]
-id = "jianshan"
-name = "兼山"
-slot = 8
-applies_to = [[14075, 0]]
-modifiers = [
-  { cooldown_add = 20.0 },
-]
+id = "xiangyi"
+name = "相依"
+slot = 5
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "yince"
+name = "音彻"
+slot = 5
+applies_to = [[14449, 18656], [25225, 25225], [14451, 0], [14452, 14455], [40291, 40293]]
+hooks = [{ flat_damage_on_cast = { damage = 2159.0 } }]
+
+[[qixue]]
+id = "jingzhi"
+name = "净植"
+slot = 5
+hooks = [{ flat_damage_on_cast = { damage = 1330.0, per_qifeng_spent = true } }]
+
+[[qixue]]
+id = "chaoran"
+name = "超然"
+slot = 5
+replaces_skill_id = 14081
+modifiers = [{ cooldown_mul = -60.0 }]
+
+# 鸾羽：青霄飞羽 → 飞鸾动羽（999 点固定伤害 + 锁足/眩晕，40 秒调息）
+
+[[qixue]]
+id = "taichanglv"
+name = "太常律"
+slot = 6
+grants_skills = [[30564, 0]]
+
 
 # ----------------------------------------------------------------------------
-# 奇穴第 2 层：解锁主动技能（技能本身由 jihuoqixue 门控，未激活时不可用）
+# 奇穴第 3 层：运行时钩子（触发/资源类）
 # ----------------------------------------------------------------------------
 
 [[qixue]]
@@ -411,34 +541,20 @@ slot = 6
 grants_skills = [[36489, 0]]
 
 [[qixue]]
-id = "chongqiuming"
-name = "冲秋冥"
+id = "qiushuang"
+name = "秋霜"
 slot = 7
-grants_skills = [[14093, 41871]]
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
 
 [[qixue]]
-id = "taichanglv"
-name = "太常律"
-slot = 6
-grants_skills = [[30564, 0]]
+id = "haoqing"
+name = "豪情"
+slot = 7
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
 
-
-# ----------------------------------------------------------------------------
-# 奇穴第 3 层：运行时钩子（触发/资源类）
-# ----------------------------------------------------------------------------
-
-[[qixue]]
-id = "yince"
-name = "音彻"
-slot = 5
-applies_to = [[14449, 18656], [25225, 25225], [14451, 0], [14452, 14455], [40291, 40293]]
-hooks = [{ flat_damage_on_cast = { damage = 2159.0 } }]
-
-[[qixue]]
-id = "jingzhi"
-name = "净植"
-slot = 5
-hooks = [{ flat_damage_on_cast = { damage = 1330.0, per_qifeng_spent = true } }]
 
 [[qixue]]
 id = "shixiang"
@@ -536,90 +652,105 @@ modifiers = [{ huixin_up_add = 4 }]
 id = "shang_dmg3"
 name = "《音·商》参悟残页"
 skill_id = 14065
+sub_id = 14311
 modifiers = [{ hit_up_add = 3 }]
 
 [[miji]]
 id = "shang_dmg4"
 name = "《音·商》参悟断篇"
 skill_id = 14065
+sub_id = 14311
 modifiers = [{ hit_up_add = 4 }]
 
 [[miji]]
 id = "shang_dmg5"
 name = "《音·商》参悟绝章"
 skill_id = 14065
+sub_id = 14311
 modifiers = [{ hit_up_add = 5 }]
 
 [[miji]]
 id = "shang_crit2"
 name = "《音·商》秘决残页"
 skill_id = 14065
+sub_id = 14311
 modifiers = [{ huixin_up_add = 2 }]
 
 [[miji]]
 id = "shang_crit3"
 name = "《音·商》秘决断篇"
 skill_id = 14065
+sub_id = 14311
 modifiers = [{ huixin_up_add = 3 }]
 
 [[miji]]
 id = "shang_crit4"
 name = "《音·商》秘决绝章"
 skill_id = 14065
+sub_id = 14311
 modifiers = [{ huixin_up_add = 4 }]
 
 [[miji]]
 id = "zheng_dmg3"
 name = "《音·徵》参悟残页"
-skill_id = 14066
+skill_id = 14067
+sub_id = 14227
 modifiers = [{ hit_up_add = 3 }]
 
 [[miji]]
 id = "zheng_dmg4"
 name = "《音·徵》参悟断篇"
-skill_id = 14066
+skill_id = 14067
+sub_id = 14227
 modifiers = [{ hit_up_add = 4 }]
 
 [[miji]]
 id = "zheng_crit2"
 name = "《音·徵》秘决残页"
-skill_id = 14066
+skill_id = 14067
+sub_id = 14227
 modifiers = [{ huixin_up_add = 2 }]
 
 [[miji]]
 id = "zheng_crit3"
 name = "《音·徵》秘决断篇"
-skill_id = 14066
+skill_id = 14067
+sub_id = 14227
 modifiers = [{ huixin_up_add = 3 }]
 
 [[miji]]
 id = "zheng_crit4"
 name = "《音·徵》秘决绝章"
-skill_id = 14066
+skill_id = 14067
+sub_id = 14227
 modifiers = [{ huixin_up_add = 4 }]
 
 [[miji]]
 id = "yu_dmg3"
 name = "《音·羽》参悟残页"
-skill_id = 14067
+skill_id = 14068
+sub_id = 14100
 modifiers = [{ hit_up_add = 3 }]
 
 [[miji]]
 id = "yu_dmg4"
 name = "《音·羽》参悟断篇"
-skill_id = 14067
+skill_id = 14068
+sub_id = 14100
 modifiers = [{ hit_up_add = 4 }]
 
 [[miji]]
 id = "yu_crit3"
 name = "《音·羽》秘决残页"
-skill_id = 14067
+skill_id = 14068
+sub_id = 14100
 modifiers = [{ huixin_up_add = 3 }]
 
 [[miji]]
 id = "yu_crit4"
 name = "《音·羽》秘决断篇"
-skill_id = 14067
+skill_id = 14068
+sub_id = 14100
 modifiers = [{ huixin_up_add = 4 }]
 
 [[miji]]
@@ -651,33 +782,78 @@ modifiers = [{ cooldown_add = -4.0 }]
 # ----------------------------------------------------------------------------
 
 # 洞天：变徵 → 1.5 秒内 3 次 4851 点固定伤害（消耗 3 点曲风，暂未建模消耗）
-[[qixue]]
-id = "dongtian"
-name = "洞天"
-slot = 1
-replaces_skill_id = 14299
-replaces_sub_id = 18859
-replacement = { skill_name = "洞天", skill_id = 14299, sub_id = 18859, base_damage1 = 4851, base_damage2 = 4851, atk_xishu = 0.0, dot_flag = 1, dot_interval = 0.5, dot_duration = 1.5, cast_time = 0.0, gcd_kind = 0 }
 
-# 超然：孤影化双 调息 150 → 60 秒，且受加速率影响（cd_haste 暂未建模单技能加成）
 [[qixue]]
-id = "chaoran"
-name = "超然"
-slot = 5
-replaces_skill_id = 14081
-modifiers = [{ cooldown_mul = -60.0 }]
-
-# 鸾羽：青霄飞羽 → 飞鸾动羽（999 点固定伤害 + 锁足/眩晕，40 秒调息）
-[[qixue]]
-id = "luanyu"
-name = "鸾羽"
-slot = 3
-replaces_skill_id = 14076
-replacement = { skill_name = "飞鸾动羽", skill_id = 14076, sub_id = 0, base_damage1 = 999, base_damage2 = 999, atk_xishu = 0.0, cast_time = 0.0, cooldown = 40.0, gcd_kind = 0 }
-
-# 鹿鸣：PvE 奇穴（宫 6 秒调息 + 持续运功消耗曲风），暂不建模，先占位
-[[qixue]]
-id = "luming"
-name = "鹿鸣"
-slot = 1
+id = "jingyi"
+name = "井仪"
+slot = 7
 shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "biehe"
+name = "别鹤"
+slot = 7
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "jianshan"
+name = "兼山"
+slot = 7
+applies_to = [[14075, 0]]
+modifiers = [
+  { cooldown_add = 20.0 },
+]
+
+# ----------------------------------------------------------------------------
+# 奇穴第 2 层：解锁主动技能（技能本身由 jihuoqixue 门控，未激活时不可用）
+# ----------------------------------------------------------------------------
+
+[[qixue]]
+id = "youyu"
+name = "游羽"
+slot = 7
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "wangxian"
+name = "忘弦"
+slot = 7
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "lianpo"
+name = "莲魄"
+slot = 7
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "wujinzang"
+name = "无尽藏"
+slot = 7
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "liuyun"
+name = "流韵"
+slot = 7
+shelved = true
+# 描述性奇穴：当前引擎未建模，仅用于 UI 选择（不改变计算）
+
+
+[[qixue]]
+id = "chongqiuming"
+name = "冲秋冥"
+slot = 7
+grants_skills = [[14093, 41871]]

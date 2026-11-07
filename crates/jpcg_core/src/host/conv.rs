@@ -102,6 +102,7 @@ impl From<SkillEditorItemDTO> for Skilltype {
             has_critical_strike: dto.has_critical_strike,
             effect_type: dto.effect_type,
             jihuoqixue: dto.jihuoqixue,
+            channel_ticks: 1,
             base_damage1: dto.base_damage1,
             base_damage2: dto.base_damage2,
             atk_xishu: dto.atk_xishu,

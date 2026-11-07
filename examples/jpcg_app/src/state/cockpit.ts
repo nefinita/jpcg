@@ -26,6 +26,10 @@ export interface ComboDraft {
   selectedPreset: string;
   poolQuery: string;
   collapsedGroups: string[];
+  /** 已装备的秘籍 id（跨页面/重挂载保留；旧存档可缺省） */
+  miji?: string[];
+  /** 已激活的奇穴 id（跨页面/重挂载保留；旧存档可缺省） */
+  qixue?: string[];
 }
 
 export function defaultManualForm(): FormData {
@@ -40,7 +44,15 @@ export function defaultManualForm(): FormData {
   };
 }
 export const defaultCockpit = (): CockpitState => ({ mode: "gear", loadouts: {}, form: defaultManualForm(), manualReady: false, calculation: null, baseline: null });
-export const defaultComboDraft = (): ComboDraft => ({ sequence: [], presetName: "", selectedPreset: "", poolQuery: "", collapsedGroups: [] });
+export const defaultComboDraft = (): ComboDraft => ({
+  sequence: [],
+  presetName: "",
+  selectedPreset: "",
+  poolQuery: "",
+  collapsedGroups: [],
+  miji: [],
+  qixue: [],
+});
 
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 const number = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -83,7 +95,7 @@ export const cockpitSchema = {
   migrate: (x: unknown, version: number) => version <= 1 && record(x) ? { ...x, loadouts: {}, mode: "manual" } : null,
 };
 export const comboDraftSchema = {
-  version: 1,
+  version: 2,
   validate: (x: unknown): x is ComboDraft => record(x) && Array.isArray(x.sequence) && x.sequence.every((s: unknown) => record(s)
     && record(s.skill) && typeof s.skill.skill_name === "string"
     && ["skill_id", "base_damage1", "base_damage2", "atk_xishu", "watk_xishu", "hit_up", "huixin_up", "huixiao_up", "wushifangyu", "wushihuajin", "dot_flag"].every((k) => record(s.skill) && number(s.skill[k]))
@@ -91,6 +103,12 @@ export const comboDraftSchema = {
     && typeof s.skill.has_critical_strike === "boolean"
     && (s.overrides === null || (record(s.overrides) && Object.values(s.overrides).every((v) => v === null || number(v)))))
     && ["presetName", "selectedPreset", "poolQuery"].every((k) => typeof x[k] === "string")
-    && Array.isArray(x.collapsedGroups) && x.collapsedGroups.every((s: unknown) => typeof s === "string"),
-  migrate: (x: unknown, version: number) => version === 0 ? x : null,
+    && Array.isArray(x.collapsedGroups) && x.collapsedGroups.every((s: unknown) => typeof s === "string")
+    && (x.miji === undefined || (Array.isArray(x.miji) && x.miji.every((s: unknown) => typeof s === "string")))
+    && (x.qixue === undefined || (Array.isArray(x.qixue) && x.qixue.every((s: unknown) => typeof s === "string"))),
+  migrate: (x: unknown, version: number) => {
+    if (!record(x)) return null;
+    if (version <= 1) return { ...x, miji: [], qixue: [] };
+    return null;
+  },
 };

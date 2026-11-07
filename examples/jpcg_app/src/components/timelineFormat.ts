@@ -17,7 +17,9 @@ export function formatTimelineEvent(e: TimelineEventDTO): string {
       return `施放 ${k.skill_name} @${k.hit_time.toFixed(2)}s 伤害 ${k.damage}${gcd}`;
     }
     case "dot_tick":
-      return `dot ${k.skill_name} #${k.index} 伤害 ${k.damage}`;
+      return `dot ${k.skill_name} #${k.index} 伤害 ${k.damage}${k.advanced ? "（提前）" : ""}`;
+    case "channel_tick":
+      return `引导 ${k.skill_name} 第 ${k.index} 段 伤害 ${k.damage}`;
     case "form_switch":
       return `切器形 ${k.from} → ${k.to}`;
     case "qifeng_switch":

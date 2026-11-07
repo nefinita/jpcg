@@ -21,6 +21,7 @@ import type {
   CombatBundleDTO,
   TimelineRequestDTO,
   TimelineResultDTO,
+  TimelineStepSwitchDTO,
 } from "../types";
 import { sanitizeGearLoadout } from "../state/gear";
 
@@ -373,6 +374,8 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         { skill_name: "宫", skill_id: 10447, sub_id: 14474, base_damage1: 160, base_damage2: 200, atk_xishu: 501, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
         { skill_name: "商", skill_id: 10448, sub_id: 14475, base_damage1: 120, base_damage2: 160, atk_xishu: 400, watk_xishu: 0, hit_up: 0, huixin_up: 5, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
         { skill_name: "角", skill_id: 10449, sub_id: 14476, base_damage1: 100, base_damage2: 140, atk_xishu: 350, watk_xishu: 0, hit_up: 10, huixin_up: 0, huixiao_up: 0, wushifangyu: 512, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
+        { skill_name: "徵", skill_id: 14067, sub_id: 14227, base_damage1: 84, base_damage2: 92, atk_xishu: 0.219602, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, cast_time: 2.8125, channel: true, channel_ticks: 3 },
+        { skill_name: "停手", skill_id: 999999, sub_id: 0, base_damage1: 0, base_damage2: 0, atk_xishu: 0, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
         { skill_name: "引窍·0点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 3.51, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
         { skill_name: "引窍·50点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 10.53, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
         { skill_name: "引窍·100点任脉", skill_id: 38009, sub_id: 38438, base_damage1: 20, base_damage2: 20, atk_xishu: 17.55, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false },
@@ -389,51 +392,70 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         skill_id, sub_id, requires_instrument: "qin", requires_qifeng: null,
         gcd_lane: "", on_cast: { switch_instrument: null, switch_qifeng: null, gcd_lanes: [], lock_skills: [] },
         cast_time: null, gcd_base: null, gcd_kind: null, cooldown: null,
-        charges: null, recharge: null, cd_haste: null, channel: null, buff_id: null,
+        charges: null, recharge: null, cd_haste: null, channel: null, channel_ticks: null, buff_id: null,
         jihuoqixue: null, qifeng_gain: null, spend_all_qifeng: null,
         ...extra,
       });
       return {
         skills: [],
         combat: {
-          meta: { profession, version: "mock", note: "浏览器预览数据" },
+          meta: { profession, version: "mock", note: "浏览器预览数据", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
           form: forms,
           qifeng: ["yangchun", "gaoshan", "pingsha"],
           skill_combat: [
-            sc(10447, 14474, { cast_time: 1.75 }),
-            sc(10448, 14475, { qifeng_gain: 1 }),
-            sc(10449, 14476, { qifeng_gain: 1 }),
+            sc(10447, 14474, { cast_time: 1.75, miji_ids: ["mj_gong_1", "mj_gong_2", "mj_gong_3"] }),
+            sc(10448, 14475, { qifeng_gain: 1, miji_ids: ["mj_shang_1"] }),
+            sc(10449, 14476, { qifeng_gain: 1, miji_ids: ["mj_jiao_1"] }),
+            sc(14067, 14227, { cast_time: 2.8125, channel: true, channel_ticks: 3 }),
             sc(38009, 38438, { requires_instrument: "jian" }),
-            sc(38014, 38093, { requires_instrument: "jian" }),
+            sc(38014, 38093, { requires_instrument: "jian", jihuoqixue: "qx_14" }),
             sc(14069, 0, { gcd_kind: 1, cooldown: 3.0, on_cast: { switch_instrument: null, switch_qifeng: "gaoshan", gcd_lanes: [], lock_skills: [] } }),
           ],
           buff: [],
           miji: [
-            { id: "mj_gong_1", name: "经脉图·残页", skill_id: 10447, sub_id: 14474 },
-            { id: "mj_gong_2", name: "参悟·断篇", skill_id: 10447, sub_id: 14474 },
-            { id: "mj_gong_3", name: "秘法·绝章", skill_id: 10447, sub_id: 14474 },
+            { id: "mj_gong_1", name: "经脉图·残页", skill_id: 10447, sub_id: 14474, modifiers: [{ cast_time_add: -0.125 }], effects: ["运功-0.125秒"] },
+            { id: "mj_gong_2", name: "参悟·断篇", skill_id: 10447, sub_id: 14474, modifiers: [{ hit_up_add: 4 }], effects: ["伤害+4%"] },
+            { id: "mj_gong_3", name: "秘法·绝章", skill_id: 10447, sub_id: 14474, modifiers: [{ huixin_up_add: 4 }], effects: ["会心+4%"] },
             { id: "mj_shang_1", name: "参悟·残页", skill_id: 10448, sub_id: 14475 },
-            { id: "mj_jiao_1", name: "秘法·绝章", skill_id: 10449, sub_id: 14476 },
+            { id: "mj_jiao_1", name: "秘法·绝章", skill_id: 10449, sub_id: 14476, modifiers: [{ huixin_up_add: 4 }], effects: ["会心+4%"] },
           ],
           qixue: [
-            { id: "qx_1", name: "洞天", slot: 1 },
-            { id: "qx_2", name: "绝弦", slot: 1 },
-            { id: "qx_3", name: "入月", slot: 1 },
-            { id: "qx_4", name: "鹿鸣", slot: 1 },
-            { id: "qx_5", name: "殊曲", slot: 2 },
-            { id: "qx_6", name: "削竹", slot: 2 },
-            { id: "qx_7", name: "醉剑", slot: 2 },
-            { id: "qx_8", name: "参连", slot: 3 },
-            { id: "qx_9", name: "鸾羽", slot: 3 },
-            { id: "qx_10", name: "冻泉", slot: 4 },
-            { id: "qx_11", name: "凌冬", slot: 4 },
-            { id: "qx_12", name: "相依", slot: 5 },
-            { id: "qx_13", name: "音彻", slot: 5 },
-            { id: "qx_14", name: "不愧君", slot: 6 },
-            { id: "qx_15", name: "斩长鲸", slot: 6 },
-            { id: "qx_16", name: "冲秋冥", slot: 7 },
-            { id: "qx_17", name: "师襄", slot: 7 },
-            { id: "qx_18", name: "兼山", slot: 8 },
+            { id: "dongtian", name: "洞天", slot: 1 },
+            { id: "juexian", shelved: true, name: "绝弦", slot: 1 },
+            { id: "ruyue", shelved: true, name: "入月", slot: 1 },
+            { id: "luming", shelved: true, name: "鹿鸣", slot: 1 },
+            { id: "shuqu", name: "殊曲", slot: 2 },
+            { id: "xiaozhu", name: "削竹", slot: 2 },
+            { id: "zuijian", shelved: true, name: "醉剑", slot: 2 },
+            { id: "ningmei", shelved: true, name: "凝眉", slot: 3 },
+            { id: "luanyu", name: "鸾羽", slot: 3 },
+            { id: "daoyi", shelved: true, name: "捣衣", slot: 3 },
+            { id: "canlian", name: "参连", slot: 3 },
+            { id: "dongquan", name: "冻泉", slot: 4 },
+            { id: "dongquan-gong", name: "冻泉·宫", slot: 4 },
+            { id: "tingpai", shelved: true, name: "停拍", slot: 4 },
+            { id: "guanzhu", shelved: true, name: "贯珠", slot: 4 },
+            { id: "lingdong", name: "凌冬", slot: 4 },
+            { id: "xiangyi", shelved: true, name: "相依", slot: 5 },
+            { id: "yince", name: "音彻", slot: 5 },
+            { id: "jingzhi", name: "净植", slot: 5 },
+            { id: "chaoran", name: "超然", slot: 5 },
+            { id: "taichanglv", name: "太常律", slot: 6 },
+            { id: "bukuijun", name: "不愧君", slot: 6 },
+            { id: "duanshuiliu", name: "断水流", slot: 6 },
+            { id: "zhanchangjing", name: "斩长鲸", slot: 6 },
+            { id: "qiushuang", shelved: true, name: "秋霜", slot: 7 },
+            { id: "haoqing", shelved: true, name: "豪情", slot: 7 },
+            { id: "shixiang", name: "师襄", slot: 7 },
+            { id: "jingyi", shelved: true, name: "井仪", slot: 7 },
+            { id: "biehe", shelved: true, name: "别鹤", slot: 7 },
+            { id: "jianshan", name: "兼山", slot: 7 },
+            { id: "youyu", shelved: true, name: "游羽", slot: 7 },
+            { id: "wangxian", shelved: true, name: "忘弦", slot: 7 },
+            { id: "lianpo", shelved: true, name: "莲魄", slot: 7 },
+            { id: "wujinzang", shelved: true, name: "无尽藏", slot: 7 },
+            { id: "liuyun", shelved: true, name: "流韵", slot: 7 },
+            { id: "chongqiuming", name: "冲秋冥", slot: 7 },
           ],
         },
       } as CombatBundleDTO;
@@ -442,6 +464,9 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       const req = args?.req as TimelineRequestDTO | undefined;
       const actions = req?.actions ?? [];
       const events: TimelineResultDTO["events"] = [];
+      const castTimes: number[] = [];
+      const initialInstrument = req?.initial_instrument ?? "qin";
+      const initialQifeng = req?.initial_qifeng ?? "yangchun";
       let t = 0;
       let total = 0;
       for (const a of actions) {
@@ -449,10 +474,31 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         const skill = req?.skills?.find((s) => s.skill_id === a.skill_id && (s.sub_id ?? 0) === a.sub_id);
         const damage = Math.floor(80000 + Math.random() * 20000);
         total += damage;
+        const name = skill?.skill_name ?? "技能";
+        castTimes.push(t);
         events.push({
           time: t,
-          kind: { kind: "cast", skill_name: skill?.skill_name ?? "技能", damage, hit_time: t + (skill?.cast_time ?? 1.5) },
+          kind: { kind: "cast", skill_name: name, damage, hit_time: t + (skill?.cast_time ?? 1.5), gcd_secs: 1.5, gcd_ready_at: t + 1.5 },
         });
+        // 浏览器预览：徵 产生 3 段引导结算
+        if (name.includes("徵")) {
+          for (let i = 1; i <= 3; i += 1) {
+            events.push({
+              time: t + (2.8125 * i) / 3,
+              kind: { kind: "channel_tick", skill_name: name, index: i, damage: 28_000 },
+            });
+          }
+          t += 2.8125;
+        }
+        // 浏览器预览：商/角 产生 6 跳 DOT，便于检查右侧持续伤害记录
+        if (name.includes("商") || name.includes("角")) {
+          for (let i = 0; i < 6; i += 1) {
+            events.push({
+              time: t + 3 * (i + 1),
+              kind: { kind: "dot_tick", skill_name: `${name}·持续`, index: i + 1, damage: name.includes("商") ? 750 : 731 },
+            });
+          }
+        }
         t += skill?.cast_time ?? 1.5;
       }
       // 浏览器预览：补一条器形切换与一条曲风切换事件，便于检查视觉
@@ -466,11 +512,40 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
           kind: { kind: "form_switch", from: "qin", to: "jian" },
         });
       }
+      events.sort((a, b) => a.time - b.time);
+      let cumulative = 0;
+      for (const e of events) {
+        if (e.kind.kind === "cast" || e.kind.kind === "dot_tick" || e.kind.kind === "channel_tick") {
+          cumulative += e.kind.damage;
+        }
+        e.cumulative = cumulative;
+      }
+      const castActions = actions.filter((a) => a.kind === "cast");
+      const steps = castActions.map((a, i) => {
+        const skill = req?.skills?.find((sk) => sk.skill_id === a.skill_id && (sk.sub_id ?? 0) === a.sub_id);
+        const def = (req?.combat?.skill_combat ?? []).find((sc) => sc.skill_id === a.skill_id && (sc.sub_id ?? 0) === (a.sub_id ?? 0));
+        const time = castTimes[i] ?? null;
+        return {
+          time,
+          gcd_secs: time == null ? 0 : 1.5,
+          gcd_ready_at: time == null ? 0 : time + 1.5,
+          legal: time != null,
+          instrument: initialInstrument,
+          qifeng: initialQifeng,
+          skipped_reason: time == null ? "当前器形/曲风不满足技能要求" : "",
+          required_instrument: def?.requires_instrument ?? null,
+          required_qifeng: def?.requires_qifeng ?? null,
+          switches: [] as TimelineStepSwitchDTO[],
+        };
+      });
       return {
         events,
+        steps,
         total_damage: total,
         window_dps: t > 0 ? total / t : 0,
         skipped_actions: 0,
+        final_instrument: initialInstrument,
+        final_qifeng: initialQifeng,
       } as TimelineResultDTO;
     }
     case "calculate_combo_cmd": {

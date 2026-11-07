@@ -18,6 +18,7 @@ import tempfile
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURE_ROOT = ROOT / "crates/jpcg_gear/tests/fixtures/synthetic"
 PINNED = "21f472e211581ac1c1a7fa5ea2ff9199df6151cb"
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--reference-dir", type=Path)
@@ -108,9 +109,9 @@ for school_id, source_id, major, upstream_major, kind in schools:
         folder = Path(folder)
         for d in ("gear", "shuxing"):
             (folder / d).mkdir()
-        shutil.copytree(ROOT / "data/values", folder / "values")
-        for filename in ("templates.toml", "schools.toml", "sets.toml", "overrides.toml"):
-            content = (ROOT / "data/gear" / filename).read_text().replace('"mowen"', json.dumps(school_id)).replace('"live-130"', json.dumps(value_set))
+        shutil.copytree(FIXTURE_ROOT / "values", folder / "values")
+        for filename in ("templates.toml", "schools.toml", "sets.toml", "overrides.toml", "enchants.toml", "wucai.toml"):
+            content = (FIXTURE_ROOT / "gear" / filename).read_text().replace('"mowen"', json.dumps(school_id)).replace('"live-50"', json.dumps(value_set))
             if filename == "schools.toml":
                 content = content.replace('"gengu"', json.dumps(major)).replace('"neigong"', '"waigong"' if kind == "physical" else '"neigong"')
             (folder / "gear" / filename).write_text(content)
@@ -118,7 +119,7 @@ for school_id, source_id, major, upstream_major, kind in schools:
         prefix = f'[version]\nlevel = {level}\n[xinfa]\nxinfa_nom = "{major}"\n'
         profession.write_text(prefix + table(rule))
         os.environ["JPCG_DATA_DIR"] = str(folder)
-        loadout = tomllib.loads((ROOT / "data/gear/sample-loadout.toml").read_text())
+        loadout = tomllib.loads((FIXTURE_ROOT / "gear/sample-loadout.toml").read_text())
         loadout.update(school=school_id, value_set=value_set, attribute_rules="profession-toml")
         loadout["base"].update(tizhi=123, yuanqi=1001, qixue_additional=123)
         result = call("compose", loadout)

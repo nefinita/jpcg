@@ -45,6 +45,17 @@ impl ActiveHook {
     }
 }
 
+/// 独立 DOT 数据（覆盖层提供；与本体伤害分开结算）
+#[derive(Debug, Clone)]
+pub struct DotTickSpec {
+    /// 用于逐跳重算的合成技能（dot_flag/interval/duration 已填好）
+    pub skill: Skilltype,
+    /// 每跳间隔（秒，只用于展示/校验；跳时间按 duration 均分）
+    pub interval: f32,
+    /// 总持续时长（秒）
+    pub duration: f32,
+}
+
 /// 带时序数据的技能条目
 #[derive(Debug, Clone)]
 pub struct TimingSkill {
@@ -61,6 +72,8 @@ pub struct TimingSkill {
     pub gcd_lane: String,
     /// 施放副作用
     pub on_cast: OnCast,
+    /// 独立 DOT（None = 本体带 dot 或无 DOT）
+    pub dot_tick: Option<DotTickSpec>,
 }
 
 impl TimingSkill {
@@ -79,8 +92,32 @@ impl TimingSkill {
         if gcd_lane.is_empty() && resolved.gcd_group != 0 {
             gcd_lane = format!("group_{}", resolved.gcd_group);
         }
+        // 独立 DOT：overlay 给出 dot_duration/dot_interval 时，克隆一份「每跳技能」用于逐跳重算
+        let dot_tick = sc.and_then(|s| {
+            let duration = s.dot_duration?;
+            let interval = s.dot_interval.unwrap_or(0.0);
+            if duration <= 0.0 {
+                return None;
+            }
+            let base1 = s.dot_tick_base1.unwrap_or(1);
+            let mut tick = resolved.clone();
+            tick.dot_flag = 1;
+            tick.dot_interval = interval;
+            tick.dot_duration = duration;
+            tick.dot_up = 0.0;
+            tick.base_damage1 = base1;
+            tick.base_damage2 = s.dot_tick_base2.unwrap_or(base1);
+            tick.atk_xishu = s.dot_tick_xishu.unwrap_or(0.0);
+            tick.watk_xishu = 0;
+            Some(DotTickSpec {
+                skill: tick,
+                interval,
+                duration,
+            })
+        });
         TimingSkill {
             skill: resolved,
+            dot_tick,
             qifeng_gain: sc.and_then(|s| s.qifeng_gain).unwrap_or(0),
             spend_all_qifeng: sc.and_then(|s| s.spend_all_qifeng).unwrap_or(false),
             requires_instrument: sc.and_then(|s| s.requires_instrument.clone()),
@@ -176,11 +213,19 @@ pub enum TimelineEventKind {
         /// 该 GCD 通道就绪时刻
         gcd_ready_at: f32,
     },
+    /// 引导/倒读条单段结算（`index` 从 1 开始；如徵 3 段）
+    ChannelTick {
+        skill_name: String,
+        index: u32,
+        damage: u32,
+    },
     /// dot 单跳结算（`index` 从 1 开始）
     DotTick {
         skill_name: String,
         index: u32,
         damage: u32,
+        /// 是否被洞天/羽提前（UI 可标注）
+        advanced: bool,
     },
     /// 器形切换（琴 / 剑）
     FormSwitch { from: String, to: String },
@@ -197,14 +242,49 @@ pub struct TimelineEvent {
     pub kind: TimelineEventKind,
 }
 
+/// 单个动作的结算结果（供前端直接渲染，不再由前端推导）
+#[derive(Debug, Clone, Default)]
+pub struct TimelineStep {
+    /// 该动作实际施放/切换的时刻；被跳过时为 None
+    pub time: Option<f32>,
+    pub gcd_secs: f32,
+    pub gcd_ready_at: f32,
+    /// 该动作是否成功执行（形态/曲风/调息/窗口等都算）
+    pub legal: bool,
+    /// 动作执行前的器形 / 曲风状态
+    pub instrument: String,
+    pub qifeng: String,
+    /// 被跳过时的原因（成功为空）
+    pub skipped_reason: String,
+    /// 非法时缺少的器形 / 曲风要求
+    pub required_instrument: Option<String>,
+    pub required_qifeng: Option<String>,
+    /// 本动作执行前发生的器形/曲风切换事件
+    pub switches: Vec<TimelineStepSwitch>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TimelineStepSwitch {
+    /// "form" / "qifeng"
+    pub switch_kind: String,
+    pub from: String,
+    pub to: String,
+    pub time: f32,
+}
+
 /// 时序模拟结果
 #[derive(Debug, Clone, Default)]
 pub struct TimelineResult {
     pub events: Vec<TimelineEvent>,
+    /// 每个动作一个步骤结果（与输入 actions 一一对应）
+    pub steps: Vec<TimelineStep>,
     pub total_damage: f64,
     pub window_dps: f64,
     /// 窗口内未能施放的动作数（GCD/CD/形态不满足或超出窗口）
     pub skipped_actions: u32,
+    /// 序列执行完后的器形 / 曲风
+    pub final_instrument: String,
+    pub final_qifeng: String,
 }
 
 // ============ 内部运行态 ============
@@ -237,6 +317,12 @@ struct DotInstance {
     coeff: CoefficientConfig,
     /// 每跳时间点（绝对时间，施加时按当时加速率算好）
     tick_times: Vec<f32>,
+    /// 该跳是否被「下一跳立刻生效」（洞天/羽）提前过
+    advanced: Vec<bool>,
+    /// 展示用的跳序号（刷新后新一轮从 1 重新编号；老实例已生效的跳保留原序号）
+    tick_labels: Vec<u32>,
+    /// 跳间隔（秒，施加时算好；提前后按它重新排后续跳）
+    interval: f32,
 }
 
 impl DotInstance {
@@ -272,6 +358,8 @@ struct Sim<'a> {
     qifeng_id: String,
     /// 活跃定时 buff
     active_buffs: Vec<ActiveBuff>,
+    /// DOT 提前事件（时间, 目标 DOT 技能键）：洞天等「下一跳立刻生效」
+    accel_events: Vec<(f32, Vec<SkillKey>)>,
     school_gcd_secs: f32,
 }
 
@@ -301,8 +389,60 @@ impl<'a> Sim<'a> {
             instrument,
             qifeng_id: input.initial_qifeng.clone(),
             active_buffs: Vec::new(),
+            accel_events: Vec::new(),
             school_gcd_secs,
         }
+    }
+
+    /// 施加 DOT；同一技能重复施放时「刷新」：保留已经生效的跳，追加新的跳（序号继续），
+    /// 而不是丢弃旧实例（否则刷新前已经打出的跳会从日志里消失）。
+    fn push_dot(
+        &mut self,
+        now: f32,
+        sid: u32,
+        sub: u32,
+        name: String,
+        skill: Skilltype,
+        times: Vec<f32>,
+        buff: BuffConfig,
+        interval: f32,
+    ) {
+        if times.is_empty() {
+            return;
+        }
+        if let Some(dot) = self
+            .dots
+            .iter_mut()
+            .find(|d| d.skill.skill_id == sid && d.skill.sub_id == sub)
+        {
+            let keep = dot.tick_times.iter().filter(|t| **t <= now + 1e-4).count();
+            dot.tick_times.truncate(keep);
+            dot.advanced.truncate(keep);
+            dot.tick_labels.truncate(keep);
+            let new_ticks = times.len();
+            dot.tick_times.extend(times);
+            dot.advanced
+                .extend(std::iter::repeat(false).take(new_ticks));
+            // 刷新后的新一轮重新从第 1 跳编号
+            dot.tick_labels.extend(1..=new_ticks as u32);
+            dot.skill = skill;
+            dot.buff = buff;
+            dot.interval = interval;
+            return;
+        }
+        let ticks = times.len();
+        self.dots.push(DotInstance {
+            skill_name: name,
+            skill,
+            player: self.input.player.clone(),
+            xinfa: self.input.xinfa.clone(),
+            buff,
+            coeff: self.input.coeff.clone(),
+            tick_times: times,
+            advanced: vec![false; ticks],
+            tick_labels: (1..=ticks as u32).collect(),
+            interval,
+        });
     }
 
     /// 某时刻的加速率（受上限 / 突破上限分开汇总）
@@ -537,10 +677,15 @@ impl<'a> Sim<'a> {
                 QixueHook::DamagePctPerQifeng { pct } => {
                     pct_bonus += pct * qifeng_before as f32;
                 }
+                QixueHook::AccelerateDot { .. } => {}
             }
         }
         let direct_damage =
             ((base_direct as f32) * (1.0 + pct_bonus / 100.0) + flat_bonus).max(0.0) as u32;
+        // 引导/倒读条：伤害按段结算（Cast 事件本身不带伤害）
+        let channel_ticks = sk.skill.channel_ticks.max(1) as u32;
+        let channel_cast = sk.skill.channel && channel_ticks > 1;
+        let per_tick_damage = ((base_direct as f32) * (1.0 + pct_bonus / 100.0)).max(0.0) as u32;
         // 施放后更新曲风：先结清消耗，再加获得（上限 9）
         self.qifeng_points = if sk.spend_all_qifeng {
             sk.qifeng_gain.min(MAX_QIFENG)
@@ -558,27 +703,105 @@ impl<'a> Sim<'a> {
             time: start,
             kind: TimelineEventKind::Cast {
                 skill_name: sk.skill.skill_name.clone(),
-                damage: direct_damage,
+                damage: if channel_cast { 0 } else { direct_damage },
                 hit_time,
                 gcd_secs,
                 gcd_ready_at,
             },
         });
 
+        // ---- 引导分段：每段在其结算时刻输出（首段吃一次性固定加成） ----
+        if channel_cast {
+            let cast_secs = cast_time.max(0.0);
+            for k in 1..=channel_ticks {
+                let t = start + cast_secs * k as f32 / channel_ticks as f32;
+                let bonus = if k == 1 {
+                    flat_bonus.max(0.0) as u32
+                } else {
+                    0
+                };
+                self.events.push(TimelineEvent {
+                    time: t,
+                    kind: TimelineEventKind::ChannelTick {
+                        skill_name: sk.skill.skill_name.clone(),
+                        index: k,
+                        damage: per_tick_damage + bonus,
+                    },
+                });
+            }
+        }
+
         // ---- dot：进攻侧快照（伤害/加速/跳数），逐跳排在时间轴上 ----
+        // 同一技能重复施放视为刷新：保留已生效跳、追加新跳（push_dot）。
         if !damage.dot_jumps.is_empty() {
             let ticks = damage.dot_jumps.len() as u32;
             let total = timing::quantize_secs(sk.skill.dot_duration, rate);
             let stamp = |i: u32| hit_time + total * i as f32 / ticks as f32;
-            self.dots.push(DotInstance {
-                skill_name: sk.skill.skill_name.clone(),
-                skill: sk.skill.clone(),
-                player: self.input.player.clone(),
-                xinfa: self.input.xinfa.clone(),
-                buff: buff_cfg.clone(),
-                coeff: self.input.coeff.clone(),
-                tick_times: (1..=ticks).map(stamp).collect(),
-            });
+            self.push_dot(
+                hit_time,
+                sk.skill.skill_id,
+                sk.skill.sub_id,
+                sk.skill.skill_name.clone(),
+                sk.skill.clone(),
+                (1..=ticks).map(stamp).collect(),
+                buff_cfg.clone(),
+                total / ticks as f32,
+            );
+        }
+
+        // ---- 独立 DOT：逐跳按合成技能结算（与本体伤害分开） ----
+        if let Some(spec) = &sk.dot_tick {
+            let tick_cfg = JpcgConfig::new_with_config(
+                &self.input.player,
+                &self.input.hostile,
+                &spec.skill,
+                &self.input.xinfa,
+                &buff_cfg,
+                &self.input.coeff,
+            );
+            let jumps = tick_cfg.q_cal().dot_jumps;
+            if !jumps.is_empty() {
+                let ticks = jumps.len() as u32;
+                let total = timing::quantize_secs(spec.duration, rate);
+                let stamp = |i: u32| hit_time + total * i as f32 / ticks as f32;
+                self.push_dot(
+                    hit_time,
+                    sk.skill.skill_id,
+                    sk.skill.sub_id,
+                    format!("{}·持续", sk.skill.skill_name),
+                    spec.skill.clone(),
+                    (1..=ticks).map(stamp).collect(),
+                    buff_cfg.clone(),
+                    total / ticks as f32,
+                );
+            }
+        }
+
+        // ---- 羽类：施放时让目标 DOT 的「下 N 跳」立刻生效 ----
+        if !sk.on_cast.advance_dot_targets.is_empty() {
+            let times = sk.on_cast.advance_dot_ticks.max(1) as usize;
+            for target in &sk.on_cast.advance_dot_targets {
+                for _ in 0..times {
+                    self.accel_events.push((hit_time, vec![*target]));
+                }
+            }
+        }
+
+        // ---- 洞天类奇穴：本技能的每次 DOT 跳都让目标 DOT「下一跳立刻生效」 ----
+        if !damage.dot_jumps.is_empty() {
+            let ticks = damage.dot_jumps.len() as u32;
+            let total = timing::quantize_secs(sk.skill.dot_duration, rate);
+            for h in &self.input.hooks {
+                if !h.target(key) {
+                    continue;
+                }
+                if let QixueHook::AccelerateDot { targets } = &h.hook {
+                    for i in 1..=ticks {
+                        let t = hit_time + total * i as f32 / ticks as f32;
+                        self.accel_events.push((t, targets.clone()));
+                    }
+                }
+            }
         }
 
         // ---- 占用 GCD 通道（自身通道 + 副作用额外通道） ----
@@ -736,8 +959,17 @@ impl<'a> Sim<'a> {
     fn run(mut self) -> TimelineResult {
         let mut now: f32 = 0.0;
         let mut skipped = 0u32;
+        let mut steps: Vec<TimelineStep> = Vec::new();
 
         for action in &self.input.actions {
+            let ev_start = self.events.len();
+            let instrument_before = self.instrument.clone();
+            let qifeng_before = self.qifeng_id.clone();
+            let mut legal = true;
+            let mut skipped_reason = String::new();
+            let mut required_instrument: Option<String> = None;
+            let mut required_qifeng: Option<String> = None;
+
             match action {
                 TimelineAction::SwitchForm(to) => {
                     if self.form(to).is_some() && *to != self.instrument {
@@ -751,6 +983,8 @@ impl<'a> Sim<'a> {
                             },
                         });
                     } else {
+                        legal = false;
+                        skipped_reason = "器形不存在或已经处于该器形".to_string();
                         skipped += 1;
                     }
                 }
@@ -759,25 +993,112 @@ impl<'a> Sim<'a> {
                     sub_id,
                     skill_name,
                 } => {
-                    let Some(index) = self.resolve_skill(*skill_id, *sub_id, skill_name.as_deref())
-                    else {
+                    if let Some(index) =
+                        self.resolve_skill(*skill_id, *sub_id, skill_name.as_deref())
+                    {
+                        // 先按当前时刻结算充能，再判断能否施放
+                        self.settle_charges(index, now);
+                        if !self.skill_allowed(&self.input.skills[index]) {
+                            legal = false;
+                            skipped_reason = "当前器形/曲风不满足技能要求".to_string();
+                            required_instrument =
+                                self.input.skills[index].requires_instrument.clone();
+                            required_qifeng = self.input.skills[index].requires_qifeng.clone();
+                            skipped += 1;
+                        } else {
+                            let start = self.earliest_start(index).max(now);
+                            if start > self.input.window {
+                                legal = false;
+                                skipped_reason = "超出模拟窗口".to_string();
+                                skipped += 1;
+                            } else {
+                                now = self.cast(index, start);
+                            }
+                        }
+                    } else {
                         // id 无法唯一确定具体变体（且未提供 skill_name）→ 跳过，避免静默取错条目
+                        legal = false;
+                        skipped_reason = "技能 id 无法唯一确定变体".to_string();
                         skipped += 1;
-                        continue;
-                    };
-                    // 先按当前时刻结算充能，再判断能否施放
-                    self.settle_charges(index, now);
-                    if !self.skill_allowed(&self.input.skills[index]) {
-                        skipped += 1;
-                        continue;
                     }
-                    let start = self.earliest_start(index).max(now);
-                    if start > self.input.window {
-                        skipped += 1;
-                        continue;
-                    }
-                    now = self.cast(index, start);
                 }
+            }
+
+            // 从本动作新产生的事件里提取时间 / GCD / 切换，供前端直接渲染
+            let mut step = TimelineStep {
+                time: None,
+                gcd_secs: 0.0,
+                gcd_ready_at: 0.0,
+                legal,
+                instrument: instrument_before,
+                qifeng: qifeng_before,
+                skipped_reason,
+                required_instrument,
+                required_qifeng,
+                switches: Vec::new(),
+            };
+            for e in &self.events[ev_start..] {
+                match &e.kind {
+                    TimelineEventKind::Cast {
+                        hit_time,
+                        gcd_secs,
+                        gcd_ready_at,
+                        ..
+                    } => {
+                        step.time = Some(*hit_time);
+                        step.gcd_secs = *gcd_secs;
+                        step.gcd_ready_at = *gcd_ready_at;
+                    }
+                    TimelineEventKind::FormSwitch { from, to } => {
+                        step.switches.push(TimelineStepSwitch {
+                            switch_kind: "form".to_string(),
+                            from: from.clone(),
+                            to: to.clone(),
+                            time: e.time,
+                        });
+                    }
+                    TimelineEventKind::QifengSwitch { from, to } => {
+                        step.switches.push(TimelineStepSwitch {
+                            switch_kind: "qifeng".to_string(),
+                            from: from.clone(),
+                            to: to.clone(),
+                            time: e.time,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            steps.push(step);
+        }
+
+        // ---- 应用「下一跳立刻生效」：把目标 DOT 的最早未跳时间改到触发时刻 ----
+        self.accel_events.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // 每个 DOT 记录「下一条要被炸的跳」下标；每来一次触发事件就消费一跳，
+        // 保证洞天 3 跳 / 羽 2 跳每一下都能炸到，不会因为级联前移而找不到目标。
+        let mut consumed: std::collections::HashMap<usize, usize> =
+            std::collections::HashMap::new();
+        for (t, targets) in &self.accel_events {
+            for (di, dot) in self.dots.iter_mut().enumerate() {
+                let matched = targets.iter().any(|(id, sub)| {
+                    *id == dot.skill.skill_id && (*sub == 0 || *sub == dot.skill.sub_id)
+                });
+                if !matched {
+                    continue;
+                }
+                let mut start = *consumed.get(&di).unwrap_or(&0);
+                // 跳过「在触发时刻之前/同时已经生效」的跳：不能把它们改到更晚的时刻。
+                while start < dot.tick_times.len() && dot.tick_times[start] <= *t + 1e-4 {
+                    start += 1;
+                }
+                consumed.insert(di, start);
+                if start >= dot.tick_times.len() {
+                    continue;
+                }
+                for (offset, tick) in dot.tick_times.iter_mut().enumerate().skip(start) {
+                    *tick = *t + dot.interval * (offset - start) as f32;
+                }
+                dot.advanced[start] = true;
+                consumed.insert(di, start + 1);
             }
         }
 
@@ -792,8 +1113,9 @@ impl<'a> Sim<'a> {
                     time: t,
                     kind: TimelineEventKind::DotTick {
                         skill_name: dot.skill_name.clone(),
-                        index: (i + 1) as u32,
+                        index: *dot.tick_labels.get(i).unwrap_or(&(i as u32 + 1)),
                         damage: dmg,
+                        advanced: *dot.advanced.get(i).unwrap_or(&false),
                     },
                 });
             }
@@ -812,6 +1134,11 @@ impl<'a> Sim<'a> {
                         total += *damage as f64;
                     }
                 }
+                TimelineEventKind::ChannelTick { damage, .. } => {
+                    if e.time <= self.input.window {
+                        total += *damage as f64;
+                    }
+                }
                 TimelineEventKind::DotTick { damage, .. } => total += *damage as f64,
                 _ => {}
             }
@@ -822,8 +1149,13 @@ impl<'a> Sim<'a> {
             0.0
         };
 
+        let final_instrument = self.instrument.clone();
+        let final_qifeng = self.qifeng_id.clone();
         TimelineResult {
             events: self.events,
+            steps,
+            final_instrument,
+            final_qifeng,
             total_damage: total,
             window_dps,
             skipped_actions: skipped,
@@ -905,6 +1237,7 @@ mod tests {
             requires_qifeng: None,
             gcd_lane: lane.into(),
             on_cast: OnCast::default(),
+            dot_tick: None,
         }
     }
 
@@ -1027,6 +1360,8 @@ mod tests {
                 switch_qifeng: None,
                 gcd_lanes: vec!["dual".into()],
                 lock_skills: vec![(2, 0)],
+                advance_dot_targets: Vec::new(),
+                advance_dot_ticks: 0,
             },
             ..timing(skill(1, 0, "断云势"), "single")
         };
