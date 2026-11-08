@@ -391,7 +391,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         ...extra,
       });
       return {
-        skills: [],
+        skills: await mockResponse("load_skill_pool", args),
         combat: {
           meta: { profession, version: "mock", note: "浏览器预览数据", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
           form: forms,

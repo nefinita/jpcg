@@ -113,7 +113,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       if (selected) return prev.filter((x) => !ids.includes(x));
       if (!mixed) {
         // 固定重数：同一重内互斥
-        const sameSlot = new Set(timelineQixue.filter((q) => q.slot === slot).map((q) => q.id));
+        const sameSlot = new Set(timelineQixue.filter((q) => q.slot === slot).flatMap((q) => q.group_ids?.length ? q.group_ids : [q.id]));
         return [...prev.filter((x) => !sameSlot.has(x)), ...ids];
       }
       // 混选池：上限由后端 meta 提供，按「格」计数（后端已把同一奇穴多条效果合并）
@@ -592,14 +592,14 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                 const equipped = miji.filter((m) => selMiji.includes(m.id)).length;
                 return (
                   <div key={`${key}-${itemIndex}`}
-                    data-skill-card={key}
-                    data-skill-name={s.skill_name}
                     className={`${styles.skillTile} ${accent} ${fav ? styles.favoriteTile : ""}`}
-                    onClick={() => addToSequence(s)}
                     onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}
                     title={`${s.skill_name} | ${s.base_damage1}-${s.base_damage2}${qifengNeed ? ` | 需${qifengNeed}` : ""}${fav ? " · 已收藏" : " · 右键收藏"}`}>
+                    <button type="button" className={styles.tileAdd} data-skill-card={key}
+                      data-skill-name={s.skill_name} onClick={() => addToSequence(s)} aria-label={`添加${s.skill_name}`}>
                     <span className={styles.tileName}>{s.skill_name}</span>
                     <span className={styles.tileTag}>{castLabel(s)}</span>
+                    </button>
                     {miji.length > 0 && (
                       <button type="button" className={`${styles.tileGear} ${equipped > 0 ? styles.tileGearOn : ""}`}
                         title="秘籍配置"

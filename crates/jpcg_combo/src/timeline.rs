@@ -362,6 +362,9 @@ struct ActiveBuff {
 /// dot 施加时快照（进攻侧），每跳按当前 hostile 重算
 #[derive(Debug, Clone)]
 struct DotInstance {
+    applied_at: f32,
+    order: usize,
+    key: SkillKey,
     skill_name: String,
     skill: Skilltype,
     /// 施加快照：玩家 / 心法 / buff / 系数
@@ -439,8 +442,9 @@ struct Sim<'a> {
     qifeng_id: String,
     /// 活跃定时 buff
     active_buffs: Vec<ActiveBuff>,
-    /// DOT 提前事件（时间, 目标 DOT 技能键）：洞天等「下一跳立刻生效」
-    accel_events: Vec<(f32, Vec<SkillKey>)>,
+    /// DOT 提前事件（时间、动作顺序、目标技能键、可选来源实例）。
+    accel_events: Vec<(f32, usize, Vec<SkillKey>, Option<usize>)>,
+    dot_operation_order: usize,
     school_gcd_secs: f32,
 }
 
@@ -471,6 +475,7 @@ impl<'a> Sim<'a> {
             qifeng_id: input.initial_qifeng.clone(),
             active_buffs: Vec::new(),
             accel_events: Vec::new(),
+            dot_operation_order: 0,
             school_gcd_secs,
         }
     }
@@ -491,28 +496,13 @@ impl<'a> Sim<'a> {
         if times.is_empty() {
             return;
         }
-        if let Some(dot) = self
-            .dots
-            .iter_mut()
-            .find(|d| d.skill.skill_id == sid && d.skill.sub_id == sub)
-        {
-            let keep = dot.tick_times.iter().filter(|t| **t <= now + 1e-4).count();
-            dot.tick_times.truncate(keep);
-            dot.advanced.truncate(keep);
-            dot.tick_labels.truncate(keep);
-            let new_ticks = times.len();
-            dot.tick_times.extend(times);
-            dot.advanced
-                .extend(std::iter::repeat(false).take(new_ticks));
-            // 刷新后的新一轮重新从第 1 跳编号
-            dot.tick_labels.extend(1..=new_ticks as u32);
-            dot.skill = skill;
-            dot.buff = buff;
-            dot.interval = interval;
-            return;
-        }
         let ticks = times.len();
+        let order = self.dot_operation_order;
+        self.dot_operation_order += 1;
         self.dots.push(DotInstance {
+            applied_at: now,
+            order,
+            key: (sid, sub),
             skill_name: name,
             skill,
             player: self.input.player.clone(),
@@ -871,8 +861,10 @@ impl<'a> Sim<'a> {
         }
 
         // ---- dot：进攻侧快照（伤害/加速/跳数），逐跳排在时间轴上 ----
-        // 同一技能重复施放视为刷新：保留已生效跳、追加新跳（push_dot）。
+        // 先保存独立快照，在时间顺序回放阶段截断旧实例的未来跳。
+        let mut raw_dot_source = None;
         if !damage.dot_jumps.is_empty() {
+            raw_dot_source = Some(self.dots.len());
             let ticks = damage.dot_jumps.len() as u32;
             let total = timing::quantize_secs(sk.skill.dot_duration, rate);
             let stamp = |i: u32| hit_time + total * i as f32 / ticks as f32;
@@ -921,7 +913,13 @@ impl<'a> Sim<'a> {
             let times = sk.on_cast.advance_dot_ticks.max(1) as usize;
             for target in &sk.on_cast.advance_dot_targets {
                 for _ in 0..times {
-                    self.accel_events.push((hit_time, vec![*target]));
+                    self.accel_events.push((
+                        hit_time,
+                        self.dot_operation_order,
+                        vec![*target],
+                        None,
+                    ));
+                    self.dot_operation_order += 1;
                 }
             }
         }
@@ -937,7 +935,13 @@ impl<'a> Sim<'a> {
                 if let QixueHook::AccelerateDot { targets } = &h.hook {
                     for i in 1..=ticks {
                         let t = hit_time + total * i as f32 / ticks as f32;
-                        self.accel_events.push((t, targets.clone()));
+                        self.accel_events.push((
+                            t,
+                            self.dot_operation_order,
+                            targets.clone(),
+                            raw_dot_source,
+                        ));
+                        self.dot_operation_order += 1;
                     }
                 }
             }
@@ -1239,31 +1243,61 @@ impl<'a> Sim<'a> {
             steps[index].time = Some(time);
         }
 
-        // ---- 应用「下一跳立刻生效」：把目标 DOT 的最早未跳时间改到触发时刻 ----
-        self.accel_events.sort_by(|a, b| a.0.total_cmp(&b.0));
-        // 每个 DOT 记录「下一条要被炸的跳」下标；每来一次触发事件就消费一跳，
-        // 保证洞天 3 跳 / 羽 2 跳每一下都能炸到，不会因为级联前移而找不到目标。
-        let mut consumed: std::collections::HashMap<usize, usize> =
-            std::collections::HashMap::new();
-        for (t, targets) in &self.accel_events {
-            for (di, dot) in self.dots.iter_mut().enumerate() {
-                let matched = targets.iter().any(|(id, sub)| {
-                    *id == dot.skill.skill_id && (*sub == 0 || *sub == dot.skill.sub_id)
-                });
-                if !matched {
+        // 按时间及同刻动作顺序回放施加/刷新/提前，保留每次施加的独立快照。
+        // kind=true 为施加，false 为提前；先发生的羽不能作用于未来的商。
+        let mut operations: Vec<(f32, usize, bool, usize)> = self
+            .dots
+            .iter()
+            .enumerate()
+            .map(|(i, d)| (d.applied_at, d.order, true, i))
+            .collect();
+        operations.extend(
+            self.accel_events
+                .iter()
+                .enumerate()
+                .map(|(i, e)| (e.0, e.1, false, i)),
+        );
+        operations.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        let mut active: HashMap<SkillKey, usize> = HashMap::new();
+        let mut consumed: HashMap<usize, usize> = HashMap::new();
+        for (time, _, apply, index) in operations {
+            if apply {
+                let key = self.dots[index].key;
+                if let Some(old) = active.insert(key, index) {
+                    let dot = &mut self.dots[old];
+                    let keep = dot
+                        .tick_times
+                        .iter()
+                        .take_while(|t| **t <= time + 1e-4)
+                        .count();
+                    dot.tick_times.truncate(keep);
+                    dot.tick_labels.truncate(keep);
+                    dot.advanced.truncate(keep);
+                }
+                continue;
+            }
+            let (_, _, targets, source) = &self.accel_events[index];
+            // 被刷新掉的旧实例不再发出未来触发事件。
+            if source.is_some_and(|i| active.get(&self.dots[i].key) != Some(&i)) {
+                continue;
+            }
+            for (&(id, sub), &di) in &active {
+                if !targets
+                    .iter()
+                    .any(|(target, variant)| *target == id && (*variant == 0 || *variant == sub))
+                {
                     continue;
                 }
+                let dot = &mut self.dots[di];
                 let mut start = *consumed.get(&di).unwrap_or(&0);
-                // 跳过「在触发时刻之前/同时已经生效」的跳：不能把它们改到更晚的时刻。
-                while start < dot.tick_times.len() && dot.tick_times[start] <= *t + 1e-4 {
+                while start < dot.tick_times.len() && dot.tick_times[start] <= time + 1e-4 {
                     start += 1;
                 }
-                consumed.insert(di, start);
                 if start >= dot.tick_times.len() {
                     continue;
                 }
                 for (offset, tick) in dot.tick_times.iter_mut().enumerate().skip(start) {
-                    *tick = *t + dot.interval * (offset - start) as f32;
+                    *tick = time + dot.interval * (offset - start) as f32;
                 }
                 dot.advanced[start] = true;
                 consumed.insert(di, start + 1);

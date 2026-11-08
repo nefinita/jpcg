@@ -73,7 +73,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
           const best = optResult.result.best!.composed.loadout;
           const choice = best.choices.find((c) => c.slot === slot);
           const template = choice
-            ? catalog.templates.find((t) => t.choice.slot === slot && choiceKey(t.choice) === choiceKey(choice))
+            ? catalog.templates.find((t) => t.school === (choice.school ?? best.school) && t.choice.slot === slot && choiceKey(t.choice) === choiceKey(choice))
             : undefined;
           const enchantId = best.enchants?.[slot];
           const enchant = enchantId ? catalog.enchants?.find((e) => e.slot === slot && e.id === enchantId) : undefined;
@@ -111,7 +111,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
         // 跨门派装备（如冰心护手）也可以在任何一个门派下选择，只是不计套装。
         const candidates = catalog.templates.filter((t) => (t.school === loadout.school || t.cross_school) && t.choice.slot === slot);
         const selected = loadout.choices.find((c) => c.slot === slot);
-        const template = candidates.find((t) => selected && choiceKey(t.choice) === choiceKey(selected));
+        const template = candidates.find((t) => selected && t.school === (selected.school ?? loadout.school) && choiceKey(t.choice) === choiceKey(selected));
         const sockets = template?.sockets ?? [];
         const enchantOptions = (catalog.enchants ?? []).filter((e) => e.slot === slot);
         const enchantId = loadout.enchants?.[slot] ?? "";

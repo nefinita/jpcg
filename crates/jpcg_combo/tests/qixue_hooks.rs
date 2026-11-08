@@ -517,7 +517,7 @@ fn panel_bundle_is_enriched_by_backend() {
 
 #[test]
 fn dongtian_recast_keeps_past_ticks() {
-    // 连续两次洞天（刷新）时，第一次已生效的跳不能被丢掉，序号继续累加
+    // 连续两次洞天刷新保留过去伤害，新实例从第一跳重新结算
     let mut request = req(
         vec!["dongtian".into()],
         vec![
@@ -541,6 +541,16 @@ fn dongtian_recast_keeps_past_ticks() {
             _ => None,
         })
         .collect();
+    for e in &result.events {
+        if let TimelineEventKindDTO::DotTick {
+            skill_name, damage, ..
+        } = &e.kind
+        {
+            if skill_name == "洞天" {
+                assert!(*damage > 0, "刷新后的跳不能归零");
+            }
+        }
+    }
     // 老实例已生效的 3 跳保留 1..3；刷新后的新一轮重新从 1 开始
     assert_eq!(
         indices,
@@ -951,4 +961,25 @@ fn prepared_optimizer_request_matches_desktop_full_qixue_definitions() {
         desktop.steps.iter().map(|s| s.time).collect::<Vec<_>>()
     );
     assert!(optimizer.steps[1].time.unwrap() - optimizer.steps[0].time.unwrap() >= 12.0);
+}
+
+#[test]
+fn advance_only_affects_dot_instances_alive_at_the_time() {
+    for refresh in [false, true] {
+        let mut actions = vec![cast(14068, 14100, "羽"), cast(14065, 14311, "商")];
+        if refresh {
+            actions.insert(0, cast(14065, 14311, "商"));
+        }
+        let mut request = req(vec![], actions);
+        request.player.jichu_gongji = 8438;
+        request.window = 60.0;
+        let result = jpcg_combo::timeline_host::calculate_timeline(request).unwrap();
+        let ticks: Vec<_> = result.events.iter().filter(|e| matches!(&e.kind, TimelineEventKindDTO::DotTick { skill_name, .. } if skill_name.contains("商"))).collect();
+        let expected = if refresh {
+            vec![1.5, 1.5, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0]
+        } else {
+            vec![4.5, 7.5, 10.5, 13.5, 16.5, 19.5]
+        };
+        assert_eq!(ticks.iter().map(|e| e.time).collect::<Vec<_>>(), expected);
+    }
 }

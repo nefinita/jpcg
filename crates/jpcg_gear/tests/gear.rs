@@ -580,3 +580,67 @@ fn parallel_and_serial_reject_invalid_budgets_and_constraints_identically() {
         optimize_parallel(&c, &req, &OptimizeProgress::new()).unwrap_err()
     );
 }
+
+#[test]
+fn upper_bounds_keep_feasible_base_tiers_in_both_search_modes() {
+    if !runtime_child("upper_bounds_keep_feasible_base_tiers_in_both_search_modes") {
+        return;
+    }
+    let c = catalog();
+    let mut r = request();
+    r.constraints = Constraints::default();
+    r.constraints.sources = vec![Source::Mingjian, Source::Weiwang];
+    r.constraints.allow_upgraded = true;
+    r.constraints.allow_cross_source_2plus2 = true;
+    let head = r
+        .loadout
+        .choices
+        .iter_mut()
+        .find(|x| x.slot == Slot::Tou)
+        .unwrap();
+    head.source = Source::Mingjian;
+    head.tier = Tier::Upgraded;
+    r.constraints.locked = r
+        .loadout
+        .choices
+        .iter()
+        .filter(|x| x.slot != Slot::Tou)
+        .cloned()
+        .collect();
+    r.constraints
+        .required_sources
+        .insert(Slot::Tou, Source::Mingjian);
+    let mut base = r.loadout.clone();
+    base.choices
+        .iter_mut()
+        .find(|x| x.slot == Slot::Tou)
+        .unwrap()
+        .tier = Tier::Base;
+    let base_stats = c.compose(&base).unwrap().stats;
+    let max = base_stats.pofang + 5;
+    r.constraints.stats.insert(
+        "pofang".into(),
+        Bounds {
+            min: None,
+            max: Some(max),
+        },
+    );
+    for out in [
+        optimize_with(&c, &r, evaluate, |_| true).unwrap(),
+        optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap(),
+    ] {
+        assert!(out.complete);
+        let best = out.best.expect("base tier satisfies cap");
+        assert!(best.composed.stats.pofang <= max);
+        assert_eq!(
+            best.composed
+                .loadout
+                .choices
+                .iter()
+                .find(|c| c.slot == Slot::Tou)
+                .unwrap()
+                .tier,
+            Tier::Base
+        );
+    }
+}

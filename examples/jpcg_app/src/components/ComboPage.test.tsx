@@ -213,3 +213,18 @@ it("输入切换后迟到的成功结果不能覆盖新结果", async () => {
     expect(host.textContent).not.toContain("123,456");
   } finally { vi.useRealTimers(); }
 });
+
+it("固定槽切换会移除整个奇穴组，技能入口是可聚焦原生按钮", async () => {
+ vi.mocked(api.loadCombatBundle).mockResolvedValue({skills: [skill], combat: {meta: {}, form: [], qifeng: [], skill_combat: [], buff: [], miji: [], qixue: [
+ {id: "dongquan", name: "冻泉", slot: 4, group_ids: ["dongquan", "dongquan-gong"]},
+ {id: "lingdong", name: "凌冬", slot: 4},
+ ]}} as never);
+ await mount();
+ const add = host.querySelector('[data-skill-card]')!;
+ expect(add.tagName).toBe("BUTTON");
+ (add as HTMLButtonElement).focus(); expect(document.activeElement).toBe(add);
+ expect(add.querySelector("button")).toBeNull();
+ await click("冻泉"); await click("凌冬");
+ const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data;
+ expect(saved.qixue).toEqual(["lingdong"]);
+});

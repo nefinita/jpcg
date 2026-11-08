@@ -152,8 +152,15 @@ fn build_candidates(
     req: &OptimizeRequest,
 ) -> Result<(Vec<Vec<Choice>>, u64), String> {
     let mut droppable: BTreeSet<(Slot, Source, u8)> = BTreeSet::new();
+    // 有上限时，属性更高不代表可行性更好，不能删去基础档。
+    let has_upper_bound = req
+        .constraints
+        .stats
+        .values()
+        .any(|bounds| bounds.max.is_some());
     for up in &catalog.templates {
-        if up.school != req.loadout.school
+        if has_upper_bound
+            || up.school != req.loadout.school
             || up.choice.tier != Tier::Upgraded
             || !req.constraints.permits(&up.choice)
         {

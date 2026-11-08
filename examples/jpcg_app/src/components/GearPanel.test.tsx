@@ -139,3 +139,18 @@ it("已填写五维后切回旧模式仍可清零，不会困在禁用输入框�
   expect(current.base.qixue_additional).toBe(0);
   expect(host.querySelector('[role="alert"]')).toBeNull();
 });
+
+it("跨门派同键装备显示所选门派的属性和镶嵌", async () => {
+  const loadout = structuredClone(fixture.cases[0].composed.loadout);
+  const selected = loadout.choices[0];
+  const own = fixture.catalog.templates.find((t) => t.school === loadout.school && t.choice.slot === selected.slot && t.choice.source === selected.source && t.choice.tier === selected.tier && t.choice.variant === selected.variant)!;
+  expect(own).toBeDefined();
+  selected.school = "bingxin";
+  const foreign = { ...own, school: "bingxin", cross_school: true, stats: { ...own.stats, pofang: 98765 }, sockets: [{ ...own.stats, pofang: 54321 }] };
+  await act(async () => root.render(<GearPanel catalog={{ ...fixture.catalog, templates: [...fixture.catalog.templates, foreign] }} loadout={loadout}
+    onChange={onChange} onReset={vi.fn()} onExport={vi.fn()} onImport={async () => {}} onOptimize={vi.fn()} optimizing={false} pending={false} />));
+  const card = [...host.querySelectorAll("article")].find((a) => a.querySelector('button[aria-pressed="true"]')?.getAttribute("title")?.includes("跨门派"))!;
+  expect(card).toBeDefined();
+  expect(card.textContent).toContain("98765");
+  expect(card.textContent).toContain("54321");
+});

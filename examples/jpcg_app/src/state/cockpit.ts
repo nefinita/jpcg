@@ -95,13 +95,29 @@ function isSnapshot(x: unknown): x is CalculationSnapshot {
     && (x.inputKey === undefined || typeof x.inputKey === "string");
 }
 export const cockpitSchema = {
-  version: 2,
+  version: 3,
   validate: (x: unknown): x is CockpitState => record(x) && (x.mode === "manual" || x.mode === "gear") && record(x.loadouts) && Object.entries(x.loadouts).every(([school, loadout]) => isGearLoadout(loadout) && loadout.school === school) && typeof x.manualReady === "boolean"
     && (x.manualHydration === undefined || (record(x.manualHydration) && typeof x.manualHydration.xinfa === "boolean" && typeof x.manualHydration.coefficient === "boolean"))
     && (x.combo === undefined || (record(x.combo) && typeof x.combo.inputKey === "string" && isTimelineResult(x.combo.result)))
     && isManualForm(x.form) && (x.calculation === null || isSnapshot(x.calculation)) && (x.baseline === null || isSnapshot(x.baseline)),
   // #95/v1 仍按手动模式恢复，既有表单/结果/基准不丢。
-  migrate: (x: unknown, version: number) => version <= 1 && record(x) ? { ...x, loadouts: {}, mode: "manual" } : null,
+  migrate: (x: unknown, version: number) => {
+    if (!record(x) || version > 2) return null;
+    const migrateSnapshot = (snapshot: unknown) => {
+      if (!record(snapshot)) return snapshot;
+      const { comboResult, comboDraft, ...rest } = snapshot;
+      return { ...rest,
+        ...(isTimelineResult(comboResult) ? { comboResult } : {}),
+        ...(comboDraft === undefined ? {} : { comboDraft: comboDraftSchema.migrate(comboDraft, 2) }),
+      };
+    };
+    const { combo, ...rest } = x;
+    return { ...rest,
+      ...(version <= 1 ? { loadouts: {}, mode: "manual" } : {}),
+      calculation: migrateSnapshot(x.calculation), baseline: migrateSnapshot(x.baseline),
+      ...(record(combo) && isTimelineResult(combo.result) ? { combo } : {}),
+    };
+  },
 };
 const isSkillStep = (s: unknown): boolean => record(s)
   && record(s.skill) && typeof s.skill.skill_name === "string"
