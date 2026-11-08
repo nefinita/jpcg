@@ -38,6 +38,10 @@ export default function App() {
   const freshCockpit = useRef(readPreference(STORAGE_KEYS.cockpit) === null);
   const [contextReady, setContextReady] = useState(false);
   const [cockpit, setCockpit] = usePersistentState(STORAGE_KEYS.cockpit, defaultCockpit, cockpitSchema);
+  const cockpitRef = useRef(cockpit);
+  cockpitRef.current = cockpit;
+  const manualHydrationRef = useRef(cockpit.manualHydration ?? { xinfa: cockpit.manualReady, coefficient: cockpit.manualReady });
+  manualHydrationRef.current = cockpit.manualHydration ?? { xinfa: cockpit.manualReady, coefficient: cockpit.manualReady };
   const [restoreRevision, setRestoreRevision] = useState(0);
   const requestRevision = useRef(0);
   const actionRevision = useRef(0);
@@ -72,8 +76,12 @@ export default function App() {
     if (optimizeLock.current) return;
     // 旧选择的异步元数据回填不是新用户意图，不能取消后选的导入。
     if (options?.source !== "metadata") ++actionRevision.current;
+    // 同一微任务批次里的导入可能先于 React 下一次 render 继续执行。
+    const hydration = options?.hydration ?? { xinfa: true, coefficient: true };
+    manualHydrationRef.current = hydration;
     setCockpit((previous) => ({ ...previous,
       manualReady: options?.ready ?? true,
+      manualHydration: hydration,
       form: typeof update === "function" ? update(previous.form) : update }));
   }, [setCockpit]);
 
@@ -161,7 +169,7 @@ export default function App() {
       const base = previous.baseline; if (!base) return previous;
       return { ...previous, mode: base.mode ?? "manual", form: base.manualForm ?? base.form,
         loadouts: base.loadout ? { ...previous.loadouts, [base.loadout.school]: base.loadout } : previous.loadouts,
-        calculation: base, manualReady: true,
+        calculation: base, manualReady: true, manualHydration: { xinfa: true, coefficient: true },
         combo: base.comboResult && base.comboDraft ? { inputKey: JSON.stringify({ request: toCalculateRequest(base.form), sequence: base.comboDraft.sequence, miji: base.comboDraft.miji, qixue: base.comboDraft.qixue }), result: base.comboResult } : undefined };
     });
     setRestoreRevision((value) => value + 1); setStatus("已恢复钉住时的配装、属性与结果");
@@ -176,13 +184,16 @@ export default function App() {
       const vs = await api.resolveValueSet(migrated.value_set);
       if (action !== actionRevision.current) return;
       if (!vs.available || vs.id !== migrated.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
-      const config = migrated.school !== formData.xinfa ? await api.loadProfessionConfig(migrated.school) : null;
-      if (migrated.school !== formData.xinfa && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
+      // 目录/文件等待期间可能已收到初始化回填，不能使用导入开始时的旧就绪状态。
+      const current = cockpitRef.current;
+      const needsConfig = migrated.school !== current.form.xinfa || !manualHydrationRef.current.xinfa;
+      const config = needsConfig ? await api.loadProfessionConfig(migrated.school) : null;
+      if (needsConfig && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
       if (action !== actionRevision.current) return;
-      setCockpit((previous) => ({ ...previous, mode: "gear", manualReady: true,
+      setCockpit((previous) => ({ ...previous, mode: "gear", manualReady: true, manualHydration: { xinfa: true, coefficient: true },
         loadouts: { ...previous.loadouts, [migrated.school]: migrated },
         form: { ...previous.form, xinfa: migrated.school, value_set: migrated.value_set,
-          coefficient: previous.form.value_set === migrated.value_set ? previous.form.coefficient : { ...vs.coefficient! },
+          coefficient: previous.form.value_set === migrated.value_set && (previous.manualHydration?.coefficient ?? previous.manualReady) ? previous.form.coefficient : { ...vs.coefficient! },
           xinfa_config: config ? { profession: migrated.school, xinfa_name: String(config.xinfa_name ?? migrated.school),
             xinfa_nom: String(config.xinfa_nom ?? previous.form.xinfa_config.xinfa_nom), atk_up: Number(config.atk_up) || 0,
             pofang_up: Number(config.pofang_up) || 0, huixin_up: Number(config.huixin_up) || 0 }
@@ -275,7 +286,7 @@ export default function App() {
     <ResultTable results={results} baseline={cockpit.baseline?.results} calculating={calculating} />
   </div>;
   const configPanel = <ConfigPanel key={restoreRevision} form={formData} onFormChange={setFormData}
-    preserveInitialForm={cockpit.manualReady} manualMode={!gearMode} onReady={setContextReady}
+    preserveInitialForm={cockpit.manualReady} initialHydration={cockpit.manualHydration} manualMode={!gearMode} onReady={setContextReady}
     playerPreview={composition ? gearPlayerForm(composition.player) : undefined}
     onCalculate={handleCalculate} calculating={calculating} addToast={addToast} setStatus={setStatus} />;
 
