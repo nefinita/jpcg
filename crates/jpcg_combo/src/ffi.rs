@@ -58,6 +58,7 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             #[derive(serde::Deserialize)]
             struct ComboRequest {
                 steps: Vec<jpcg_api::ComboStepDTO>,
+
                 player: jpcg_api::PlayerConfigDTO,
                 hostile: jpcg_api::HostileConfigDTO,
                 xinfa: jpcg_api::XinfaConfigDTO,
@@ -85,10 +86,12 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             struct ComboPresetReq {
                 name: String,
                 steps: Vec<jpcg_api::ComboStepDTO>,
+                #[serde(default)]
+                flags: Vec<jpcg_api::ComboFlagDTO>,
             }
             let req: ComboPresetReq =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            crate::host::save_combo_preset(req.name, req.steps)?;
+            crate::host::save_combo_preset_with_flags(req.name, req.steps, req.flags)?;
             serde_json::to_string(&()).map_err(|e| format!("响应序列化失败: {}", e))
         }
         "list_combo_presets" => {

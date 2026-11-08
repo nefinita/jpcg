@@ -231,7 +231,7 @@ pub struct SkillPoolItemDTO {
     /// 调息时间（秒，0=无调息）
     #[serde(default)]
     pub cooldown: f32,
-    /// 充能层数（0 或 1 = 无充能；>1 = 最大层数）
+    /// 充能层数（0 = 普通冷却；>=1 = 最大充能次数，使用 recharge 恢复）
     #[serde(default)]
     pub charges: u8,
     /// 充能恢复间隔（秒）
@@ -274,9 +274,17 @@ pub struct ComboStepDTO {
     pub overrides: Option<StepOverrideDTO>,
 }
 
+/// 标记位于第 position 个技能之前（等于技能数时位于末尾）；同位置按数组顺序。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComboFlagDTO {
+    pub position: usize,
+    pub start: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct ComboPresetDTO {
+    pub flags: Vec<ComboFlagDTO>,
     pub name: String,
     pub steps: Vec<ComboStepDTO>,
 }
@@ -398,7 +406,7 @@ pub struct SkillEditorItemDTO {
     /// 调息时间（秒，0=无调息）
     #[serde(default)]
     pub cooldown: f32,
-    /// 充能层数（0 或 1 = 无充能；>1 = 最大层数）
+    /// 充能层数（0 = 普通冷却；>=1 = 最大充能次数，使用 recharge 恢复）
     #[serde(default)]
     pub charges: u8,
     /// 充能恢复间隔（秒）
@@ -705,6 +713,8 @@ pub enum TimelineActionDTO {
         /// 技能名：用于在 (skill_id, sub_id) 对应多个变体（如「入月·N 层」）时消歧
         #[serde(default)]
         skill_name: Option<String>,
+        #[serde(default)]
+        overrides: Option<StepOverrideDTO>,
     },
     SwitchForm {
         form: String,
@@ -767,6 +777,9 @@ pub enum TimelineEventKindDTO {
         skill_name: String,
         damage: u32,
         hit_time: f32,
+        /// 起手时刻；外层 time 是实际结算时刻。
+        #[serde(default)]
+        start_time: f32,
         /// 本次施放占用的 GCD 秒数（不占 GCD 为 0）
         #[serde(default)]
         gcd_secs: f32,
@@ -803,7 +816,7 @@ pub enum TimelineEventKindDTO {
     },
 }
 
-/// 时间轴事件 + 时刻
+/// 窗口内时间轴日志，按实际结算时刻排序；Cast 起手单独保存在 start_time。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimelineEventDTO {
     pub time: f32,

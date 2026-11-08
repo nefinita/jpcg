@@ -418,7 +418,10 @@ it.each([false, true])("调优期间锁定整个编辑区，完成或失败后�
   state.form.hostile.target_hp = "1000";
   state.loadouts.mowen = fixture.cases[0].composed.loadout;
   localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
-  const draft = defaultComboDraft(); draft.sequence = [{ kind: "flag", flag: "start" }];
+  const draft = defaultComboDraft(); draft.sequence = [{ kind: "flag", flag: "start" },
+    {kind: "skill", skill: {skill_id: 1, sub_id: 0, lost_hp_zhenshishanghai: 0, skill_name: "逐步覆盖", base_damage1: 10, base_damage2: 10, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false},
+    overrides: {base_damage_override: 777, atk_xishu_override: null, jianshang_bili_override: null, wushihuajin_override: null, extra_atk_pct: null, gain_override: null, extra_crit_pct: null, extra_crit_dmg_pct: null}}];
+  vi.mocked(api.calculateTimeline).mockResolvedValue({events: [], total_damage: 777, window_dps: 777, skipped_actions: 0});
   localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 3, data: draft }));
   vi.mocked(api.listenGearOptimizeProgress).mockReturnValue(() => {});
   let resolve!: (value: any) => void; let reject!: (reason: Error) => void;
@@ -430,6 +433,12 @@ it.each([false, true])("调优期间锁定整个编辑区，完成或失败后�
   });
   await click("自动调优");
   expect(api.optimizeGear).toHaveBeenCalledTimes(1);
+  const objective=vi.mocked(api.optimizeGear).mock.lastCall![0].objective;
+  expect(objective.kind).toBe("timeline");
+  if (objective.kind === "timeline") {
+    expect(objective.request.actions).toEqual(vi.mocked(api.calculateTimeline).mock.lastCall![0].actions);
+    expect(objective.request.actions[1]).toMatchObject({overrides: {base_damage_override: 777}});
+  }
   const locked = host.querySelector('[inert]');
   expect(locked).not.toBeNull();
   expect(locked!.querySelector('[aria-label="配装"]')).not.toBeNull();

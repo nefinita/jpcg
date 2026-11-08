@@ -280,7 +280,7 @@ fn optimizer_obeys_hard_constraints_and_finds_exhaustive_best() {
     );
     let out = optimize_with(&c, &r, evaluate, |_| true).unwrap();
     assert!(out.complete);
-    assert_eq!(out.progress.visited, 8);
+    assert_eq!(out.progress.visited, 16); // 8 模板 × 2 五彩石选项（旧模式跳过不兼容的五维石）
     assert_eq!(out.progress.evaluated, 8);
     let best = out.best.unwrap();
     assert!(best.score >= out.baseline.score);
@@ -520,7 +520,7 @@ fn cli_stdout_is_json_and_errors_exit_nonzero() {
     );
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(result["complete"], true);
-    assert_eq!(result["progress"]["visited"], 16);
+    assert_eq!(result["progress"]["visited"], 32);
     use std::io::Write;
     let mut process = std::process::Command::new(binary)
         .args(["--catalog", dir().to_str().unwrap(), "api"])
@@ -642,5 +642,101 @@ fn upper_bounds_keep_feasible_base_tiers_in_both_search_modes() {
                 .tier,
             Tier::Base
         );
+    }
+}
+
+#[test]
+fn full_loadout_search_checks_constraints_after_enchants_and_stone() {
+    if !runtime_child("full_loadout_search_checks_constraints_after_enchants_and_stone") {
+        return;
+    }
+    let mut c = catalog();
+    let mut r = request();
+    r.constraints = Constraints::default();
+    r.constraints.sources = vec![Source::Mingjian, Source::Weiwang];
+    r.constraints.allow_upgraded = true;
+    r.constraints.allow_cross_source_2plus2 = true;
+    r.constraints.locked = r.loadout.choices.clone();
+    r.loadout.enchants.clear();
+    r.loadout.wucai = None;
+    c.enchants = vec![EnchantDef {
+        slot: Slot::Shou,
+        id: "pofang".into(),
+        name: "破防附魔".into(),
+        stats: Stats {
+            pofang: 90,
+            ..Default::default()
+        },
+    }];
+    c.wucai = vec![WucaiDef {
+        id: "stone".into(),
+        name: "破防石".into(),
+        stats: Stats {
+            pofang: 20,
+            ..Default::default()
+        },
+    }];
+    let base = c.compose(&r.loadout).unwrap().stats.pofang;
+    for min in [base + 1, base + 100] {
+        r.constraints.stats.insert(
+            "pofang".into(),
+            Bounds {
+                min: Some(min),
+                max: None,
+            },
+        );
+        for out in [
+            optimize_with(&c, &r, evaluate, |_| true).unwrap(),
+            optimize(&c, &r, |_| true).unwrap(),
+            optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap(),
+        ] {
+            assert!(out.complete);
+            assert_eq!(out.progress.combinations, 4);
+            assert!(out.best.unwrap().composed.stats.pofang >= min);
+        }
+    }
+    r.max_combinations = 1;
+    let out = optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap();
+    assert!(!out.complete);
+    assert_eq!(out.stop_reason, "budget_exhausted");
+}
+
+#[test]
+fn timeline_overrides_match_desktop_and_both_optimizer_paths() {
+    if !runtime_child("timeline_overrides_match_desktop_and_both_optimizer_paths") {
+        return;
+    }
+    let mut c = catalog();
+    c.wucai.clear();
+    let mut r = request();
+    r.constraints.locked = r.loadout.choices.clone();
+    let bundle = jpcg_combo::timeline_host::load_combat_bundle("mowen".into()).unwrap();
+    let skill = bundle.skills.iter().find(|s| s.skill_name == "宫").unwrap();
+    let action = serde_json::json!({"kind":"cast","skill_id":skill.skill_id,"sub_id":skill.sub_id,"skill_name":skill.skill_name});
+    let mut timeline: jpcg_api::TimelineRequestDTO=serde_json::from_value(serde_json::json!({
+        "skills":bundle.skills,"actions":[action.clone(),action],"window":30.0,
+        "player":player(&c.compose(&r.loadout).unwrap()),"hostile":r.config.hostile,"xinfa":r.config.xinfa_config,
+        "buff":r.config.buff,"coeff":r.config.coefficient,"value_set":r.config.value_set
+    })).unwrap();
+    let before =
+        jpcg_combo::timeline_host::calculate_timeline_from_store(timeline.clone()).unwrap();
+    if let jpcg_api::TimelineActionDTO::Cast { overrides, .. } = &mut timeline.actions[1] {
+        *overrides = Some(jpcg_api::StepOverrideDTO {
+            base_damage_override: Some(100000.0),
+            ..Default::default()
+        });
+    }
+    let desktop =
+        jpcg_combo::timeline_host::calculate_timeline_from_store(timeline.clone()).unwrap();
+    assert!(desktop.total_damage > before.total_damage);
+    r.objective = Objective::Timeline {
+        request: timeline,
+        metric: TimelineMetric::TotalDamage,
+    };
+    for out in [
+        optimize(&c, &r, |_| true).unwrap(),
+        optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap(),
+    ] {
+        assert_eq!(out.baseline.score, desktop.total_damage);
     }
 }

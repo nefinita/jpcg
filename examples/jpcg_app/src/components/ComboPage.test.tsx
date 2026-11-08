@@ -228,3 +228,24 @@ it("固定槽切换会移除整个奇穴组，技能入口是可聚焦原生按�
  const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data;
  expect(saved.qixue).toEqual(["lingdong"]);
 });
+
+it("预设往返保留测量标记和单步覆盖，计算请求只覆盖指定动作", async () => {
+  vi.mocked(api.calculateTimeline).mockResolvedValue({events: [], total_damage: 0, window_dps: 0, skipped_actions: 0});
+  vi.mocked(api.saveComboPreset).mockImplementation(async (name, steps, flags) => {
+    vi.mocked(api.loadComboPreset).mockResolvedValue({name, steps, flags});
+  });
+  await mount(); await click("测试技·一"); await click("计算开始"); await click("测试技·一");
+  const edits=[...host.querySelectorAll<HTMLButtonElement>('button[title="调整系数"]')];
+  await act(async()=>edits[1].click());
+  await input(host.querySelector('input[type="number"]')!, "777"); await click("保存调整");
+  await click("计算结束"); await click("测试技·一");
+  const original=JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data.sequence;
+  await click(" 保存"); await input(host.querySelector('input[placeholder="连招名称"]')!, "已保存"); await click("确认保存");
+  expect(api.saveComboPreset).toHaveBeenCalledWith("已保存",expect.any(Array),[{position:1,start:true},{position:2,start:false}]);
+  await click("清空");
+  await act(async()=>{const select=host.querySelector("select")!;select.value="已保存";select.dispatchEvent(new Event("change",{bubbles:true}));});
+  expect(JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data.sequence).toEqual(original);
+  await act(async()=>{await new Promise(r=>setTimeout(r,400));});
+  const actions=vi.mocked(api.calculateTimeline).mock.lastCall![0].actions;
+  expect(actions).toMatchObject([{kind:"cast",overrides:null},{kind:"flag",flag:"start"},{kind:"cast",overrides:{base_damage_override:777}},{kind:"flag",flag:"end"},{kind:"cast",overrides:null}]);
+});

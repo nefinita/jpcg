@@ -1,18 +1,31 @@
 use crate::commands::types::*;
 
 #[tauri::command]
-pub fn save_combo_preset(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
-    save_combo_preset_impl(name, steps)
+pub fn save_combo_preset(
+    name: String,
+    steps: Vec<ComboStepDTO>,
+    flags: Option<Vec<ComboFlagDTO>>,
+) -> Result<(), String> {
+    save_combo_preset_impl(name, steps, flags)
 }
 
 #[cfg(feature = "static")]
-fn save_combo_preset_impl(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
-    jpcg_combo::host::save_combo_preset(name, steps)
+fn save_combo_preset_impl(
+    name: String,
+    steps: Vec<ComboStepDTO>,
+    flags: Option<Vec<ComboFlagDTO>>,
+) -> Result<(), String> {
+    jpcg_combo::host::save_combo_preset_with_flags(name, steps, flags.unwrap_or_default())
 }
 
 #[cfg(feature = "dynamic")]
-fn save_combo_preset_impl(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
-    let req = serde_json::json!({ "name": name, "steps": steps });
+fn save_combo_preset_impl(
+    name: String,
+    steps: Vec<ComboStepDTO>,
+    flags: Option<Vec<ComboFlagDTO>>,
+) -> Result<(), String> {
+    let req =
+        serde_json::json!({ "name": name, "steps": steps, "flags": flags.unwrap_or_default() });
     crate::commands::ffi_bridge::call_combo::<_, serde_json::Value>("save_combo_preset", &req)
         .map(|_| ())
 }

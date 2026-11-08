@@ -208,6 +208,65 @@ fn build_candidates(
     Ok((candidates, combinations))
 }
 
+// 附魔/五彩石与模板共同构成搜索空间，硬约束只检查完整配装。
+// None 槽位代表五彩石；选项 None 代表不装备。预算覆盖全部维度。
+type DecorationAxis = (Option<Slot>, Vec<Option<String>>);
+fn decoration_axes(
+    catalog: &Catalog,
+    combinations: &mut u64,
+) -> Result<Vec<DecorationAxis>, String> {
+    let mut axes = Vec::new();
+    for slot in Slot::ALL {
+        let mut options = vec![None];
+        options.extend(
+            catalog
+                .enchants
+                .iter()
+                .filter(|e| e.slot == slot)
+                .map(|e| Some(e.id.clone())),
+        );
+        if options.len() > 1 {
+            axes.push((Some(slot), options));
+        }
+    }
+    if !catalog.wucai.is_empty() {
+        let mut options = vec![None];
+        options.extend(catalog.wucai.iter().map(|w| Some(w.id.clone())));
+        axes.push((None, options));
+    }
+    for (_, options) in &axes {
+        *combinations = combinations
+            .checked_mul(options.len() as u64)
+            .ok_or("组合数溢出")?;
+    }
+    Ok(axes)
+}
+fn decode_loadout(
+    mut flat: u64,
+    candidates: &[Vec<Choice>],
+    axes: &[DecorationAxis],
+    base: &Loadout,
+) -> Loadout {
+    let mut loadout = base.clone();
+    for (slot, options) in axes {
+        let choice = options[(flat % options.len() as u64) as usize].clone();
+        flat /= options.len() as u64;
+        match slot {
+            Some(slot) => match choice {
+                Some(id) => {
+                    loadout.enchants.insert(*slot, id);
+                }
+                None => {
+                    loadout.enchants.remove(slot);
+                }
+            },
+            None => loadout.wucai = choice,
+        }
+    }
+    loadout.choices = decode_flat(flat, candidates);
+    loadout
+}
+
 /// 组合遍历下标：空间不超预算时全遍历；否则确定性均匀抽样（splitmix64），避免前缀偏差。
 fn combination_indices(combinations: u64, budget: u64) -> Vec<u64> {
     if combinations <= budget {
@@ -254,7 +313,8 @@ pub fn optimize_with(
         score: baseline_score,
         composed,
     };
-    let (candidates, combinations) = build_candidates(catalog, req)?;
+    let (candidates, mut combinations) = build_candidates(catalog, req)?;
+    let axes = decoration_axes(catalog, &mut combinations)?;
     let mut result = OptimizeResult {
         best: None,
         baseline,
@@ -304,12 +364,15 @@ pub fn optimize_with(
     for flat in visited {
         if !on_progress(result.progress) {
             result.stop_reason = "cancelled".into();
+            result.complete = false;
             break;
         }
-        let mut loadout = req.loadout.clone();
-        loadout.choices = decode_flat(flat, &candidates);
-        let composed = catalog.compose_validated(&loadout, rules.as_ref())?;
+        let loadout = decode_loadout(flat, &candidates, &axes, &req.loadout);
         result.progress.visited += 1;
+        // 某些五维附魔不适用于旧属性规则；其余候选仍应搜索。
+        let Ok(composed) = catalog.compose_validated(&loadout, rules.as_ref()) else {
+            continue;
+        };
         let armor2 = composed
             .active_bonuses
             .iter()
@@ -401,117 +464,6 @@ fn request(config: &jpcg_api::CalculateRequest, composed: &Composed) -> jpcg_api
     }
 }
 
-/// 给定模板最优配装后，对附魔/五彩石做坐标下降（逐部位取最优，多轮直至不再提升）。
-/// 附魔/五彩石是逐件附加属性，与模板选择解耦；旧属性模式不支持五维的附魔/五彩石会被跳过而非报错。
-fn enchant_phase(
-    catalog: &Catalog,
-    req: &OptimizeRequest,
-    rules: Option<&jpcg_api::AttributeRules>,
-    base: &Loadout,
-    score_fn: impl Fn(&Composed) -> Result<f64, String>,
-) -> Result<Candidate, String> {
-    let mut loadout = base.clone();
-    let mut composed = catalog.compose_validated(&loadout, rules)?;
-    let mut best_score = if req.constraints.satisfied(&composed)? {
-        score_fn(&composed)?
-    } else {
-        f64::NEG_INFINITY
-    };
-    // 同一部位可选：移除（None）或任一附魔；五彩石同理。
-    loop {
-        let mut improved = false;
-        for slot in Slot::ALL {
-            let current = loadout.enchants.get(&slot).cloned();
-            let mut options: Vec<Option<String>> = vec![None];
-            options.extend(
-                catalog
-                    .enchants
-                    .iter()
-                    .filter(|e| e.slot == slot)
-                    .map(|e| Some(e.id.clone())),
-            );
-            let mut best_local = best_score;
-            let mut best_choice: Option<Option<String>> = None;
-            for opt in options {
-                if opt == current {
-                    continue;
-                }
-                let mut trial = loadout.clone();
-                match &opt {
-                    Some(id) => {
-                        trial.enchants.insert(slot, id.clone());
-                    }
-                    None => {
-                        trial.enchants.remove(&slot);
-                    }
-                }
-                let Ok(trial_composed) = catalog.compose_validated(&trial, rules) else {
-                    continue;
-                };
-                if !req.constraints.satisfied(&trial_composed)? {
-                    continue;
-                }
-                let value = score_fn(&trial_composed)?;
-                if value > best_local {
-                    best_local = value;
-                    best_choice = Some(opt);
-                }
-            }
-            if let Some(opt) = best_choice {
-                match &opt {
-                    Some(id) => {
-                        loadout.enchants.insert(slot, id.clone());
-                    }
-                    None => {
-                        loadout.enchants.remove(&slot);
-                    }
-                }
-                composed = catalog.compose_validated(&loadout, rules)?;
-                best_score = best_local;
-                improved = true;
-            }
-        }
-        if !catalog.wucai.is_empty() {
-            let current = loadout.wucai.clone();
-            let mut options: Vec<Option<String>> = vec![None];
-            options.extend(catalog.wucai.iter().map(|w| Some(w.id.clone())));
-            let mut best_local = best_score;
-            let mut best_choice: Option<Option<String>> = None;
-            for opt in options {
-                if opt == current {
-                    continue;
-                }
-                let mut trial = loadout.clone();
-                trial.wucai = opt.clone();
-                let Ok(trial_composed) = catalog.compose_validated(&trial, rules) else {
-                    continue;
-                };
-                if !req.constraints.satisfied(&trial_composed)? {
-                    continue;
-                }
-                let value = score_fn(&trial_composed)?;
-                if value > best_local {
-                    best_local = value;
-                    best_choice = Some(opt);
-                }
-            }
-            if let Some(opt) = best_choice {
-                loadout.wucai = opt;
-                composed = catalog.compose_validated(&loadout, rules)?;
-                best_score = best_local;
-                improved = true;
-            }
-        }
-        if !improved {
-            break;
-        }
-    }
-    Ok(Candidate {
-        score: best_score,
-        composed,
-    })
-}
-
 pub fn optimize(
     catalog: &Catalog,
     req: &OptimizeRequest,
@@ -531,7 +483,7 @@ pub fn optimize(
         return Err("技能数据缺失或心法系数与现有计算器数据不一致".into());
     }
     let mut cache = BTreeMap::new();
-    let mut result = optimize_with(
+    let result = optimize_with(
         catalog,
         req,
         |composed| {
@@ -547,24 +499,6 @@ pub fn optimize(
         },
         on_progress,
     )?;
-    // 附魔/五彩石：模板最优后再选，避免组合爆炸。
-    if (!catalog.enchants.is_empty() || !catalog.wucai.is_empty())
-        && let Some(candidate) = result.best.take()
-    {
-        let rules = crate::attributes::load_rules(&req.loadout)?;
-        let final_candidate = enchant_phase(
-            catalog,
-            req,
-            rules.as_ref(),
-            &candidate.composed.loadout,
-            |composed| score(req, composed, &skill_table.skill, &skill_table.xinfa),
-        )?;
-        result.best = Some(final_candidate);
-        result.delta = result
-            .best
-            .as_ref()
-            .map(|b| b.score - result.baseline.score);
-    }
     Ok(result)
 }
 
@@ -842,7 +776,8 @@ pub fn optimize_parallel(
         score: baseline_score,
         composed: baseline_composed,
     };
-    let (candidates, combinations) = build_candidates(catalog, req)?;
+    let (candidates, mut combinations) = build_candidates(catalog, req)?;
+    let axes = decoration_axes(catalog, &mut combinations)?;
     let indices = combination_indices(combinations, req.max_combinations);
     progress
         .total
@@ -890,9 +825,10 @@ pub fn optimize_parallel(
                     return Ok(());
                 }
                 progress.visited.fetch_add(1, Ordering::Relaxed);
-                let mut loadout = req.loadout.clone();
-                loadout.choices = decode_flat(flat, &candidates);
-                let composed = catalog.compose_validated(&loadout, rules.as_ref())?;
+                let loadout = decode_loadout(flat, &candidates, &axes, &req.loadout);
+                let Ok(composed) = catalog.compose_validated(&loadout, rules.as_ref()) else {
+                    return Ok(());
+                };
                 let armor2 = armor2_count(catalog, &composed);
                 if !(req.constraints.allow_cross_source_2plus2 || armor2 <= 1) {
                     return Ok(());
@@ -932,23 +868,6 @@ pub fn optimize_parallel(
         .map_err(|_| "并行状态锁污染".to_string())?;
     result.best = best;
     result.pareto = pareto;
-    // 附魔/五彩石：模板最优后再贪心选择，避免组合爆炸。
-    if (!catalog.enchants.is_empty() || !catalog.wucai.is_empty())
-        && let Some(candidate) = result.best.take()
-    {
-        let evaluated = &progress.evaluated;
-        let final_candidate = enchant_phase(
-            catalog,
-            req,
-            rules.as_ref(),
-            &candidate.composed.loadout,
-            |composed| {
-                evaluated.fetch_add(1, Ordering::Relaxed);
-                score(req, composed, &skill_table.skill, &skill_table.xinfa)
-            },
-        )?;
-        result.best = Some(final_candidate);
-    }
     result.progress = Progress {
         visited: progress.visited.load(Ordering::Relaxed),
         evaluated: progress.evaluated.load(Ordering::Relaxed),

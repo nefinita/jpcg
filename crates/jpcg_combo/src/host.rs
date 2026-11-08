@@ -125,8 +125,26 @@ pub fn calculate_combo(
 
 /// 保存连招预设
 pub fn save_combo_preset(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
+    save_combo_preset_with_flags(name, steps, vec![])
+}
+
+pub fn save_combo_preset_with_flags(
+    name: String,
+    steps: Vec<ComboStepDTO>,
+    flags: Vec<jpcg_api::ComboFlagDTO>,
+) -> Result<(), String> {
+    if flags.iter().any(|f| f.position > steps.len()) {
+        return Err("预设标记位置超出技能序列".into());
+    }
     let core_steps = steps.into_iter().map(ComboStep::from).collect();
     let preset = ComboPreset {
+        flags: flags
+            .into_iter()
+            .map(|f| jpcg_core::type_set::combo::ComboFlag {
+                position: f.position,
+                start: f.start,
+            })
+            .collect(),
         name,
         steps: core_steps,
     };
@@ -295,6 +313,7 @@ mod tests {
         assert!(core.skill_snapshot.is_some(), "保存时应写入技能快照");
 
         let toml_str = toml::to_string_pretty(&ComboPreset {
+            flags: vec![],
             name: "test".into(),
             steps: vec![core],
         })
@@ -320,6 +339,7 @@ mod tests {
         };
         let core: ComboStep = ComboStep::from(step_dto);
         let rounds: ComboPresetDTO = ComboPresetDTO::from(ComboPreset {
+            flags: vec![],
             name: "test".into(),
             steps: vec![core],
         });

@@ -1,3 +1,4 @@
+import { buildTimelineRequest } from "../utils/timelineRequest";
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, type SetStateAction, type Dispatch } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -5,7 +6,6 @@ import type {
   SkillPoolItemDTO, ComboStepDTO, StepOverrideDTO, SequenceItem, FormData, TimelineResultDTO, CombatBundleDTO, CombatDataDTO,
 } from "../types";
 import * as api from "../api/commands";
-import { toCalculateRequest } from "../utils/normalize";
 import { IconGear, IconClose, IconSave, IconTrash, IconStar } from "./icons";
 import { usePersistentState, readPreference, writePreference } from "../hooks/usePersistentState";
 import { STORAGE_KEYS } from "../utils/constants";
@@ -234,34 +234,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     setTimelineResult(null);
     try {
       const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
-      const req = toCalculateRequest(formData);
-      const result = await api.calculateTimeline({
-        skills: bundle.skills,
-        forms: bundle.combat.form,
-        timed_buffs: bundle.combat.buff,
-        actions: sequence.map((s) => (s.kind === "flag"
-          ? { kind: "flag" as const, flag: s.flag }
-          : {
-              kind: "cast" as const,
-              skill_id: s.skill.skill_id,
-              sub_id: s.skill.sub_id ?? 0,
-              // 同一 (skill_id, sub_id) 可能对应多个变体（入月·N 层），必须带名字消歧
-              skill_name: s.skill.skill_name,
-            })),
-        window: 300,
-        player: req.player,
-        hostile: req.hostile,
-        xinfa: req.xinfa_config,
-        buff: req.buff,
-        coeff: req.coefficient,
-        value_set: req.value_set ?? null,
-        combat: bundle.combat,
-        initial_instrument: bundle.combat.form.find((f) => f.initial)?.id ?? bundle.combat.form[0]?.id ?? null,
-        initial_qifeng: bundle.combat.qifeng?.[0] ?? "",
-        miji: selMiji,
-        qixue: selQixue,
-        samples: 50000,
-      });
+      const result = await api.calculateTimeline(buildTimelineRequest(formData, bundle, sequence, selMiji, selQixue, 50000));
       if (revision === timelineRevision.current) setTimelineResult(result);
     } catch (err) {
       if (revision === timelineRevision.current) setTimelineError(err instanceof Error ? err.message : String(err));
@@ -289,7 +262,13 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const handleSavePreset = useCallback(async () => {
     if (!presetName.trim()) return;
     try {
-      await api.saveComboPreset(presetName.trim(), sequence.filter((s): s is Extract<SequenceItem, { kind: "skill" }> => s.kind === "skill").map((s) => ({ skill: s.skill, overrides: s.overrides })));
+      let position = 0;
+      const flags: {position: number; start: boolean}[] = [];
+      for (const item of sequence) {
+        if (item.kind === "flag") flags.push({position, start: item.flag === "start"});
+        else position++;
+      }
+      await api.saveComboPreset(presetName.trim(), sequence.filter((s): s is Extract<SequenceItem, { kind: "skill" }> => s.kind === "skill").map((s) => ({ skill: s.skill, overrides: s.overrides })), flags);
       setDraftField("selectedPreset", presetName.trim());
       setSaveDialog(false);
       setPresets(await api.listComboPresets());
@@ -301,7 +280,13 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const handleLoadPreset = useCallback(async (name: string) => {
     try {
       const preset = await api.loadComboPreset(name);
-      setSequence(preset.steps.map((st) => ({ kind: "skill", skill: st.skill, overrides: st.overrides })));
+      const restored: SequenceItem[] = [];
+      for (let i = 0; i <= preset.steps.length; i++) {
+        for (const flag of preset.flags ?? []) if (flag.position === i) restored.push({kind: "flag", flag: flag.start ? "start" : "end"});
+        const step = preset.steps[i];
+        if (step) restored.push({kind: "skill", skill: step.skill, overrides: step.overrides});
+      }
+      setSequence(restored);
       setPresetName(name);
       setDraftField("selectedPreset", name);
     } catch (err) {

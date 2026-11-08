@@ -12,7 +12,7 @@ export function formatTime(seconds: number): string {
 
 const kindLabel = (kind: TimelineEventDTO["kind"]) => {
   switch (kind.kind) {
-    case "cast": return "施放";
+    case "cast": return "结算";
     case "dot_tick": return "持续";
     case "channel_tick": return "引导";
     case "form_switch": return "器形";
@@ -35,9 +35,9 @@ const kindClass = (kind: TimelineEventDTO["kind"]) => {
 const kindDetail = (kind: TimelineEventDTO["kind"]) => {
   switch (kind.kind) {
     case "cast":
-      return kind.gcd_secs != null && kind.gcd_secs > 0
+      return `${kind.start_time != null ? `起手 ${kind.start_time.toFixed(2)}s · ` : ""}${kind.gcd_secs != null && kind.gcd_secs > 0
         ? `GCD ${kind.gcd_secs.toFixed(2)}s（就绪 ${(kind.gcd_ready_at ?? 0).toFixed(2)}s）`
-        : "不占 GCD";
+        : "不占 GCD"}`;
     case "dot_tick": return `第 ${kind.index} 跳${kind.advanced ? "（提前）" : ""}`;
     case "channel_tick": return `第 ${kind.index} 段`;
     case "form_switch": return `${kind.from} → ${kind.to}`;

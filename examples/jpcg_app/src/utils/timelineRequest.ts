@@ -18,7 +18,7 @@ export function buildTimelineRequest(
     timed_buffs: bundle.combat.buff,
     actions: sequence.map((s) => (s.kind === "flag"
       ? { kind: "flag" as const, flag: s.flag }
-      : { kind: "cast" as const, skill_id: s.skill.skill_id, sub_id: s.skill.sub_id ?? 0, skill_name: s.skill.skill_name })),
+      : { kind: "cast" as const, skill_id: s.skill.skill_id, sub_id: s.skill.sub_id ?? 0, skill_name: s.skill.skill_name, overrides: s.overrides })),
     window: 300,
     player: req.player,
     hostile: req.hostile,

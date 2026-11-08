@@ -152,6 +152,7 @@ export type SequenceItem =
   | { kind: "flag"; flag: "start" | "end" };
 
 export interface ComboPresetDTO {
+  flags?: { position: number; start: boolean }[];
   name: string;
   steps: ComboStepDTO[];
 }
@@ -442,7 +443,7 @@ export interface CombatBundleDTO {
 }
 
 export type TimelineActionDTO =
-  | { kind: "cast"; skill_id: number; sub_id: number; skill_name?: string }
+  | { kind: "cast"; skill_id: number; sub_id: number; skill_name?: string; overrides?: StepOverrideDTO | null }
   | { kind: "switch_form"; form: string }
   | { kind: "flag"; flag: "start" | "end" };
 
@@ -473,7 +474,7 @@ export interface TimelineRequestDTO {
 // 与 Rust `TimelineEventKindDTO` 的 #[serde(tag = "kind")] 内部标签形状一致：
 // 真实 JSON 形如 { "kind": "cast", "skill_name": ..., "damage": ..., "hit_time": ... }
 export type TimelineEventKindDTO =
-  | { kind: "cast"; skill_name: string; damage: number; hit_time: number; gcd_secs?: number; gcd_ready_at?: number }
+  | { kind: "cast"; skill_name: string; damage: number; hit_time: number; start_time?: number; gcd_secs?: number; gcd_ready_at?: number }
   | { kind: "channel_tick"; skill_name: string; index: number; damage: number }
   | { kind: "dot_tick"; skill_name: string; index: number; damage: number; advanced?: boolean }
   | { kind: "form_switch"; from: string; to: string }

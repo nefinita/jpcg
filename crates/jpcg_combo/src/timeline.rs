@@ -152,6 +152,7 @@ pub enum TimelineAction {
         skill_id: u32,
         sub_id: u32,
         skill_name: Option<String>,
+        overrides: Option<jpcg_api::StepOverrideDTO>,
     },
     SwitchForm(String),
     /// 计算开始/结束标记（start = 开始，false = 结束）
@@ -167,6 +168,7 @@ impl TimelineAction {
             skill_id,
             sub_id,
             skill_name: None,
+            overrides: None,
         }
     }
 
@@ -181,6 +183,7 @@ impl TimelineAction {
             skill_id,
             sub_id,
             skill_name: Some(skill_name.into()),
+            overrides: None,
         }
     }
 }
@@ -322,6 +325,7 @@ pub struct TimelineStepSwitch {
 /// 时序模拟结果
 #[derive(Debug, Clone, Default)]
 pub struct TimelineResult {
+    pub window: f32,
     pub events: Vec<TimelineEvent>,
     /// 每个动作一个步骤结果（与输入 actions 一一对应）
     pub steps: Vec<TimelineStep>,
@@ -380,13 +384,18 @@ struct DotInstance {
     tick_labels: Vec<u32>,
     /// 跳间隔（秒，施加时算好；提前后按它重新排后续跳）
     interval: f32,
+    target_reduction: Option<u32>,
 }
 
 impl DotInstance {
     fn tick_dice(&self, hostile: &HostilepileConfig, index: usize) -> DamageDice {
+        let mut hostile = hostile.clone();
+        if let Some(value) = self.target_reduction {
+            hostile.jianshang_bili = value;
+        }
         let calc = JpcgConfig::new_with_config(
             &self.player,
-            hostile,
+            &hostile,
             &self.skill,
             &self.xinfa,
             &self.buff,
@@ -492,6 +501,7 @@ impl<'a> Sim<'a> {
         times: Vec<f32>,
         buff: BuffConfig,
         interval: f32,
+        target_reduction: Option<u32>,
     ) {
         if times.is_empty() {
             return;
@@ -513,6 +523,7 @@ impl<'a> Sim<'a> {
             advanced: vec![false; ticks],
             tick_labels: (1..=ticks as u32).collect(),
             interval,
+            target_reduction,
         });
     }
 
@@ -696,15 +707,54 @@ impl<'a> Sim<'a> {
     }
 
     /// 执行一次施放
-    fn cast(&mut self, sk_index: usize, start: f32) -> f32 {
-        let sk = &self.input.skills[sk_index];
+    fn cast(
+        &mut self,
+        sk_index: usize,
+        start: f32,
+        overrides: Option<&jpcg_api::StepOverrideDTO>,
+    ) -> f32 {
+        // 每次施放独立副本，不改变技能目录或后续同技能的冷却身份。
+        let mut cast_skill = self.input.skills[sk_index].clone();
+        let mut buff_cfg = self.buff_at(start);
+        let mut hostile = self.input.hostile.clone();
+        let target_reduction = overrides
+            .and_then(|o| o.jianshang_bili_override)
+            .map(|v| v.clamp(0.0, 100.0) as u32);
+        if let Some(value) = target_reduction {
+            hostile.jianshang_bili = value;
+        }
+        if let Some(o) = overrides {
+            let st = &mut cast_skill.skill;
+            if let Some(v) = o.base_damage_override {
+                st.base_damage1 = v as u32;
+                st.base_damage2 = v as u32;
+            }
+            if let Some(v) = o.atk_xishu_override {
+                st.atk_xishu = v;
+            }
+            if let Some(v) = o.wushihuajin_override {
+                st.wushihuajin = v as u32;
+            }
+            if let Some(v) = o.extra_crit_pct {
+                st.huixin_up = v as u32;
+            }
+            if let Some(v) = o.extra_crit_dmg_pct {
+                st.huixiao_up = v as u32;
+            }
+            if let Some(v) = o.extra_atk_pct {
+                buff_cfg.base_atk_pct += v;
+            }
+            if let Some(v) = o.gain_override {
+                st.hit_up = v.max(0.0) as u32;
+            }
+        }
+        let sk = &cast_skill;
         let rate = self.jiasu_at(start);
         let cast_time = sk.skill.cast_time_with_haste(rate);
         let hit_time = start + cast_time;
-        let buff_cfg = self.buff_at(start);
         let calc = JpcgConfig::new_with_config(
             &self.input.player,
-            &self.input.hostile,
+            &hostile,
             &sk.skill,
             &self.input.xinfa,
             &buff_cfg,
@@ -877,6 +927,7 @@ impl<'a> Sim<'a> {
                 (1..=ticks).map(stamp).collect(),
                 buff_cfg.clone(),
                 total / ticks as f32,
+                target_reduction,
             );
         }
 
@@ -884,7 +935,7 @@ impl<'a> Sim<'a> {
         if let Some(spec) = &sk.dot_tick {
             let tick_cfg = JpcgConfig::new_with_config(
                 &self.input.player,
-                &self.input.hostile,
+                &hostile,
                 &spec.skill,
                 &self.input.xinfa,
                 &buff_cfg,
@@ -904,6 +955,7 @@ impl<'a> Sim<'a> {
                     (1..=ticks).map(stamp).collect(),
                     buff_cfg.clone(),
                     total / ticks as f32,
+                    target_reduction,
                 );
             }
         }
@@ -969,7 +1021,8 @@ impl<'a> Sim<'a> {
 
         // ---- CD / 充能 ----
         let max_charges = sk.skill.max_charges();
-        if max_charges > 1 {
+        // 旧数据可能用 charges=1 表示普通冷却；只有显式 recharge 才启用单充能。
+        if max_charges > 1 || (sk.skill.charges == 1 && sk.skill.recharge > 0.0) {
             self.settle_charges(sk_index, start);
             if let Some(state) = self.charges.get_mut(&sk_index) {
                 let was_full = state.left >= state.max;
@@ -1143,6 +1196,7 @@ impl<'a> Sim<'a> {
                     skill_id,
                     sub_id,
                     skill_name,
+                    overrides,
                 } => {
                     if let Some(index) =
                         self.resolve_skill(*skill_id, *sub_id, skill_name.as_deref())
@@ -1173,7 +1227,7 @@ impl<'a> Sim<'a> {
                                     }
                                     steps[flag_step_idx].time = Some(start);
                                 }
-                                now = self.cast(index, start);
+                                now = self.cast(index, start, overrides.as_ref());
                             }
                         }
                     } else {
@@ -1470,6 +1524,7 @@ impl<'a> Sim<'a> {
             steps,
             final_instrument,
             final_qifeng,
+            window: self.input.window,
             total_damage: total,
             window_dps,
             skipped_actions: skipped,
@@ -2209,8 +2264,8 @@ cast_time = 2.0
             ignore_cap: false,
         }];
         let mut sim = Sim::new(&input);
-        sim.cast(0, 0.0);
-        sim.cast(0, 1.5);
+        sim.cast(0, 0.0, None);
+        sim.cast(0, 1.5, None);
         assert_eq!(sim.active_buffs.len(), 2, "两层应为两个独立实例");
         assert!((sim.buff_at(2.9).base_atk_pct - 20.0).abs() < 1e-4);
         assert!(

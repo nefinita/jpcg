@@ -80,7 +80,7 @@ pub struct Skilltype {
     #[serde(skip_serializing_if = "is_zero_u32")]
     pub wushifangyu: u32, // 无视防御（1024 制，如 512 无视 50%）
     #[serde(skip_serializing_if = "is_zero_u32")]
-    pub wushihuajin: u32, // 无视化劲
+    pub wushihuajin: u32, // 无视化劲减免比例（百分比，0..100）
     #[serde(skip_serializing_if = "is_zero_u32")]
     pub wushijianshang: u32, // 无视减伤
     #[serde(skip_serializing_if = "is_zero_u32")]
@@ -103,7 +103,7 @@ pub struct Skilltype {
     #[serde(skip_serializing_if = "is_zero_f32")]
     pub cooldown: f32, // 调息时间（秒，0=无调息）
     #[serde(skip_serializing_if = "is_zero_u8")]
-    pub charges: u8, // 充能层数（0 或 1 = 无充能；>1 = 最大层数）
+    pub charges: u8, // 充能层数（0 = 普通冷却；>=1 = 最大充能次数，使用 recharge 恢复）
     #[serde(skip_serializing_if = "is_zero_f32")]
     pub recharge: f32, // 充能恢复间隔（秒）
     #[serde(skip_serializing_if = "is_false")]
@@ -180,7 +180,7 @@ impl Skilltype {
         }
     }
 
-    /// 充能层数（0/1 视作 1 层，即无充能）
+    /// 最大可用次数（至少 1）；是否启用充能机制需单独检查 charges > 0。
     pub fn max_charges(&self) -> u32 {
         if self.charges > 1 {
             self.charges as u32

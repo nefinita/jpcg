@@ -243,9 +243,12 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
                 skill_id,
                 sub_id,
                 skill_name,
-            } => match skill_name {
-                Some(name) => TimelineAction::cast_named(skill_id, sub_id, name),
-                None => TimelineAction::cast(skill_id, sub_id),
+                overrides,
+            } => TimelineAction::Cast {
+                skill_id,
+                sub_id,
+                skill_name,
+                overrides,
             },
             TimelineActionDTO::SwitchForm { form } => TimelineAction::SwitchForm(form),
             TimelineActionDTO::Flag { flag } => TimelineAction::Flag {
@@ -308,13 +311,22 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
 
 impl From<timeline::TimelineResult> for TimelineResultDTO {
     fn from(r: timeline::TimelineResult) -> Self {
-        let mut cumulative = 0.0f64;
-        let events = r
-            .events
+        // 伤害日志按实际命中排序，起手另存 start_time；窗口外命中不进入日志。
+        let settlement = |e: &TimelineEvent| match e.kind {
+            TimelineEventKind::Cast { hit_time, .. } => hit_time,
+            _ => e.time,
+        };
+        let mut events = r.events;
+        events.retain(|e| settlement(e) <= r.window);
+        events.sort_by(|a, b| settlement(a).total_cmp(&settlement(b)));
+        let mut cumulative = 0.0;
+        let events = events
             .into_iter()
             .map(|e| {
                 cumulative += event_damage(&e.kind);
+                let time = settlement(&e);
                 let mut dto = event_to_dto(e);
+                dto.time = time;
                 dto.cumulative = cumulative;
                 dto
             })
@@ -382,6 +394,7 @@ fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
                 gcd_ready_at,
                 ..
             } => TimelineEventKindDTO::Cast {
+                start_time: e.time,
                 skill_name,
                 damage,
                 hit_time,
@@ -454,11 +467,13 @@ mod tests {
                     skill_id: 1,
                     sub_id: 0,
                     skill_name: None,
+                    overrides: None,
                 },
                 TimelineActionDTO::Cast {
                     skill_id: 1,
                     sub_id: 0,
                     skill_name: None,
+                    overrides: None,
                 },
             ],
             window: 10.0,
@@ -562,8 +577,10 @@ mod tests {
         let casts: Vec<f32> = result
             .events
             .iter()
-            .filter(|e| matches!(e.kind, TimelineEventKindDTO::Cast { .. }))
-            .map(|e| e.time)
+            .filter_map(|e| match e.kind {
+                TimelineEventKindDTO::Cast { start_time, .. } => Some(start_time),
+                _ => None,
+            })
             .collect();
         assert_eq!(casts.len(), 2);
         assert!((casts[0] - 0.0).abs() < 1e-4, "起手应在 0s: {:?}", casts);

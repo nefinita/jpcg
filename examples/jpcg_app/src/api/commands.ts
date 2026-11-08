@@ -221,8 +221,8 @@ export async function calculateTimeline(req: TimelineRequestDTO): Promise<Timeli
   return invoke("calculate_timeline_cmd", { req });
 }
 
-export async function saveComboPreset(name: string, steps: ComboStepDTO[]): Promise<void> {
-  return invoke("save_combo_preset", { name, steps });
+export async function saveComboPreset(name: string, steps: ComboStepDTO[], flags: NonNullable<ComboPresetDTO["flags"]> = []): Promise<void> {
+  return invoke("save_combo_preset", { name, steps, flags });
 }
 
 export async function listComboPresets(): Promise<string[]> {

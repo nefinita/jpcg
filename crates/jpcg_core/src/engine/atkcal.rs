@@ -91,12 +91,18 @@ impl<'a> JpcgConfig<'a> {
         [0, atk, x, 0, 0]
     }
 
+    /// 无视化劲为百分比；零值保持原有截断与数值路径。
+    fn effective_huajin(&self) -> f32 {
+        self.hostilepile.guo_huajin_with(self.coeff) as f32
+            * (1.0 - self.skilltype.wushihuajin.min(100) as f32 / 100.0)
+    }
+
     fn g_cal(&self) -> [u32; 5] {
         let i = self.i_cal();
         let y = self.y_cal();
         let i_hit = i[2];
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(self.coeff);
+        let huajin = self.effective_huajin();
         let pvp = self.coeff.pvp_global_jianshang;
 
         // 游戏实测截断点（顺序与取整策略源自实际检测结果，勿改动逻辑）
@@ -108,7 +114,7 @@ impl<'a> JpcgConfig<'a> {
                 * (y as f32 / 1024.0),
         );
         // ② × 化劲减免 → 截断
-        x = truncate(x * (1.0 - huajin as f32 / 1024.0));
+        x = truncate(x * (1.0 - huajin / 1024.0));
         // ③ × 全局 PVP 减伤 × (1 - 目标减伤比) → 截断输出
         x = x * pvp * (1.0 - self.hostilepile.jianshang_bili as f32 / 100.0);
         let x = x as u32;
@@ -220,7 +226,7 @@ impl<'a> JpcgConfig<'a> {
 
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
         let hit_up = self.skilltype.hit_up as f32 / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(self.coeff) as f32;
+        let huajin = self.effective_huajin();
         let pvp = self.coeff.pvp_global_jianshang;
         let jianshang_bili = self.hostilepile.jianshang_bili as f32 / 100.0;
 

@@ -53,6 +53,7 @@ fn cast(id: u32, sub: u32, name: &str) -> TimelineActionDTO {
         skill_id: id,
         sub_id: sub,
         skill_name: Some(name.into()),
+        overrides: None,
     }
 }
 
@@ -217,6 +218,7 @@ fn replacement_qixue_changes_skill() {
         skill_id: 14069,
         sub_id: 0,
         skill_name: Some("高山流水".into()),
+        overrides: None,
     };
     let base = jpcg_combo::timeline_host::calculate_timeline(req(
         vec![],
@@ -226,6 +228,7 @@ fn replacement_qixue_changes_skill() {
                 skill_id: 14299,
                 sub_id: 18859,
                 skill_name: None,
+                overrides: None,
             },
         ],
     ))
@@ -242,6 +245,7 @@ fn replacement_qixue_changes_skill() {
                 skill_id: 14299,
                 sub_id: 18859,
                 skill_name: None,
+                overrides: None,
             },
         ],
     ))
@@ -599,9 +603,11 @@ fn idle_skill_exists_and_occupies_gcd() {
         .events
         .iter()
         .find_map(|e| match &e.kind {
-            TimelineEventKindDTO::Cast { skill_name, .. } if skill_name.starts_with("宫") => {
-                Some(e.time)
-            }
+            TimelineEventKindDTO::Cast {
+                skill_name,
+                start_time,
+                ..
+            } if skill_name.starts_with("宫") => Some(*start_time),
             _ => None,
         })
         .expect("宫 Cast");
@@ -941,6 +947,12 @@ fn prepared_optimizer_request_matches_desktop_full_qixue_definitions() {
     request.window = 30.0;
     request.samples = 100;
     request.seed = Some(42);
+    if let TimelineActionDTO::Cast { overrides, .. } = &mut request.actions[1] {
+        *overrides = Some(StepOverrideDTO {
+            base_damage_override: Some(9999.0),
+            ..Default::default()
+        });
+    }
     let prepared = jpcg_combo::timeline_host::prepare_timeline_from_store(request.clone()).unwrap();
     assert!(
         prepared
@@ -981,5 +993,35 @@ fn advance_only_affects_dot_instances_alive_at_the_time() {
             vec![4.5, 7.5, 10.5, 13.5, 16.5, 19.5]
         };
         assert_eq!(ticks.iter().map(|e| e.time).collect::<Vec<_>>(), expected);
+    }
+}
+
+#[test]
+fn real_single_charge_skills_wait_for_recharge() {
+    for (id, sub, name, form, delay) in [
+        (14452, 14455, "剑·羽", "jian", 16.0),
+        (14082, 15076, "疏影横斜", "qin", 28.0),
+    ] {
+        // ID 唯一即可；名称展示可能使用数据中的全名。
+        let action = TimelineActionDTO::Cast {
+            skill_id: id,
+            sub_id: sub,
+            skill_name: None,
+            overrides: None,
+        };
+        let mut request = req_instrument(form, vec![], vec![action.clone(), action]);
+        request.window = 60.0;
+        request.xinfa.profession = "mowen".into();
+        let result = jpcg_combo::timeline_host::calculate_timeline_from_store(request).unwrap();
+        assert!(
+            result.steps.iter().all(|s| s.legal),
+            "{name}: {:?}",
+            result.steps
+        );
+        assert_eq!(
+            result.steps[1].time.unwrap() - result.steps[0].time.unwrap(),
+            delay,
+            "{name}"
+        );
     }
 }

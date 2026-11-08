@@ -1,8 +1,8 @@
+import { buildTimelineRequest } from "../utils/timelineRequest";
 import { useEffect, useState } from "react";
 import type { ComboDraft } from "../state/cockpit";
 import type { TimelineResultDTO, FormData } from "../types";
 import * as api from "../api/commands";
-import { toCalculateRequest } from "../utils/normalize";
 import styles from "./SnapshotDiff.module.css";
 
 export default function CockpitCombo({ form, draft, inputKey, saved, baseline, active, onResult, onBusy }: {
@@ -19,33 +19,7 @@ export default function CockpitCombo({ form, draft, inputKey, saved, baseline, a
       try {
         const profession = form.xinfa_config.profession;
         const bundle = await api.loadCombatBundle(profession);
-        const req = toCalculateRequest(form);
-        const result = await api.calculateTimeline({
-          skills: bundle.skills,
-          forms: bundle.combat.form,
-          timed_buffs: bundle.combat.buff,
-          actions: draft.sequence.map((s) => (s.kind === "flag"
-            ? { kind: "flag" as const, flag: s.flag }
-            : {
-                kind: "cast" as const,
-                skill_id: s.skill.skill_id,
-                sub_id: s.skill.sub_id ?? 0,
-                skill_name: s.skill.skill_name,
-              })),
-          window: 300,
-          player: req.player,
-          hostile: req.hostile,
-          xinfa: req.xinfa_config,
-          buff: req.buff,
-          coeff: req.coefficient,
-          value_set: req.value_set ?? null,
-          combat: bundle.combat,
-          initial_instrument: bundle.combat.form.find((f) => f.initial)?.id ?? bundle.combat.form[0]?.id ?? null,
-          initial_qifeng: bundle.combat.qifeng?.[0] ?? "",
-          miji: draft.miji ?? [],
-          qixue: draft.qixue ?? [],
-          samples: 50000,
-        });
+        const result = await api.calculateTimeline(buildTimelineRequest(form, bundle, draft.sequence, draft.miji ?? [], draft.qixue ?? [], 50000));
         if (!cancelled) onResult(inputKey, result);
       } catch (err) { if (!cancelled) setError(String(err)); }
       finally { if (!cancelled) onBusy(false); }
