@@ -1,12 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect, type SetStateAction } from "react";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
-import type { SkillResultDTO, FormData } from "./types";
+import type { FormData, TimelineResultDTO } from "./types";
 import * as api from "./api/commands";
 import ActivityBar from "./components/ActivityBar";
 import ThemeToggle from "./components/ThemeToggle";
-import { GITHUB_ISSUES_URL } from "./utils/constants";
-import ConfigPanel from "./components/ConfigPanel";
+import { GITHUB_ISSUES_URL, STORAGE_KEYS } from "./utils/constants";
+import ConfigPanel, { type FormChangeOptions } from "./components/ConfigPanel";
 import ResultTable from "./components/ResultTable";
 import ForumPage from "./components/ForumPage";
 import ComboPage from "./components/ComboPage";
@@ -16,44 +16,284 @@ import StatusBar from "./components/StatusBar";
 import Toast from "./components/Toast";
 import { IconBug, IconCalc } from "./components/icons";
 import { toCalculateRequest } from "./utils/normalize";
+import { buildTimelineRequest } from "./utils/timelineRequest";
+import { usePersistentState, writePreference, readPreference } from "./hooks/usePersistentState";
+import { cockpitSchema, defaultCockpit, comboDraftSchema, defaultComboDraft } from "./state/cockpit";
+import SnapshotDiff from "./components/SnapshotDiff";
+import type { GearCatalog, GearLoadout, GearComposition, OptimizeOptions, GearOptimizeResult } from "./types/gear";
+import { initialLoadout, gearInputKey, gearPlayerForm, PROFESSION_ATTRIBUTE_RULES } from "./state/gear";
+import CockpitCombo from "./components/CockpitCombo";
+import GearPanel from "./components/GearPanel";
 import styles from "./App.module.css";
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const { toasts, addToast, removeToast } = useToast();
   const [curPage, setCurPage] = useState<"calc" | "forum" | "combo" | "editor" | "optimize">("calc");
-  const [results, setResults] = useState<SkillResultDTO[] | null>(null);
+  const [visitedPages, setVisitedPages] = useState(() => new Set(["calc"]));
+  const navigate = (page: typeof curPage) => {
+    setCurPage(page);
+    setVisitedPages((previous) => previous.has(page) ? previous : new Set([...previous, page]));
+  };
+  const freshCockpit = useRef(readPreference(STORAGE_KEYS.cockpit) === null);
+  const [contextReady, setContextReady] = useState(false);
+  const [cockpit, setCockpit] = usePersistentState(STORAGE_KEYS.cockpit, defaultCockpit, cockpitSchema);
+  const cockpitRef = useRef(cockpit);
+  cockpitRef.current = cockpit;
+  const manualHydrationRef = useRef(cockpit.manualHydration ?? { xinfa: cockpit.manualReady, coefficient: cockpit.manualReady });
+  manualHydrationRef.current = cockpit.manualHydration ?? { xinfa: cockpit.manualReady, coefficient: cockpit.manualReady };
+  const [restoreRevision, setRestoreRevision] = useState(0);
+  const requestRevision = useRef(0);
+  const actionRevision = useRef(0);
+  const startupAction = useRef(actionRevision.current);
   const [calculating, setCalculating] = useState(false);
   const [status, setStatus] = useState("就绪");
-  const [currentXinfa, setCurrentXinfa] = useState("mowen");
-  const [formData, setFormData] = useState<FormData | null>(null);
+  const [catalog, setCatalog] = useState<GearCatalog | null>(null);
+  const [gearError, setGearError] = useState("");
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
+  // 仅存在于当前会话；配装缓存不能证明磁盘上的职业 TOML 仍有效。
+  const [validatedRules, setValidatedRules] = useState<{ inputKey: string; catalog: GearCatalog; composition: GearComposition } | null>(null);
+  const formData = cockpit.form;
+  const [comboDraft, setComboDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(formData.xinfa)}`, defaultComboDraft, comboDraftSchema);
+  const [comboBusy, setComboBusy] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const optimizeLock = useRef(false);
+  const [optProgress, setOptProgress] = useState<number | null>(null);
+  const [optResult, setOptResult] = useState<{ result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null>(null);
+  const saveComboResult = useCallback((inputKey: string, result: TimelineResultDTO) => {
+    setCockpit((previous) => ({ ...previous, combo: { inputKey, result } }));
+  }, [setCockpit]);
+  const loadout = cockpit.loadouts[formData.xinfa];
+  const results = cockpit.calculation?.results ?? null;
+  const gearMode = cockpit.mode === "gear";
+  // manualReady 表示「持久化表单已是有效快照」：只有用户编辑/已加载的存档才算，
+  // 初始化的占位写入（首次挂载时先同步旧值、再异步拉取心法属性）不能提前置位，
+  // 否则首次加载失败会被永久当成已初始化，下次启动跳过重新加载。
+  const setFormData = useCallback((
+    update: SetStateAction<FormData>,
+    options?: FormChangeOptions,
+  ) => {
+    if (optimizeLock.current) return;
+    // 旧选择的异步元数据回填不是新用户意图，不能取消后选的导入。
+    if (options?.source !== "metadata") ++actionRevision.current;
+    // 同一微任务批次里的导入可能先于 React 下一次 render 继续执行。
+    const hydration = options?.hydration ?? { xinfa: true, coefficient: true };
+    manualHydrationRef.current = hydration;
+    setCockpit((previous) => ({ ...previous,
+      manualReady: options?.ready ?? true,
+      manualHydration: hydration,
+      form: typeof update === "function" ? update(previous.form) : update }));
+  }, [setCockpit]);
 
-  const handleCalculate = useCallback(
-    async (form: FormData) => {
-      setFormData(form);
-      setCalculating(true);
-      setStatus("计算中...");
+  useEffect(() => {
+    let cancelled = false;
+    api.gearCatalog().then((value) => { if (!cancelled) { setCatalog(value); setGearError(""); } })
+      .catch((err) => { if (!cancelled) setGearError(String(err)); });
+    return () => { cancelled = true; };
+  }, [catalogAttempt]);
+
+  useEffect(() => {
+    if (!catalog || loadout) return;
+    const next = initialLoadout(catalog, formData.xinfa);
+    if (next) setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } }));
+  }, [catalog, loadout, formData.xinfa, setCockpit]);
+
+  const desiredGearKey = loadout ? gearInputKey(formData, loadout) : "";
+  const acceptedAttributeMode = !loadout?.attribute_rules || loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES;
+  const professionRules = loadout?.attribute_rules === PROFESSION_ATTRIBUTE_RULES;
+  const rulesCurrent = !professionRules || (validatedRules?.inputKey === desiredGearKey
+    && validatedRules.catalog === catalog && validatedRules.composition === cockpit.calculation?.composition);
+  const compatible = contextReady && !!catalog && !!loadout && loadout.school === formData.xinfa && loadout.revision === catalog.version.revision
+    && loadout.value_set === catalog.version.value_set && formData.value_set === loadout.value_set;
+  const stale = !!cockpit.calculation && (gearMode
+    ? !acceptedAttributeMode || !rulesCurrent || cockpit.calculation.mode !== "gear" || cockpit.calculation.inputKey !== desiredGearKey
+    : cockpit.calculation.mode === "gear" || JSON.stringify(toCalculateRequest(formData)) !== JSON.stringify(toCalculateRequest(cockpit.calculation.form)));
+
+  useEffect(() => {
+    if (!gearMode || curPage !== "calc" || !compatible || !acceptedAttributeMode || !loadout) { setCalculating(false); return; }
+    if (cockpit.calculation?.mode === "gear" && cockpit.calculation.inputKey === desiredGearKey && rulesCurrent) return;
+    if (professionRules) setValidatedRules(null);
+    const revision = ++requestRevision.current;
+    const timer = window.setTimeout(async () => {
+      setCalculating(true); setGearError(""); setStatus("合成配装并计算中…");
       try {
-        const req = toCalculateRequest(form);
-        const data = await api.calculateDamage(req);
-        setResults(data);
-        setStatus(`计算完成 — ${data.length} 个技能`);
-        addToast("计算完成", "success");
+        const composition = await api.composeGear(loadout);
+        if (revision !== requestRevision.current) return;
+        const { jcsx, ...player } = gearPlayerForm(composition.player);
+        const effectiveForm: FormData = { ...formData, player,
+          xinfa_config: { ...formData.xinfa_config, xinfa_nom: String(jcsx) } };
+        const data = await api.calculateDamage(toCalculateRequest(effectiveForm));
+        if (revision !== requestRevision.current) return;
+        setCockpit((previous) => ({ ...previous, calculation: { mode: "gear", form: effectiveForm,
+          manualForm: formData, loadout, composition, inputKey: desiredGearKey, results: data } }));
+        if (professionRules && catalog) setValidatedRules({ inputKey: desiredGearKey, catalog, composition });
+        setStatus(`配装已更新 — ${data.length} 个技能`);
       } catch (err) {
-        setStatus("计算失败");
-        addToast(String(err), "error");
-      } finally {
-        setCalculating(false);
-      }
-    },
-    [addToast],
-  );
+        if (revision === requestRevision.current) { setGearError(String(err)); setStatus("配装计算失败"); }
+      } finally { if (revision === requestRevision.current) setCalculating(false); }
+    }, 125);
+    return () => { window.clearTimeout(timer); ++requestRevision.current; };
+    // desiredGearKey 包含完整上下文与配装；结果入库不重启同一输入的计算。
+  }, [desiredGearKey, compatible, acceptedAttributeMode, gearMode, curPage, catalog, restoreRevision, setCockpit]);
 
-  return (
-    <div className={styles.container}>
-      <div className={styles.body}>
-        <ActivityBar currentPage={curPage} onNavigate={setCurPage} />
-        <div className={styles.main}>
+  const reloadGearRules = () => {
+    ++requestRevision.current;
+    setValidatedRules(null);
+    setCatalog(null);
+    setGearError("");
+    setStatus("正在重新读取职业规则…");
+    setCatalogAttempt((value) => value + 1);
+  };
+
+  const handleCalculate = useCallback(async (form: FormData) => {
+    const revision = ++requestRevision.current;
+    setCalculating(true); setStatus("计算中...");
+    try {
+      const data = await api.calculateDamage(toCalculateRequest(form));
+      if (revision !== requestRevision.current) return;
+      setCockpit((previous) => ({ ...previous, calculation: { mode: "manual", form, manualForm: previous.form, results: data } }));
+      setStatus(`计算完成 — ${data.length} 个技能`); addToast("计算完成", "success");
+    } catch (err) { if (revision === requestRevision.current) { setStatus("计算失败"); addToast(String(err), "error"); } }
+    finally { if (revision === requestRevision.current) setCalculating(false); }
+  }, [addToast, setCockpit]);
+
+  const restoreBaseline = () => {
+    if (!cockpit.baseline) return;
+    ++requestRevision.current; ++actionRevision.current; setCalculating(false); setGearError("");
+    const base = cockpit.baseline;
+    if (base.comboDraft) {
+      if (base.form.xinfa === formData.xinfa) setComboDraft(base.comboDraft);
+      else writePreference(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(base.form.xinfa)}`, JSON.stringify({ version: comboDraftSchema.version, data: base.comboDraft }));
+    }
+    setCockpit((previous) => {
+      const base = previous.baseline; if (!base) return previous;
+      return { ...previous, mode: base.mode ?? "manual", form: base.manualForm ?? base.form,
+        loadouts: base.loadout ? { ...previous.loadouts, [base.loadout.school]: base.loadout } : previous.loadouts,
+        calculation: base, manualReady: true, manualHydration: { xinfa: true, coefficient: true },
+        combo: base.comboResult && base.comboDraft ? { inputKey: JSON.stringify({ request: toCalculateRequest(base.form), sequence: base.comboDraft.sequence, miji: base.comboDraft.miji, qixue: base.comboDraft.qixue }), result: base.comboResult } : undefined };
+    });
+    setRestoreRevision((value) => value + 1); setStatus("已恢复钉住时的配装、属性与结果");
+  };
+  const adoptValueSet = async (nextLoadout?: GearLoadout, action = ++actionRevision.current) => {
+    const selected = nextLoadout ?? loadout; if (!selected || action !== actionRevision.current) return;
+    // 旧存档的版本/数值集可能落后于模板：统一按模板版本口径迁移，避免与模板版本校验互卡。
+    const migrated: GearLoadout = catalog
+      ? { ...selected, revision: catalog.version.revision, value_set: catalog.version.value_set }
+      : selected;
+    try {
+      const vs = await api.resolveValueSet(migrated.value_set);
+      if (action !== actionRevision.current) return;
+      if (!vs.available || vs.id !== migrated.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
+      // 目录/文件等待期间可能已收到初始化回填，不能使用导入开始时的旧就绪状态。
+      const current = cockpitRef.current;
+      const needsConfig = migrated.school !== current.form.xinfa || !manualHydrationRef.current.xinfa;
+      const config = needsConfig ? await api.loadProfessionConfig(migrated.school) : null;
+      if (needsConfig && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
+      if (action !== actionRevision.current) return;
+      setCockpit((previous) => ({ ...previous, mode: "gear", manualReady: true, manualHydration: { xinfa: true, coefficient: true },
+        loadouts: { ...previous.loadouts, [migrated.school]: migrated },
+        form: { ...previous.form, xinfa: migrated.school, value_set: migrated.value_set,
+          coefficient: previous.form.value_set === migrated.value_set && (previous.manualHydration?.coefficient ?? previous.manualReady) ? previous.form.coefficient : { ...vs.coefficient! },
+          xinfa_config: config ? { profession: migrated.school, xinfa_name: String(config.xinfa_name ?? migrated.school),
+            xinfa_nom: String(config.xinfa_nom ?? previous.form.xinfa_config.xinfa_nom), atk_up: Number(config.atk_up) || 0,
+            pofang_up: Number(config.pofang_up) || 0, huixin_up: Number(config.huixin_up) || 0 }
+            : previous.form.xinfa_config } }));
+      setRestoreRevision((value) => value + 1); setGearError("");
+    } catch (err) { if (action === actionRevision.current) addToast(String(err), "error"); }
+  };
+  useEffect(() => {
+    if (!freshCockpit.current || !gearMode || !loadout || !contextReady) return;
+    freshCockpit.current = false;
+    // 自动初始化沿用启动版本，不能抢占启动后发生的用户操作。
+    void adoptValueSet(loadout, startupAction.current);
+  }, [gearMode, loadout, contextReady]);
+  const changeLoadout = (next: GearLoadout) => { ++actionRevision.current; setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } })); };
+
+  const handleOptimize = useCallback(async (opts: OptimizeOptions) => {
+    if (optimizeLock.current) return;
+    if (!catalog || !loadout || !compatible || !rulesCurrent) { addToast("配装模板或职业规则尚未就绪", "warning"); return; }
+    if (!comboDraft.sequence.length) { addToast("请先在排轴器编辑连招", "warning"); return; }
+    const targetHp = Number(formData.hostile?.target_hp) || 0;
+    if (opts.metric === "kill_probability" && targetHp <= 0) { addToast("击杀率目标需要先设置目标血量", "warning"); return; }
+    const arenaSet = catalog.sets.find((x) => x.source === "mingjian" && x.kind === "armor");
+    const requiredSets: Record<string, number> = opts.arena4 && arenaSet ? { [arenaSet.id]: 4 } : {};
+    const stats: Record<string, { min?: number; max?: number }> = opts.hasteMin != null ? { jiasu: { min: opts.hasteMin } } : {};
+    const samples = opts.metric === "kill_probability" ? 50000 : 0;
+    optimizeLock.current = true;
+    ++actionRevision.current; // 作废调优开始前尚未完成的导入/环境切换
+    setOptimizing(true); setOptProgress(null); setStatus("配装自动调优中…");
+    let unlisten = () => {};
+    try {
+      unlisten = api.listenGearOptimizeProgress((pct) => setOptProgress(pct));
+      const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
+      const request = buildTimelineRequest(formData, bundle, comboDraft.sequence, comboDraft.miji ?? [], comboDraft.qixue ?? [], samples, samples > 0 ? 12345 : null);
+      const result = await api.optimizeGear({
+        loadout,
+        config: toCalculateRequest(formData),
+        objective: { kind: "timeline", request, metric: opts.metric },
+        constraints: { sources: ["mingjian", "weiwang", "baowu"], allow_upgraded: true, locked: [], banned: [], required_sources: {}, banned_sources: {}, stats, allow_cross_source_2plus2: true, required_sets: requiredSets },
+        max_combinations: 100000,
+      });
+      setOptResult({ result, metric: opts.metric });
+      if (result.best) {
+        changeLoadout(result.best.composed.loadout);
+        const value = opts.metric === "kill_probability"
+          ? `${(result.best.score * 100).toFixed(1)}%`
+          : Math.round(result.best.score).toLocaleString();
+        addToast(`调优完成：${opts.metric === "kill_probability" ? "击杀率" : "区间DPS"} ${value}`, "success");
+        setStatus("配装自动调优完成");
+      } else {
+        addToast("调优未找到更优配装", "info");
+        setStatus("配装自动调优完成");
+      }
+    } catch (err) {
+      addToast(String(err), "error");
+      setStatus("配装自动调优失败");
+    } finally {
+      unlisten();
+      setOptProgress(null);
+      optimizeLock.current = false;
+      setOptimizing(false);
+    }
+  }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, changeLoadout, addToast]);
+  const exportLoadout = async () => {
+    if (!loadout) return;
+    try {
+      const text = await api.exportGear(loadout);
+      const url = URL.createObjectURL(new Blob([text], { type: "application/toml" }));
+      const link = document.createElement("a"); link.href = url; link.download = `${loadout.school}_gear.toml`; link.click(); URL.revokeObjectURL(url);
+    } catch (err) { addToast(String(err), "error"); }
+  };
+  const importLoadout = async (file: File) => {
+    // 从选择文件起保留同一操作版本；后续编辑/切模式/导入均使旧链路失效。
+    const action = ++actionRevision.current;
+    try {
+      const text = await file.text();
+      if (action !== actionRevision.current) return;
+      const value = await api.importGear(text);
+      if (action !== actionRevision.current) return;
+      await adoptValueSet(value.composed.loadout, action);
+    } catch (err) { if (action === actionRevision.current) addToast(String(err), "error"); }
+  };
+  const composition = cockpit.calculation?.mode === "gear" && cockpit.calculation.loadout?.school === formData.xinfa ? cockpit.calculation.composition : undefined;
+  const activeForm = gearMode ? (compatible && rulesCurrent && !stale && cockpit.calculation?.mode === "gear" ? cockpit.calculation.form : null) : formData;
+  const comboKey = JSON.stringify({ request: activeForm ? toCalculateRequest(activeForm) : null, sequence: comboDraft.sequence, miji: comboDraft.miji, qixue: comboDraft.qixue });
+  const resultPanel = <div className={styles.resultPanel}>
+    <SnapshotDiff snapshot={cockpit.baseline} calculation={cockpit.calculation} stale={stale} calculating={calculating || comboBusy}
+      onToggle={() => setCockpit((previous) => ({ ...previous, baseline: previous.baseline ? null : previous.calculation ? { ...previous.calculation, comboDraft, comboResult: previous.combo?.inputKey === comboKey ? previous.combo.result : undefined } : null }))} onRestore={restoreBaseline} />
+    <CockpitCombo form={activeForm} draft={comboDraft} inputKey={comboKey} saved={cockpit.combo} baseline={cockpit.baseline?.comboResult}
+      active={curPage === "calc"} onResult={saveComboResult} onBusy={setComboBusy} />
+    <ResultTable results={results} baseline={cockpit.baseline?.results} calculating={calculating} />
+  </div>;
+  const configPanel = <ConfigPanel key={restoreRevision} form={formData} onFormChange={setFormData}
+    preserveInitialForm={cockpit.manualReady} initialHydration={cockpit.manualHydration} manualMode={!gearMode} onReady={setContextReady}
+    playerPreview={composition ? gearPlayerForm(composition.player) : undefined}
+    onCalculate={handleCalculate} calculating={calculating} addToast={addToast} setStatus={setStatus} />;
+
+  return <div className={styles.container}><div className={styles.body} inert={optimizing} aria-busy={optimizing}
+    onClickCapture={(event) => { if (optimizeLock.current) { event.preventDefault(); event.stopPropagation(); } }}>
+    <ActivityBar currentPage={curPage} onNavigate={navigate} />
+    <div className={styles.main}>
           <header className={styles.header}>
             <div className={styles.logo}>
               <span className={styles.logoMark}><IconCalc size={17} /></span>
@@ -70,31 +310,38 @@ export default function App() {
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
             </div>
           </header>
-          <div className={styles.calcLayout} style={{ display: curPage === "calc" ? "" : "none" }}>
-            <div className={styles.configPanel}>
-              <ConfigPanel
-                onCalculate={handleCalculate}
-                calculating={calculating}
-                addToast={addToast}
-                setStatus={setStatus}
-                onXinfaChange={setCurrentXinfa}
-              />
-            </div>
-            <div className={styles.resultPanel}>
-              <ResultTable
-                results={results}
-                calculating={calculating}
-              />
-            </div>
-          </div>
-          {curPage === "forum" && <ForumPage addToast={addToast} />}
-          {curPage === "combo" && <ComboPage xinfaName={currentXinfa} formData={formData} />}
-          {curPage === "optimize" && <OptimizePage formData={formData} />}
-          {curPage === "editor" && <SkillEditorPage addToast={addToast} />}
+
+      <div className={`${styles.calcLayout} ${gearMode ? styles.gearLayout : ""}`} style={{ display: curPage === "calc" ? "" : "none" }}>
+        <div className={styles.modeBar} role="group" aria-label="输入模式">
+          <button aria-pressed={gearMode} onClick={() => { if (gearMode) return; ++requestRevision.current; ++actionRevision.current; setCockpit((p) => ({ ...p, mode: "gear" })); }}>配装驱动</button>
+          <button aria-pressed={!gearMode} onClick={() => { if (!gearMode) return; ++requestRevision.current; ++actionRevision.current; setCockpit((p) => ({ ...p, mode: "manual" })); }}>手动属性</button>
         </div>
+        {gearMode ? <>
+          <details className={styles.contextPanel}><summary>{formData.xinfa_config.xinfa_name} · {formData.value_set ?? "默认数值集"} · 目标血量 {formData.hostile.target_hp || 0} · 编辑计算环境</summary>{configPanel}</details>
+          {professionRules && <div className={styles.gearAlert}>
+            <button onClick={reloadGearRules}>重新读取职业规则</button>
+            {!rulesCurrent && <span> 需重新合成当前职业规则；已有结果暂不用于后续计算。</span>}
+          </div>}
+          {gearError && <div role="alert" className={styles.gearAlert}>{gearError}<button onClick={reloadGearRules}>重新读取模板</button></div>}
+          {!catalog && !gearError && <p role="status">正在读取配装模板…</p>}
+          {catalog && !loadout && <p>当前心法没有完整的 12 部位模板，请选择其他心法或切换手动属性。</p>}
+          {catalog && loadout && !compatible && <div className={styles.gearAlert}>配装需要匹配模板版本与数值集。<button onClick={() => void adoptValueSet()}>使用模板数值集 {catalog.version.value_set}</button></div>}
+          <div className={styles.gearBody}>
+            {catalog && loadout && <GearPanel catalog={catalog} loadout={loadout} composition={composition} pending={stale || calculating}
+              onOptimize={(options) => void handleOptimize(options)} optimizing={optimizing} optProgress={optProgress} optResult={optResult} onChange={changeLoadout}
+              onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
+              onExport={() => void exportLoadout()} onImport={importLoadout} />}
+            {resultPanel}
+          </div>
+        </> : <div className={styles.manualBody}><div className={styles.configPanel}>{configPanel}</div>{resultPanel}</div>}
       </div>
-      <StatusBar message={status} />
-      <Toast toasts={toasts} onRemove={removeToast} />
+      {visitedPages.has("forum") && <div className={styles.residentPage} hidden={curPage !== "forum"}><ForumPage addToast={addToast} /></div>}
+      {visitedPages.has("combo") && <div className={styles.residentPage} hidden={curPage !== "combo"}><ComboPage key={formData.xinfa} xinfaName={formData.xinfa} formData={activeForm} draft={comboDraft} onDraftChange={setComboDraft} /></div>}
+      {visitedPages.has("optimize") && <div className={styles.residentPage} hidden={curPage !== "optimize"}><OptimizePage formData={activeForm} /></div>}
+      {visitedPages.has("editor") && <div className={styles.residentPage} hidden={curPage !== "editor"}><SkillEditorPage addToast={addToast} /></div>}
     </div>
-  );
+  </div>{optimizing && <div className={styles.optimizeLock} role="status" aria-live="polite">
+    <strong>正在调优配装{optProgress == null ? "…" : ` · ${optProgress}%`}</strong>
+    <p>调优期间已锁定配装、属性和连招，完成后自动解锁。</p>
+  </div>}<StatusBar message={status} /><Toast toasts={toasts} onRemove={removeToast} /></div>;
 }

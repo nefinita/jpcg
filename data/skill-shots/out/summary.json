@@ -1,0 +1,16 @@
+{
+  "professions": [
+    {
+      "profession": "莫问",
+      "skills": 25,
+      "miji": 42,
+      "qixue": 7,
+      "warnings": 0
+    }
+  ],
+  "total_images": 67,
+  "total_skills": 25,
+  "total_miji": 42,
+  "total_qixue": 23,
+  "warnings": 0
+}

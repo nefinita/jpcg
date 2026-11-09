@@ -8,6 +8,7 @@
 //   profession — 门派列表扫描
 // ============================================================================
 
+pub mod combat;
 pub mod combo;
 pub mod config;
 pub mod paths;
@@ -21,4 +22,4 @@ pub use config::{
 };
 pub use paths::data_dirs;
 pub use profession::list_available_professions;
-pub use toml::{TomlConfig, load_config, save_skill_toml, toml_input};
+pub use toml::{TomlConfig, load_attribute_rules, load_config, save_skill_toml, toml_input};

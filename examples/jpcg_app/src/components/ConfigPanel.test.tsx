@@ -5,6 +5,7 @@ import ConfigPanel from "./ConfigPanel";
 import * as api from "../api/commands";
 import { DEFAULT_BUFF, DEFAULT_COEFFICIENT, STORAGE_KEYS } from "../utils/constants";
 import type { CalculateRequest, FormData, ValueSetDTO } from "../types";
+import { toCalculateRequest } from "../utils/normalize";
 
 vi.mock("../api/commands");
 
@@ -54,10 +55,11 @@ async function select(id: string) {
     selection().dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
-function coefficientInput(name = "会心系数") {
+function numberInput(name: string) {
   const label = Array.from(container.querySelectorAll("label")).find((el) => el.textContent === name)!;
   return label.parentElement!.querySelector("input")!;
 }
+function coefficientInput(name = "会心系数") { return numberInput(name); }
 async function editCoefficient(value: string) {
   const input = coefficientInput();
   await act(async () => {
@@ -367,4 +369,216 @@ describe("ConfigPanel 当前数值集", () => {
     expect(await request()).toMatchObject({ value_set: experience.id, coefficient: experience.coefficient });
   });
 
+});
+
+
+describe("ConfigPanel 加载目标血量", () => {
+  it.each([
+    { max_hp: 100_000, current_hp: 25_000 },
+    { max_hp: 100_000, current_hp: 0 },
+    { max_hp: 0, current_hp: 0 },
+  ])("保留 max_hp=$max_hp、current_hp=$current_hp 的显示、计算和再次保存", async (hp) => {
+    const config = saved();
+    config.hostile = { ...config.hostile, target_hp: 50_000, ...hp };
+    vi.mocked(api.loadConfig).mockResolvedValue(config);
+    await mount();
+    await click("加载");
+
+    expect(numberInput("目标最大血量").value).toBe(String(hp.max_hp));
+    expect(numberInput("目标当前血量").value).toBe(String(hp.current_hp));
+    expect(toCalculateRequest(await request()).hostile).toEqual(config.hostile);
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({
+      hostile: config.hostile,
+    }));
+  });
+
+  it("旧存档缺少 max_hp/current_hp 时显式恢复为 0，保留 target_hp 回退", async () => {
+    const config = saved();
+    const { max_hp: _max, current_hp: _current, ...legacyHostile } = config.hostile;
+    vi.mocked(api.loadConfig).mockResolvedValue({ ...config, hostile: legacyHostile } as CalculateRequest);
+    await mount();
+    await click("加载");
+
+    expect(numberInput("目标最大血量").value).toBe("0");
+    expect(numberInput("目标当前血量").value).toBe("0");
+    const expected = { ...legacyHostile, max_hp: 0, current_hp: 0 };
+    expect(toCalculateRequest(await request()).hostile).toEqual(expected);
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ hostile: expected }));
+  });
+});
+
+describe("ConfigPanel 加载属性换算模式", () => {
+  it.each([0, 2007])("拒绝将转化攻击为 %s 的配装快照载入手动编辑，保持当前表单和数值集", async (extra) => {
+    await mount();
+    await select(experience.id);
+    const before = await request();
+    const config = saved(live.id);
+    config.player = { ...config.player, zhuanhua_gongji: extra, jiasu_dengji: 135 };
+    vi.mocked(api.loadConfig).mockResolvedValue(config);
+    await click("加载");
+    expect(addToast).toHaveBeenCalledWith(expect.stringContaining("请在配装模式导入原始配装 TOML"), "error");
+    expect(await request()).toEqual(before);
+    expect(selection().value).toBe(experience.id);
+    expect(localStorage.getItem(STORAGE_KEYS.valueSet)).toBe(experience.id);
+    expect(api.resolveValueSet).toHaveBeenLastCalledWith(experience.id);
+  });
+
+  it.each([undefined, null])("手动存档标记为 %s 时保留加速，计算及再次保存都不丢失", async (extra) => {
+    const config = saved();
+    config.player = { ...config.player, zhuanhua_gongji: extra, jiasu_dengji: 135 };
+    vi.mocked(api.loadConfig).mockResolvedValue(config);
+    await mount(); await click("加载");
+    const player = toCalculateRequest(await request()).player;
+    expect(player.jiasu_dengji).toBe(135);
+    expect(player).not.toHaveProperty("zhuanhua_gongji");
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ player: expect.objectContaining({ jiasu_dengji: 135 }) }));
+  });
+});
+
+describe("ConfigPanel 心法配置请求顺序", () => {
+  const config = (profession: string, atk_up: number) => ({
+    profession, xinfa_name: profession, xinfa_nom: "lidao", atk_up, pofang_up: 2, huixin_up: 3,
+  });
+  async function chooseXinfa(id: string) {
+    await act(async () => {
+      const input = container.querySelector("select")!;
+      input.value = id;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+  async function expectConfig(profession: string, expected: ReturnType<typeof config>) {
+    expect(container.querySelector("select")!.value).toBe(profession);
+    const form = await request();
+    expect(form.xinfa).toBe(profession);
+    expect(form.xinfa_config).toEqual(expected);
+    expect(toCalculateRequest(form).xinfa_config).toEqual(expected);
+    await click("保存");
+    expect(api.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ xinfa_config: expected }));
+  }
+
+  it("后选心法先返回时，迟到的旧响应不能改写计算与保存参数", async () => {
+    await mount();
+    const first = deferred<ReturnType<typeof config>>();
+    const latest = config("mowen", 22);
+    vi.mocked(api.loadProfessionConfig).mockImplementation(async (id) => id === "yinlong" ? first.promise : latest);
+    await chooseXinfa("yinlong");
+    await chooseXinfa("mowen");
+    await act(async () => first.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", latest);
+  });
+
+  it("切走再切回同一心法，第一次请求仍不能覆盖最新请求", async () => {
+    await mount();
+    const first = deferred<ReturnType<typeof config>>();
+    const latest = config("yinlong", 33);
+    vi.mocked(api.loadProfessionConfig)
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(config("mowen", 22))
+      .mockResolvedValueOnce(latest);
+    await chooseXinfa("yinlong");
+    await chooseXinfa("mowen");
+    await chooseXinfa("yinlong");
+    await act(async () => first.resolve(config("yinlong", 11)));
+    await expectConfig("yinlong", latest);
+  });
+
+  it("加载存档使之前尚未返回的心法配置请求失效", async () => {
+    await mount();
+    const pending = deferred<ReturnType<typeof config>>();
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    await chooseXinfa("yinlong");
+    await click("加载");
+    await act(async () => pending.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", saved().xinfa_config);
+  });
+
+  it("清空使之前尚未返回的心法配置请求失效", async () => {
+    await mount();
+    const pending = deferred<ReturnType<typeof config>>();
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    await chooseXinfa("yinlong");
+    await click("清空");
+    await act(async () => pending.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", saved().xinfa_config);
+  });
+
+  it("加载完成替换表单后，加载期间发出的心法请求也已过期", async () => {
+    await mount();
+    const load = deferred<CalculateRequest | null>();
+    const pending = deferred<ReturnType<typeof config>>();
+    vi.mocked(api.loadConfig).mockReturnValue(load.promise);
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    await click("加载");
+    await chooseXinfa("yinlong");
+    await act(async () => load.resolve(saved()));
+    await act(async () => pending.resolve(config("yinlong", 11)));
+    await expectConfig("mowen", saved().xinfa_config);
+  });
+
+  it("没有存档时，不取消仍对应当前心法的配置请求", async () => {
+    await mount();
+    const pending = deferred<ReturnType<typeof config>>();
+    const latest = config("yinlong", 11);
+    vi.mocked(api.loadProfessionConfig).mockReturnValue(pending.promise);
+    vi.mocked(api.loadConfig).mockResolvedValue(null);
+    await chooseXinfa("yinlong");
+    await click("加载");
+    await act(async () => pending.resolve(latest));
+    await expectConfig("yinlong", latest);
+  });
+
+});
+
+it("缺失心法元数据时保留有效名称/主属性，不写入字面 undefined", async () => {
+  vi.mocked(api.loadProfessionConfig).mockResolvedValue({});
+  await mount();
+  const form = await request();
+  expect(form.xinfa_config.profession).toBe("mowen");
+  expect(form.xinfa_config.xinfa_name).toBe("莫问");
+  expect(form.xinfa_config.xinfa_nom).toBe("gengu");
+});
+
+describe("初始化完成标记（manualReady）", () => {
+  async function mountControlled(onFormChange: ReturnType<typeof vi.fn>) {
+    await act(async () => {
+      root.render(
+        <ConfigPanel
+          calculating={false}
+          onCalculate={onCalculate}
+          addToast={addToast}
+          setStatus={setStatus}
+          onFormChange={onFormChange as never}
+        />,
+      );
+    });
+  }
+
+  it("首次心法加载失败时不写 ready，重挂载会重新拉取", async () => {
+    const onFormChange = vi.fn();
+    vi.mocked(api.loadProfessionConfig).mockRejectedValue(new Error("network down"));
+    await mountControlled(onFormChange);
+    expect(api.loadProfessionConfig).toHaveBeenCalled();
+    // 初始化占位写入保持 ready=false，不能让失败的加载变成「已初始化」。
+    expect(onFormChange.mock.calls.some((call) => call[1]?.ready === true)).toBe(false);
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    vi.mocked(api.loadProfessionConfig).mockClear();
+    await mountControlled(onFormChange);
+    expect(api.loadProfessionConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("加载成功或用户编辑后才写 ready", async () => {
+    const onFormChange = vi.fn();
+    vi.mocked(api.loadProfessionConfig).mockResolvedValue({
+      profession: "mowen", xinfa_name: "莫问", xinfa_nom: "gengu", atk_up: 10, pofang_up: 20, huixin_up: 30,
+    });
+    await mountControlled(onFormChange);
+    // 成功响应后有一次 ready=true 的写入（携带加载到的属性）
+    const readyWrite = onFormChange.mock.calls.find((call) => call[1]?.ready === true);
+    expect(readyWrite).toBeDefined();
+  });
 });

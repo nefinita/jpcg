@@ -95,6 +95,8 @@ const ATTR_META: [AttrMeta; 6] = [
     ),
 ];
 
+/// 对固定玩家面板求导。已换算输入的主属性偏导为 0，不是重新配装后的收益；
+/// 要评估装备原属性收益，调用方必须重新合成后比较。面向用户的 host 接口拒绝此模式。
 pub fn compute_derivatives(
     player: &PlayerConfig,
     hostile: &HostilepileConfig,

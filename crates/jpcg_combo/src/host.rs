@@ -16,7 +16,7 @@ use jpcg_core::type_set::{
 use crate::conv;
 use crate::engine::{self, ComboConfig};
 
-fn into_core(
+pub(crate) fn into_core(
     player: PlayerConfigDTO,
     hostile: HostileConfigDTO,
     xinfa: XinfaConfigDTO,
@@ -30,15 +30,7 @@ fn into_core(
     BuffConfig,
     CoefficientConfig,
 ) {
-    let player = PlayerConfig::new(
-        player.jcsx,
-        player.jichu_shuxing,
-        player.jichu_gongji,
-        player.huixin_dengji,
-        player.huixin_xiaoguo,
-        player.pofang_dengji,
-        player.wuqi_shanghai,
-    );
+    let player = PlayerConfig::from(player);
     let hostile = HostilepileConfig {
         waigong_fangyu: hostile.waigong_fangyu,
         neigong_fangyu: hostile.neigong_fangyu,
@@ -49,7 +41,8 @@ fn into_core(
         max_hp: hostile.max_hp,
         current_hp: hostile.current_hp,
     };
-    let xinfa = XinfaConfig::new(
+    let gcd_base = xinfa.gcd_base;
+    let mut xinfa = XinfaConfig::new(
         xinfa.profession,
         xinfa.xinfa_name,
         xinfa.xinfa_nom,
@@ -57,6 +50,7 @@ fn into_core(
         xinfa.pofang_up,
         xinfa.huixin_up,
     );
+    xinfa.gcd_base = gcd_base;
     let buff = BuffConfig {
         base_atk_pct: buff.base_atk_pct,
         huixin_pct: buff.huixin_pct,
@@ -131,8 +125,26 @@ pub fn calculate_combo(
 
 /// 保存连招预设
 pub fn save_combo_preset(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
+    save_combo_preset_with_flags(name, steps, vec![])
+}
+
+pub fn save_combo_preset_with_flags(
+    name: String,
+    steps: Vec<ComboStepDTO>,
+    flags: Vec<jpcg_api::ComboFlagDTO>,
+) -> Result<(), String> {
+    if flags.iter().any(|f| f.position > steps.len()) {
+        return Err("预设标记位置超出技能序列".into());
+    }
     let core_steps = steps.into_iter().map(ComboStep::from).collect();
     let preset = ComboPreset {
+        flags: flags
+            .into_iter()
+            .map(|f| jpcg_core::type_set::combo::ComboFlag {
+                position: f.position,
+                start: f.start,
+            })
+            .collect(),
         name,
         steps: core_steps,
     };
@@ -193,6 +205,8 @@ mod tests {
             huixin_xiaoguo: 2925,
             pofang_dengji: 109160,
             wuqi_shanghai: 0,
+            jiasu_dengji: 0,
+            zhuanhua_gongji: None,
         }
     }
 
@@ -217,6 +231,7 @@ mod tests {
             atk_up: 1.96,
             pofang_up: 2.0,
             huixin_up: 0.0,
+            gcd_base: 0.0,
         }
     }
 
@@ -233,8 +248,21 @@ mod tests {
                 huajin_xishu: 30115.8,
                 fangyu_xishu: 126007.2,
                 pvp_global_jianshang: 0.9,
+                jiasu_xishu: 0.0,
             },
         )
+    }
+
+    #[test]
+    fn combo_and_timeline_adapter_keeps_converted_attack_and_haste() {
+        let mut dto = player();
+        dto.jiasu_dengji = 1234;
+        dto.jichu_gongji = 1001;
+        dto.zhuanhua_gongji = Some(251);
+        let (buff, coeff) = buff_coeff();
+        let (core, _, _, _, _) = into_core(dto, hostile(), xinfa(), buff, coeff, None);
+        assert_eq!(core.jiasu_dengji, 1234);
+        assert_eq!(core.atk_with_buff(100.0, 12.5).total(), 1377);
     }
 
     /// 回归：连招与单技能/求导共用同一运行期值集解析（分母省略时按值集回退）
@@ -285,6 +313,7 @@ mod tests {
         assert!(core.skill_snapshot.is_some(), "保存时应写入技能快照");
 
         let toml_str = toml::to_string_pretty(&ComboPreset {
+            flags: vec![],
             name: "test".into(),
             steps: vec![core],
         })
@@ -310,6 +339,7 @@ mod tests {
         };
         let core: ComboStep = ComboStep::from(step_dto);
         let rounds: ComboPresetDTO = ComboPresetDTO::from(ComboPreset {
+            flags: vec![],
             name: "test".into(),
             steps: vec![core],
         });

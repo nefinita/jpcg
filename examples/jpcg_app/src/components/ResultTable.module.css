@@ -150,3 +150,51 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+}
+.controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+.controls input, .controls select, .controls button {
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font: inherit;
+}
+.controls input { min-width: 170px; }
+.controls select { min-width: 215px; }
+.controls button { cursor: pointer; }
+.controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+.controls input:focus-visible,
+.controls select:focus-visible,
+.controls button:focus-visible {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.15);
+}
+.hint { flex-basis: 100%; font-size: 0.75rem; color: var(--text-muted); }
+.table td.emptyRow {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  white-space: normal;
+}
+.tableScroll { overflow-x: auto; }
+
+.positive { color: var(--success, #16803c); }
+.negative { color: var(--danger, #c73535); }
+.controls label { min-width: 0; max-width: 100%; }
+@media (max-width: 600px) {
+  .controls input, .controls select { min-width: 0; width: 100%; }
+}
+.changedRow { animation: changed 450ms ease-out; }
+@keyframes changed { from { background: var(--glass-highlight); } to { background: transparent; } }
+.shareCell { min-width: 100px; font-size: .75rem; }.shareTrack { display: inline-block; width: 45px; height: 5px; margin-right: 6px; vertical-align: middle; background: var(--border-subtle); border-radius: 4px; overflow: hidden; }.shareTrack > span { display: block; height: 100%; background: var(--primary-500); transition: width 180ms ease-out; }
+@media(prefers-reduced-motion:reduce) { .changedRow { animation: none; }.shareTrack > span { transition: none; } }

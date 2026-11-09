@@ -1,0 +1,836 @@
+{
+ "profession": "莫问",
+ "version": "2026-11-04",
+ "source": "游戏内 tooltip 截图 + niri 选区截图（data/skill-shots/莫问/）",
+ "base_attack": {
+  "attack": 8438,
+  "element": "阴",
+  "note": "最终阴性内功攻击 8438（属性面板）；倍率存整数 int(攻击加成×160/攻击力)，结算时 加成=倍率×攻击力/160",
+  "base": 160
+ },
+ "forms": [
+  {
+   "id": "qu-yangchun",
+   "name": "阳春白雪",
+   "type": "曲",
+   "switch_skill": "阳春白雪曲"
+  },
+  {
+   "id": "qu-gaoshan",
+   "name": "高山流水",
+   "type": "曲",
+   "switch_skill": "高山流水曲",
+   "note": "宫/徵 → 变宫/变徵（可移动吟唱，复用其秘籍）"
+  },
+  {
+   "id": "qu-pingsha",
+   "name": "平沙落雁",
+   "type": "曲",
+   "switch_skill": "平沙落雁曲",
+   "note": "「角」额外使目标无法施展轻功 2 秒；音域类招式改为目标位置创建"
+  },
+  {
+   "id": "jian",
+   "name": "剑",
+   "type": "形态",
+   "switch_skill": "清绝影歌",
+   "note": "二段「收剑回琴」切回原曲形态"
+  }
+ ],
+ "form_switch": {
+  "skill": "清绝影歌",
+  "back_skill": "清绝影歌·回",
+  "note": "莫问为四形态职业：阳春白雪 / 高山流水 / 平沙落雁（三曲） + 剑。曲之间用各自的「曲」主动切换；剑形态用清绝影歌进入、收剑回琴退出。"
+ },
+ "skills": [
+  {
+   "name": "宫",
+   "element": "阴",
+   "range": 22,
+   "cast": 1.75,
+   "cooldown": 0,
+   "charges": null,
+   "base_min": 80,
+   "base_max": 90,
+   "attack_bonus": 2715,
+   "ratio": 51,
+   "miji": true,
+   "note": "攻击加成按 buff 系数 0.99694 校正（旧图 +2723）",
+   "forms": [
+    "qu-yangchun",
+    "qu-gaoshan",
+    "qu-pingsha"
+   ],
+   "gaoshan_variant": {
+    "name": "变宫",
+    "note": "可移动吟唱，复用宫秘籍"
+   },
+   "ratio_x160": 51.48,
+   "ratio_raw": 0.321759,
+   "ratio_int": 51,
+   "ratio_residual": 0.4814,
+   "skill_id": 14064,
+   "sub_id": 14474
+  },
+  {
+   "name": "商",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": 0,
+   "charges": null,
+   "base_min": 95,
+   "base_max": 100,
+   "attack_bonus": 2554,
+   "ratio": 48,
+   "dot": {
+    "interval": 3.0,
+    "duration": 18.0,
+    "bonus_per_tick": 750
+   },
+   "miji": true,
+   "forms": [
+    "qu-yangchun",
+    "qu-gaoshan",
+    "qu-pingsha"
+   ],
+   "ratio_x160": 48.43,
+   "ratio_raw": 0.302678,
+   "ratio_int": 48,
+   "ratio_residual": 0.4285,
+   "skill_id": 14065,
+   "sub_id": 14311
+  },
+  {
+   "name": "徵",
+   "element": "阴",
+   "range": 22,
+   "cast": 0,
+   "cooldown": 0,
+   "charges": null,
+   "base_min": 84,
+   "base_max": 92,
+   "attack_bonus": 1853,
+   "ratio": 35,
+   "hits": 3,
+   "hit_window": 2.81,
+   "miji": true,
+   "forms": [
+    "qu-yangchun",
+    "qu-gaoshan",
+    "qu-pingsha"
+   ],
+   "gaoshan_variant": {
+    "name": "变徵",
+    "note": "可移动吟唱，复用徵秘籍"
+   },
+   "ratio_x160": 35.14,
+   "ratio_raw": 0.219602,
+   "ratio_int": 35,
+   "ratio_residual": 0.1363,
+   "skill_id": 14067,
+   "sub_id": 14227
+  },
+  {
+   "name": "羽",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": null,
+   "charges": 3,
+   "recharge": 6.0,
+   "base_min": 156,
+   "base_max": 175,
+   "attack_bonus": 2717,
+   "ratio": 51,
+   "miji": true,
+   "forms": [
+    "qu-yangchun",
+    "qu-gaoshan",
+    "qu-pingsha"
+   ],
+   "ratio_x160": 51.52,
+   "ratio_raw": 0.321996,
+   "ratio_int": 51,
+   "ratio_residual": 0.5193,
+   "skill_id": 14068,
+   "sub_id": 14100
+  },
+  {
+   "name": "角",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": 0,
+   "charges": null,
+   "base_min": 95,
+   "base_max": 100,
+   "attack_bonus": 2554,
+   "ratio": 48,
+   "dot": {
+    "interval": 3.0,
+    "duration": 18.0,
+    "bonus_per_tick": 731
+   },
+   "miji": true,
+   "forms": [
+    "qu-yangchun",
+    "qu-gaoshan",
+    "qu-pingsha"
+   ],
+   "pingsha_extra": "「平沙落雁」曲目下使当前目标无法施展轻功，持续 2 秒",
+   "ratio_x160": 48.43,
+   "ratio_raw": 0.302678,
+   "ratio_int": 48,
+   "ratio_residual": 0.4285,
+   "skill_id": 14066,
+   "sub_id": 14312
+  },
+  {
+   "name": "剑·宫",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 0,
+   "charges": null,
+   "base_min": 170,
+   "base_max": 182,
+   "attack_bonus": 3875,
+   "ratio": 73,
+   "targets": 5,
+   "note": "前方 8 尺扇形 ≤5 目标；基础调息 -0.5s；减速 50% 3s",
+   "forms": [
+    "jian"
+   ],
+   "ratio_x160": 73.48,
+   "ratio_raw": 0.459232,
+   "ratio_int": 73,
+   "ratio_residual": 0.4771,
+   "skill_id": 14449,
+   "sub_id": 18656
+  },
+  {
+   "name": "剑·商",
+   "element": "阴",
+   "range": 8,
+   "cast": 0,
+   "cooldown": null,
+   "charges": 2,
+   "recharge": 20.0,
+   "base_min": 480,
+   "base_max": 500,
+   "attack_bonus": 8472,
+   "ratio": 160,
+   "note": "眩晕 4 秒",
+   "forms": [
+    "jian"
+   ],
+   "ratio_x160": 160.64,
+   "ratio_raw": 1.004029,
+   "ratio_int": 160,
+   "ratio_residual": 0.6447,
+   "skill_id": 25225,
+   "sub_id": 25225
+  },
+  {
+   "name": "剑·徵",
+   "element": "阴",
+   "range": 10,
+   "cast": 0,
+   "cooldown": 11.0,
+   "charges": null,
+   "base_min": 156,
+   "base_max": 162,
+   "attack_bonus": 3293,
+   "ratio": 62,
+   "hits": 4,
+   "hit_window": 2.0,
+   "tick_interval": 0.5,
+   "note": "每 0.5 秒造成一次，持续 2 秒；期间可移动",
+   "forms": [
+    "jian"
+   ],
+   "ratio_x160": 62.44,
+   "ratio_raw": 0.390258,
+   "ratio_int": 62,
+   "ratio_residual": 0.4413,
+   "skill_id": 14451,
+   "sub_id": 0
+  },
+  {
+   "name": "剑·羽",
+   "element": "阴",
+   "range": 24,
+   "cast": 0,
+   "cooldown": null,
+   "charges": 1,
+   "recharge": 16.0,
+   "base_min": 248,
+   "base_max": 256,
+   "attack_bonus": 5342,
+   "ratio": 101,
+   "note": "定身 2 秒；2 秒后出现「影」持续 8 秒",
+   "forms": [
+    "jian"
+   ],
+   "ratio_x160": 101.29,
+   "ratio_raw": 0.633088,
+   "ratio_int": 101,
+   "ratio_residual": 0.2941,
+   "skill_id": 14452,
+   "sub_id": 14455
+  },
+  {
+   "name": "剑·角",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 20.0,
+   "charges": null,
+   "base_min": 260,
+   "base_max": 270,
+   "attack_bonus": 3587,
+   "ratio": 68,
+   "charge_levels": [
+    {
+     "min_charge": 0.0,
+     "base_min": 260,
+     "base_max": 270,
+     "attack_bonus": 3587,
+     "ratio": 0.4251,
+     "root": 2.0
+    },
+    {
+     "min_charge": 2.0,
+     "base_min": 600,
+     "base_max": 620,
+     "attack_bonus": 7173,
+     "ratio": 0.8501,
+     "root": 5.0
+    }
+   ],
+   "note": "蓄力技，最多 3 秒",
+   "forms": [
+    "jian"
+   ],
+   "ratio_x160": 68.02,
+   "ratio_raw": 0.425101,
+   "ratio_int": 68,
+   "ratio_residual": 0.0161,
+   "skill_id": 40291,
+   "sub_id": 40293
+  },
+  {
+   "name": "高山流水",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 3.0,
+   "damage": null,
+   "note": "被动：宫/徵 → 变宫/变徵，可移动施放；主动：加速率突破上限 +20%，持续 12 秒",
+   "forms": [
+    "qu-gaoshan"
+   ],
+   "is_form_switch": true,
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "高山流水曲",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 45.0,
+   "damage": null,
+   "kind": "爆发",
+   "note": "效果同高山流水，CD 45 秒",
+   "forms": [
+    "qu-gaoshan"
+   ],
+   "is_form_switch": true,
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "阳春白雪",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 3.0,
+   "damage": {
+    "passive_base_min": 105,
+    "passive_base_max": 108,
+    "passive_attack_bonus": 1141,
+    "passive_ratio": 0.1352,
+    "bloom_base_min": 550,
+    "bloom_base_max": 590,
+    "bloom_attack_bonus": 1304,
+    "bloom_attack_bonus_max": 57603,
+    "bloom_ratio": 6.826
+   },
+   "note": "被动 6 尺内 2 个其他目标；主动 2 层充能，雪花 5 秒",
+   "forms": [
+    "qu-yangchun"
+   ],
+   "is_form_switch": true,
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "阳春白雪曲",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": null,
+   "charges": 2,
+   "recharge": 24.0,
+   "damage": {
+    "passive_base_min": 105,
+    "passive_base_max": 108,
+    "passive_attack_bonus": 1141,
+    "bloom_base_min": 550,
+    "bloom_base_max": 590,
+    "bloom_attack_bonus": 1304,
+    "bloom_attack_bonus_max": 57603
+   },
+   "note": "攻击加成按 buff 系数校正（旧图 +1145/+1308/+57780）",
+   "forms": [
+    "qu-yangchun"
+   ],
+   "is_form_switch": true,
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "平沙落雁",
+   "forms": [
+    "qu-pingsha"
+   ],
+   "element": "阴",
+   "range": 25,
+   "cast": 2.5,
+   "cooldown": 3.0,
+   "damage": null,
+   "kind": "控制",
+   "is_form_switch": true,
+   "note": "平沙落雁曲的被动版本：效果同「平沙落雁曲」，仅调息时间改为 3 秒",
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "平沙落雁曲",
+   "element": "阴",
+   "range": 25,
+   "cast": 2.5,
+   "cooldown": 90.0,
+   "damage": null,
+   "kind": "控制",
+   "note": "控制目标 10 秒（治疗心法 -2 秒）；目标受伤 -10%",
+   "forms": [
+    "qu-pingsha"
+   ],
+   "is_form_switch": true,
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "九衢闻曲",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "damage": {
+    "base_min": 200,
+    "base_max": 225,
+    "attack_bonus": 763,
+    "ratio": 0.0904
+   },
+   "kind": "被动",
+   "note": "非战斗每秒 +2 曲风；施展「羽」+1（最多 9）；宫/变宫 消耗 1 点曲风免运功，否则附带伤害",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "青霄飞羽",
+   "element": "阴",
+   "range": 0,
+   "cast": 1.0,
+   "cooldown": 40.0,
+   "damage": {
+    "base_min": 320,
+    "base_max": 328,
+    "attack_bonus": 2174,
+    "ratio": 0.2576
+   },
+   "note": "浮空 6 秒（秘籍 +2），免控/缴械/无法运功，受伤 -40%；持剑姿态下每秒对 25 尺目标造成伤害",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "云生结海",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": 70.0,
+   "damage": null,
+   "note": "半径 15 尺音域 8 秒：小队平摊伤害与治疗",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "江逐月天",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": 70.0,
+   "damage": null,
+   "note": "半径 10 尺音域：10 名敌对加速 -50%；后 5 秒招式调息暂停",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "迴梦逐光",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": 70.0,
+   "damage": null,
+   "note": "半径 10 尺音域：记录最多 5 名敌对影子 8 秒，再次施展传回",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "笑傲光阴",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": 70.0,
+   "damage": null,
+   "note": "半径 15 尺音域 8 秒：自身受伤 -50%，内外玩家无法互相施技",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "疏影横斜",
+   "element": "阴",
+   "range": 20,
+   "cast": 0,
+   "cooldown": null,
+   "charges": 1,
+   "recharge": 28.0,
+   "damage": null,
+   "note": "召唤影子；移形换影传送回影子并解控免控 5 秒（可叠加）",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "清绝影歌",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 60.0,
+   "damage": null,
+   "note": "进入持剑姿态；最大气血 50% 护盾；留下影子 8 秒；非战斗无调息；重伤重置",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "孤影化双",
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 150.0,
+   "damage": null,
+   "note": "解控；残影记录调息与气血 7 秒，再次施展恢复",
+   "forms": [
+    "any"
+   ],
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  },
+  {
+   "name": "清绝影歌·回",
+   "forms": [
+    "jian"
+   ],
+   "element": "阴",
+   "range": 0,
+   "cast": 0,
+   "cooldown": 0,
+   "damage": null,
+   "kind": "形态切换",
+   "occupies_gcd": true,
+   "gcd_count": 1,
+   "note": "收剑回琴：从剑形态切回原曲形态，只占 1 个 GCD，无其他效果",
+   "ratio": 0,
+   "ratio_x160": 0.0,
+   "ratio_raw": 0.0,
+   "ratio_int": 0
+  }
+ ],
+ "qixue": [
+  {
+   "slot": "第一重",
+   "name": "洞天",
+   "kind": "被动",
+   "effect": "变徵消耗 3 点曲风、免运功，改为琴音环绕：1.5 秒内 3 次 4851 点阴性内功；每跳使自身「商」「角」下一跳立刻生效"
+  },
+  {
+   "slot": "第一重",
+   "name": "绝弦",
+   "kind": "被动",
+   "effect": "无法施展「曲」主动；持剑姿态下可施展音域类招式，伤害 +15%、移速 +15%、受到治疗 +15%；秘境中获「出鞘」"
+  },
+  {
+   "slot": "第一重",
+   "name": "入月",
+   "kind": "被动",
+   "effect": "施展「音」招式时按曲风数造成 360~3238 点阴性内功并固定获得 3 点曲风；宫/变宫 消耗全部曲风，命中后叠「照雪」"
+  },
+  {
+   "slot": "第一重",
+   "name": "鹿鸣",
+   "kind": "被动",
+   "effect": "宫/变宫 调息改为 6 秒、不耗曲风立刻施展，随后每 0.5 秒耗 1 点曲风造成 5-6 点(+9158)"
+  },
+  {
+   "slot": "第二重",
+   "name": "殊曲",
+   "kind": "被动",
+   "effect": "「商」「角」持续间隔缩短 1 秒，总时长不变，每跳递增 12%"
+  },
+  {
+   "slot": "第二重",
+   "name": "削竹",
+   "kind": "被动",
+   "effect": "剑·徵 变为 2 层充能（8 秒），伤害 +16%，命中定身/眩晕目标额外 +40%；施展后立即斩击并锁足 2 秒"
+  },
+  {
+   "slot": "第二重",
+   "name": "醉剑",
+   "kind": "被动",
+   "effect": "剑·徵 +2 跳，运功期间闪避 +60%，斩击改为面向 10 尺矩形 ≤5 目标并回复 1.5% 气血"
+  },
+  {
+   "slot": "第三重",
+   "name": "凝眉",
+   "kind": "被动",
+   "effect": "青霄飞羽期间自身伤害 +15%，施展后击退 6 尺内 ≤5 名敌对侠士"
+  },
+  {
+   "slot": "第三重",
+   "name": "鸾羽",
+   "kind": "被动",
+   "effect": "青霄飞羽 → 飞鸾动羽：冲至 25 尺内目标点，8 尺内 ≤5 目标 999 点阴性内功、锁足 3 秒；免疫控制等 8 秒（40 秒调息）"
+  },
+  {
+   "slot": "第三重",
+   "name": "捣衣",
+   "kind": "被动",
+   "effect": "施展移形换影后，在免控期间免疫缴械和无法运功"
+  },
+  {
+   "slot": "第三重",
+   "name": "参连",
+   "kind": "被动",
+   "effect": "无视目标 60% 内功防御等级；疏影横斜召唤的影子不再攻击"
+  },
+  {
+   "slot": "第四重",
+   "name": "冻泉",
+   "kind": "被动",
+   "effect": "商/角 +4 跳；宫/变宫 调息改为 12 秒、不再运功/不耗曲风，改为获得 3 点曲风，命中挂「商」并眩晕 3 秒（需洞天）"
+  },
+  {
+   "slot": "第四重",
+   "name": "停拍",
+   "kind": "被动",
+   "effect": "剑·羽 伤害 +20%，命中返还 4 秒剑·角/剑·商 调息；命中江逐月天目标改为返还剑·羽 1 层充能"
+  },
+  {
+   "slot": "第四重",
+   "name": "贯珠",
+   "kind": "被动",
+   "effect": "受到技能伤害超过气血上限 10% 时，该次伤害 -20%"
+  },
+  {
+   "slot": "第四重",
+   "name": "凌冬",
+   "kind": "被动",
+   "effect": "徵/变徵 调息改为 18 秒；3.75 秒内 6 次伤害每次 +40%（6 次后重置）；对非侠士 +50%"
+  },
+  {
+   "slot": "第五重",
+   "name": "相依",
+   "kind": "被动",
+   "effect": "孤影化双 持续 +8 秒，施展时环形音波两道：459-472(+4895) / 552-565(+7075)，每道最多 25 目标"
+  },
+  {
+   "slot": "第五重",
+   "name": "音彻",
+   "kind": "被动",
+   "effect": "剑·音 招式命中自身音域目标时震荡：2159 点阴性内功，并返还笑傲光阴 1 秒调息（需绝弦）"
+  },
+  {
+   "slot": "第五重",
+   "name": "净植",
+   "kind": "被动",
+   "effect": "每消耗 1 点曲风：对目标 1330 点阴性内功，并为侠士加 1.75% 最大气血治疗吸收盾 5 秒（需入月）"
+  },
+  {
+   "slot": "第五重",
+   "name": "超然",
+   "kind": "被动",
+   "effect": "孤影化双 调息降至 60 秒并受加速影响，不再召唤残影；重置羽/剑·羽 调息；若曲招式可用则召唤琴影 8 秒（加速突破上限 +30%）"
+  },
+  {
+   "slot": "第六重",
+   "name": "太常律",
+   "kind": "爆发",
+   "effect": "高山流水主动期间可施展：每 0.75 秒对 8 尺内 ≤5 目标 180-195(+5522)，持续 2.25 秒；命中后补「商」「角」"
+  },
+  {
+   "slot": "第六重",
+   "name": "不愧君",
+   "kind": "爆发",
+   "effect": "被动：音域内 ≤5 名敌对侠士受到治疗 -45%；主动：850-875(+11447) 阴性内功并使目标受到治疗 -45% 12 秒（视为剑·音套路）"
+  },
+  {
+   "slot": "第六重",
+   "name": "断水流",
+   "kind": "爆发",
+   "effect": "5 层充能（8 秒），进入持剑姿态冲向目标造成 3 次 4099 点阴性内功，并提高该招式施展速度（最多 3 次，5 秒）"
+  },
+  {
+   "slot": "第六重",
+   "name": "斩长鲸",
+   "kind": "爆发",
+   "effect": "20 尺、瞬间、无调息，对目标造成巨额伤害（tooltip 未显示数值）"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "秋霜",
+   "kind": "被动",
+   "effect": "剑·音 招式回复 1 点曲风；对非侠士施展剑·商改为消耗全部曲风，每点造成伤害并返还 2 秒调息；随后 30 秒内剑·徵 伤害 +60%（需绝弦）"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "豪情",
+   "kind": "被动",
+   "effect": "徵/变徵 立刻造成一次伤害，可对目标周围 8 尺内额外 4 个敌对目标造成伤害"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "师襄",
+   "kind": "被动",
+   "effect": "每点曲风使会心效果与无双等级 +2%；音/剑·音 套路运功不会被打退"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "井仪",
+   "kind": "被动",
+   "effect": "持续效果被卸除后，每个持续效果使驱散者 2 秒内无法运功，最多 6 秒"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "别鹤",
+   "kind": "被动",
+   "effect": "迴梦逐光拉回目标时定身 3 秒，并为无自身「商」「角」的目标补上"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "兼山",
+   "kind": "被动",
+   "effect": "云生结海 调息 +20 秒；音域生成时立刻平衡范围内小队成员当前气血百分比"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "游羽",
+   "kind": "被动",
+   "effect": "青霄飞羽 运功不会被打退；期间双击左/右平移可朝指定方向移动"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "忘弦",
+   "kind": "被动",
+   "effect": "笑傲光阴 减伤 +20%；音域生成时若自身在圈内，回复 20% 最大气血并解除阴性/阳性/混元/毒性/点穴/持续伤害"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "莲魄",
+   "kind": "被动",
+   "effect": "移形换影 获得 20% 最大气血伤害吸收盾 10 秒；持剑姿态下施展不再传送"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "无尽藏",
+   "kind": "被动",
+   "effect": "徵/变徵 每跳也强化雪花；雪花绽放对非侠士伤害 ×3"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "流韵",
+   "kind": "被动",
+   "effect": "剑·角 命中后挂「商」「角」，并卸除目标阴性/阳性/混元/毒性内功气劲各 1 个；蓄力 ≥2 秒额外卸除 1 个"
+  },
+  {
+   "slot": "混选奇穴",
+   "name": "冲秋冥",
+   "kind": "控制",
+   "effect": "10 尺、瞬间、25 秒调息：463 点阴性内功，打断运功并击退 12 尺"
+  }
+ ]
+}

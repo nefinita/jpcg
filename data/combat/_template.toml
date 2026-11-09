@@ -1,0 +1,92 @@
+# ============================================================================
+# data/combat 模板（#92 时序引擎）
+#
+# 用法：复制为 data/combat/{门派}.toml（如 mowen.toml）后按需删除/填写。
+# 以 `_` 开头的文件不会被加载。
+#
+# 说明（两个独立维度）：
+#   - 器形（form）：琴 / 剑 这类会替换技能组与 GCD 的形态；各自独立 GCD 通道。
+#   - 曲风（qifeng）：阳春白雪 / 高山流水 / 平沙落雁 这类只换技能变体、不换 GCD 的状态。
+#   - 没写的技能 = 默认瞬发、1.5s GCD、无 CD。
+#   - 所有表都是 deny_unknown_fields：字段名写错会解析失败（错误会指出文件与字段）。
+# ============================================================================
+
+# 曲风取值（按需增删；requires_qifeng / switch_qifeng 必须引用这里的 id）
+qifeng = ["yangchun", "gaoshan", "pingsha"]
+
+[meta]
+profession = "mowen"
+version = "template-1"
+note = "填表模板；复制为 mowen.toml 后按需修改"
+
+# ----------------------------------------------------------------------------
+# 器形：不写 = 无器形概念（整个时间轴共用 1.5s GCD）
+# 双器形门派（莫问琴/剑、刀宗单持/双持、蓬莱上天）在此声明。
+# ----------------------------------------------------------------------------
+[[form]]
+id = "qin"
+name = "琴"
+gcd_base = 1.5
+initial = true
+skills = [[14064, 14474]]
+
+# 第二器形示例（取消注释使用）：
+# [[form]]
+# id = "jian"
+# name = "剑"
+# gcd_base = 1.5
+# skills = [[14449, 18656]]
+
+# ----------------------------------------------------------------------------
+# 技能时序 override（每个技能一条；只写与默认不同的字段）
+# ----------------------------------------------------------------------------
+[[skill_combat]]
+skill_id = 14064
+sub_id = 14474
+requires_instrument = "qin"
+cast_time = 1.5
+
+# 曲目技能示例：释放即切曲风，0 GCD、3 秒调息
+# [[skill_combat]]
+# skill_id = 14069
+# sub_id = 0
+# requires_instrument = "qin"
+# gcd_kind = 1
+# cooldown = 3.0
+# on_cast = { switch_qifeng = "gaoshan" }
+
+# 变体技能示例：只有高山流水曲风下可用
+# [[skill_combat]]
+# skill_id = 14298
+# sub_id = 18860
+# requires_instrument = "qin"
+# requires_qifeng = "gaoshan"
+
+# 器形切换示例：清绝影歌切剑、清绝影歌·回切回琴
+# [[skill_combat]]
+# skill_id = 14083
+# sub_id = 0
+# cast_time = 0.0
+# cooldown = 60.0
+# on_cast = { switch_instrument = "jian" }
+
+# 带 CD 的示例
+# [[skill_combat]]
+# skill_id = 10447
+# sub_id = 14063
+# cooldown = 20.0
+# cd_haste = false
+
+# 充能技能示例（2 层，每层 8 秒恢复）
+# [[skill_combat]]
+# skill_id = 14065
+# sub_id = 14311
+# charges = 2
+# recharge = 8.0
+# cd_haste = true
+
+# 施放副作用示例：切器形 + 额外占用 GCD 通道 + 锁另一个技能
+# [[skill_combat]]
+# skill_id = 14082
+# sub_id = 15076
+# on_cast = { switch_instrument = "jian", gcd_lanes = ["jian"], lock_skills = [[14076, 0]] }

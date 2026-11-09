@@ -32,6 +32,8 @@ pub struct LevelConstant {
     pub fangyu_xishu: f32,
     /// PVP 全局减伤（乘法比例，非 1024 制）
     pub pvp_global_jianshang: f32,
+    /// 加速等级 → 加速比例（×1024 制分母；0 = 暂不启用加速换算）
+    pub jiasu_xishu: f32,
 }
 
 impl LevelConstant {
@@ -46,6 +48,7 @@ impl LevelConstant {
             huajin_xishu: 0.0,
             fangyu_xishu: 0.0,
             pvp_global_jianshang: 0.0,
+            jiasu_xishu: 0.0,
         }
     }
 }
@@ -69,8 +72,8 @@ pub const fn parse_snapshot(text: &str) -> (u32, LevelConstant) {
     let len = bytes.len();
     let mut out = LevelConstant::zero();
     let mut level: u32 = 0;
-    let mut seen: u16 = 0; // 9 个 key（含 level）各占一位
-    const KEY_MASK: u16 = (1 << 9) - 1;
+    let mut seen: u16 = 0; // 10 个 key（含 level）各占一位
+    const KEY_MASK: u16 = (1 << 10) - 1;
 
     let mut i = 0;
     while i < len {
@@ -143,6 +146,8 @@ pub const fn parse_snapshot(text: &str) -> (u32, LevelConstant) {
             7
         } else if key_matches(bytes, ks, ke, b"pvp_global_jianshang") {
             8
+        } else if key_matches(bytes, ks, ke, b"jiasu_xishu") {
+            9
         } else {
             panic!("level_constant 解析失败：未知 key（请同步白名单解析器）");
         };
@@ -164,7 +169,8 @@ pub const fn parse_snapshot(text: &str) -> (u32, LevelConstant) {
                 5 => out.yuhui_xishu = v,
                 6 => out.huajin_xishu = v,
                 7 => out.fangyu_xishu = v,
-                _ => out.pvp_global_jianshang = v,
+                8 => out.pvp_global_jianshang = v,
+                _ => out.jiasu_xishu = v,
             }
         }
     }
@@ -314,6 +320,7 @@ mod tests {
             huajin_xishu: 30115.8,
             fangyu_xishu: 126007.2,
             pvp_global_jianshang: 0.9,
+            jiasu_xishu: 0.0,
         };
         assert_eq!(LIVE_130, expect);
     }
@@ -330,6 +337,7 @@ mod tests {
             huajin_xishu: 5148.00,
             fangyu_xishu: 10802.88,
             pvp_global_jianshang: 0.9,
+            jiasu_xishu: 101.079,
         };
         assert_eq!(LEVEL, 50);
         assert_eq!(CURRENT, expect);

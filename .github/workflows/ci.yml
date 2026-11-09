@@ -28,6 +28,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Makefile 依赖顺序守卫（dry-run，不产生构建产物）：编译 app 前必须先准备
+      # 前端 dist 与 updater sidecar（tauri-build 在 cargo 构建阶段即校验两者）。
+      - name: Makefile 依赖顺序守卫
+        if: runner.os == 'Linux'
+        run: bash scripts/check-make-order.sh
+
       # Tauri v2 Linux 系统依赖（构建 jpcg_app 需要）
       - name: 安装 Tauri Linux 依赖
         if: runner.os == 'Linux'
@@ -40,7 +46,7 @@ jobs:
       - name: 构建前端 (tauri frontendDist)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: examples/jpcg_app/package-lock.json
       - name: npm ci + build
@@ -76,8 +82,9 @@ jobs:
 
       - name: 双 cdylib 数值快照修复回归
         run: |
-          cargo build -p jpcg_core -p jpcg_combo
+          cargo build -p jpcg_core -p jpcg_combo -p jpcg_gear
           python3 scripts/test-values-dynamic.py
+          python3 scripts/test-gear-dynamic.py
 
   golden-regression:
     name: 金标准回归（计算数值）
@@ -99,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: examples/jpcg_app/package-lock.json
       - run: npm ci

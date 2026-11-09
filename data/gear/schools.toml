@@ -1,0 +1,14 @@
+# 莫问 50 级装备目录（真实游戏数据）。
+[version]
+schema = 1
+season = 1
+revision = "live-50-20261106"
+value_set = "live-50"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
+
+[[schools]]
+id = "mowen"
+zhushuxing = "gengu"
+gongji_type = "neigong"
+pofang_type = "neigong"

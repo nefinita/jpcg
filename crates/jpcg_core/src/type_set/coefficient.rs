@@ -22,6 +22,8 @@ pub struct CoefficientConfig {
     pub huajin_xishu: f32,
     pub fangyu_xishu: f32,
     pub pvp_global_jianshang: f32,
+    /// 加速等级系数（加速率 = 加速等级 / 该系数 / 100；0 = 该值集暂不启用加速换算）
+    pub jiasu_xishu: f32,
 }
 
 impl Default for CoefficientConfig {
@@ -47,6 +49,12 @@ impl CoefficientConfig {
             huajin_xishu: nz(dto.huajin_xishu, base.huajin_xishu),
             fangyu_xishu: nz(dto.fangyu_xishu, base.fangyu_xishu),
             pvp_global_jianshang: dto.pvp_global_jianshang,
+            // 加速系数 0 合法（= 不启用），仅当 DTO 与值集都为 0 时才为 0
+            jiasu_xishu: if dto.jiasu_xishu > 0.0 {
+                dto.jiasu_xishu
+            } else {
+                base.jiasu_xishu
+            },
         }
     }
 
@@ -61,6 +69,7 @@ impl CoefficientConfig {
             huajin_xishu: base.huajin_xishu,
             fangyu_xishu: base.fangyu_xishu,
             pvp_global_jianshang: base.pvp_global_jianshang,
+            jiasu_xishu: base.jiasu_xishu,
         }
     }
 }

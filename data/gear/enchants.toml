@@ -1,0 +1,267 @@
+# 附魔（人工填写）：loadout.enchants 里按 部位 = id 选择。
+[version]
+schema = 1
+season = 1
+revision = "live-50-20261106"
+value_set = "live-50"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
+
+[[enchants]]
+slot = "tou"
+id = "全攻击-gongji-90"
+name = "全攻击提高90"
+stats = { gongji = 90 }
+
+[[enchants]]
+slot = "yi"
+id = "misc-huajin-90"
+name = "化劲等级提高90"
+stats = { huajin = 90 }
+
+[[enchants]]
+slot = "yao"
+id = "misc-huajin-90"
+name = "化劲等级提高90"
+stats = { huajin = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "全破防-pofang-90"
+name = "全破防提高90"
+stats = { pofang = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "全破防-pofang-90"
+name = "全破防提高90"
+stats = { pofang = 90 }
+
+[[enchants]]
+slot = "xie"
+id = "全攻击-gongji-90"
+name = "全攻击提高90"
+stats = { gongji = 90 }
+
+[[enchants]]
+slot = "xianglian"
+id = "misc-yujin-126"
+name = "御劲等级提高126"
+stats = { yujin = 126 }
+
+[[enchants]]
+slot = "yaozhui"
+id = "misc-huajin-126"
+name = "化劲等级提高126"
+stats = { huajin = 126 }
+
+[[enchants]]
+slot = "jie1"
+id = "全攻击-gongji-126"
+name = "全攻击提高126"
+stats = { gongji = 126 }
+
+[[enchants]]
+slot = "jie2"
+id = "全攻击-gongji-126"
+name = "全攻击提高126"
+stats = { gongji = 126 }
+
+[[enchants]]
+slot = "wuqi"
+id = "全攻击-gongji-90"
+name = "全攻击提高90"
+stats = { gongji = 90 }
+
+[[enchants]]
+slot = "anqi"
+id = "misc-jiasu-126"
+name = "加速等级提高126"
+stats = { jiasu = 126 }
+
+[[enchants]]
+slot = "jie1"
+id = "根骨-gengu-126"
+name = "根骨提高126"
+stats = { gengu = 126 }
+
+[[enchants]]
+slot = "jie1"
+id = "身法-shenfa-126"
+name = "身法提高126"
+stats = { shenfa = 126 }
+
+[[enchants]]
+slot = "jie1"
+id = "元气-yuanqi-126"
+name = "元气提高126"
+stats = { yuanqi = 126 }
+
+[[enchants]]
+slot = "jie1"
+id = "力道-liliang-126"
+name = "力道提高126"
+stats = { liliang = 126 }
+
+[[enchants]]
+slot = "jie2"
+id = "根骨-gengu-126"
+name = "根骨提高126"
+stats = { gengu = 126 }
+
+[[enchants]]
+slot = "jie2"
+id = "身法-shenfa-126"
+name = "身法提高126"
+stats = { shenfa = 126 }
+
+[[enchants]]
+slot = "jie2"
+id = "元气-yuanqi-126"
+name = "元气提高126"
+stats = { yuanqi = 126 }
+
+[[enchants]]
+slot = "jie2"
+id = "力道-liliang-126"
+name = "力道提高126"
+stats = { liliang = 126 }
+
+[[enchants]]
+slot = "xianglian"
+id = "体质-tizhi-126"
+name = "体质提高126"
+stats = { tizhi = 126 }
+
+[[enchants]]
+slot = "yaozhui"
+id = "体质-tizhi-126"
+name = "体质提高126"
+stats = { tizhi = 126 }
+
+
+[[enchants]]
+slot = "anqi"
+id = "破防-pofang-126"
+name = "破防等级提高126"
+stats = { pofang = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "根骨-gengu-126"
+name = "根骨提高126"
+stats = { gengu = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "身法-shenfa-126"
+name = "身法提高126"
+stats = { shenfa = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "元气-yuanqi-126"
+name = "元气提高126"
+stats = { yuanqi = 126 }
+
+[[enchants]]
+slot = "anqi"
+id = "力道-liliang-126"
+name = "力道提高126"
+stats = { liliang = 126 }
+
+[[enchants]]
+slot = "tou"
+id = "加速-jiasu-90"
+name = "加速等级提高90"
+stats = { jiasu = 90 }
+
+[[enchants]]
+slot = "xie"
+id = "加速-jiasu-90"
+name = "加速等级提高90"
+stats = { jiasu = 90 }
+
+[[enchants]]
+slot = "yi"
+id = "御劲-yujin-90"
+name = "御劲等级提高90"
+stats = { yujin = 90 }
+
+[[enchants]]
+slot = "yi"
+id = "体质-tizhi-90"
+name = "体质提高90"
+stats = { tizhi = 90 }
+
+[[enchants]]
+slot = "yao"
+id = "御劲-yujin-90"
+name = "御劲等级提高90"
+stats = { yujin = 90 }
+
+[[enchants]]
+slot = "yao"
+id = "体质-tizhi-90"
+name = "体质提高90"
+stats = { tizhi = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "会心-huixin-90"
+name = "全会心等级提高90"
+stats = { huixin = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "根骨-gengu-90"
+name = "根骨提高90"
+stats = { gengu = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "身法-shenfa-90"
+name = "身法提高90"
+stats = { shenfa = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "元气-yuanqi-90"
+name = "元气提高90"
+stats = { yuanqi = 90 }
+
+[[enchants]]
+slot = "shou"
+id = "力道-liliang-90"
+name = "力道提高90"
+stats = { liliang = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "会心-huixin-90"
+name = "全会心等级提高90"
+stats = { huixin = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "根骨-gengu-90"
+name = "根骨提高90"
+stats = { gengu = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "身法-shenfa-90"
+name = "身法提高90"
+stats = { shenfa = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "元气-yuanqi-90"
+name = "元气提高90"
+stats = { yuanqi = 90 }
+
+[[enchants]]
+slot = "ku"
+id = "力道-liliang-90"
+name = "力道提高90"
+stats = { liliang = 90 }

@@ -1,0 +1,176 @@
+import { useState } from "react";
+import type { GearCatalog, GearChoice, GearComposition, GearLoadout, OptimizeOptions, GearOptimizeResult } from "../types/gear";
+import { GEAR_SLOTS, emptyGearStats } from "../types/gear";
+import { choiceKey, slotNames, sourceNames, greenNames, statNames, PROFESSION_ATTRIBUTE_RULES } from "../state/gear";
+import styles from "./GearPanel.module.css";
+
+const convertedFields = ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue_additional"] as const;
+/** 跨门派装备的显示名；后端 schools 里暂无 name 字段。 */
+const SCHOOL_NAMES: Record<string, string> = { mowen: "莫问", bingxin: "冰心" };
+
+export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, optimizing, optProgress, optResult, pending }: {
+  catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
+  onChange: (loadout: GearLoadout) => void; onReset: () => void; onExport: () => void;
+  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
+  optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
+}) {
+  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: false, hasteMin: null });
+  const arenaSet = catalog.sets.find((s) => s.source === "mingjian" && s.kind === "armor");
+  const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
+  const panel = loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
+    && composition?.composed.loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES ? composition.composed.panel : undefined;
+  const legacyHasBasics = !loadout.attribute_rules && convertedFields.some((key) => (loadout.base[key] ?? 0) > 0);
+  const change = (choice: GearChoice) => onChange({ ...loadout, choices: loadout.choices.map((c) => c.slot === choice.slot ? choice : c) });
+  const schoolName = (id?: string) => SCHOOL_NAMES[id ?? ""] ?? id ?? "";
+  return <section className={styles.panel} aria-label="配装">
+    <header className={styles.header}>
+      <div><h2>当前配装</h2><p>{catalog.version.sample ? "合成测试样例 · 非游戏装备数值" : `赛季 ${catalog.version.season}`} · {catalog.version.revision}</p></div>
+      <div className={styles.actions}>
+        <button onClick={() => onOptimize(opts)} disabled={optimizing || pending}>{optimizing ? (optProgress != null ? `调优中 ${optProgress}%` : "调优中…") : "自动调优"}</button>
+        <button onClick={onReset}>重置配装</button>
+        <button onClick={onExport} disabled={stale}>导出配装</button>
+        <label>导入配装<input type="file" accept=".toml" onChange={(e) => {
+          const file = e.currentTarget.files?.[0]; e.currentTarget.value = "";
+          if (file) void onImport(file);
+        }} /></label>
+      </div>
+    </header>
+    <div className={styles.optimizeBar} aria-label="调优设置">
+      <label>调优目标
+        <select value={opts.metric} onChange={(e) => setOpts((p) => ({ ...p, metric: e.target.value as OptimizeOptions["metric"] }))}>
+          <option value="kill_probability">击杀率</option>
+          <option value="window_dps">区间 DPS</option>
+        </select>
+      </label>
+      <label><input type="checkbox" checked={opts.arena4} disabled={!arenaSet}
+        onChange={(e) => setOpts((p) => ({ ...p, arena4: e.target.checked }))} /> 必须竞技场四件套</label>
+      <label>加速 ≥
+        <input type="number" min={0} step={1} value={opts.hasteMin ?? ""}
+          onChange={(e) => setOpts((p) => ({ ...p, hasteMin: e.target.value === "" ? null : Number(e.target.value) }))} />
+      </label>
+    </div>
+    {optResult && <div className={styles.optResult} aria-label="调优结果">
+      <div className={styles.optResultHead}>
+        <strong>调优结果 · {optResult.metric === "kill_probability" ? "击杀率" : "区间 DPS"}</strong>
+        <span>
+          {optResult.metric === "kill_probability"
+            ? `${((optResult.result.best?.score ?? 0) * 100).toFixed(1)}%`
+            : Math.round(optResult.result.best?.score ?? 0).toLocaleString()}
+          {optResult.result.delta != null && <em>（{optResult.result.delta >= 0 ? "+" : ""}
+            {optResult.metric === "kill_probability"
+              ? `${(optResult.result.delta * 100).toFixed(2)} 个百分点`
+              : Math.round(optResult.result.delta).toLocaleString()}）</em>}
+        </span>
+        <span>
+          {optResult.result.complete ? "已遍历全部组合"
+            : optResult.result.stop_reason === "budget_exhausted" ? "预算内最优"
+            : optResult.result.stop_reason === "cancelled" ? "已取消" : optResult.result.stop_reason}
+          {" · "}评估 {optResult.result.progress.evaluated} / {optResult.result.progress.combinations}
+        </span>
+      </div>
+      {optResult.result.best && <div className={styles.optResultSlots}>
+        {GEAR_SLOTS.map((slot) => {
+          const best = optResult.result.best!.composed.loadout;
+          const choice = best.choices.find((c) => c.slot === slot);
+          const template = choice
+            ? catalog.templates.find((t) => t.school === (choice.school ?? best.school) && t.choice.slot === slot && choiceKey(t.choice) === choiceKey(choice))
+            : undefined;
+          const enchantId = best.enchants?.[slot];
+          const enchant = enchantId ? catalog.enchants?.find((e) => e.slot === slot && e.id === enchantId) : undefined;
+          const wucai = slot === "wuqi" && best.wucai ? catalog.wucai?.find((w) => w.id === best.wucai) : undefined;
+          const detail = [
+            template ? `${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "—",
+            enchant ? `附魔：${enchant.name}` : "",
+            wucai ? wucai.name : "",
+          ].filter(Boolean).join(" · ");
+          return <span key={slot} title={`${slotNames[slot]}：${detail}`}>
+            <b>{slotNames[slot]}</b>
+            {detail}
+          </span>;
+        })}
+      </div>}
+      {optResult.result.warnings.length > 0 && <ul className={styles.optResultWarnings}>
+        {optResult.result.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+      </ul>}
+    </div>}
+    {stale && <div role="alert" className={styles.notice}>保存的配装与当前模板版本不一致。<button onClick={onReset}>按当前模板重置</button></div>}
+    <div className={styles.base}>
+      <label>属性换算规则 <select aria-label="属性换算规则" value={loadout.attribute_rules ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, attribute_rules: event.target.value || null })}>
+        <option value="">旧版合成（不换算体质与基础属性会心）</option>
+        <option value={PROFESSION_ATTRIBUTE_RULES}>从职业 TOML 读取换算规则（当前50级，需填写并验证）</option>
+        {loadout.attribute_rules && loadout.attribute_rules !== PROFESSION_ATTRIBUTE_RULES && <option value={loadout.attribute_rules}>已保存规则：{loadout.attribute_rules}（当前范围不支持）</option>}
+      </select></label>
+      {loadout.attribute_rules ? loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
+        ? <p>先在对应职业 TOML 填写属性换算规则并验证；等级与所选数值集必须匹配。缺少规则时不能进行属性换算。</p>
+        : <p>已保存规则已不受支持，请重新选择职业 TOML 规则并核对数据后再计算；不会自动沿用历史系数。</p>
+        : <p>体质及五维属性换算需选择对应规则；旧配装保持原有计算方式。</p>}
+      {legacyHasBasics && <p role="alert">旧版合成不支持这些换算输入。请重新选择换算规则，或在下方将已填写的体质、力道、身法、根骨、元气及额外气血上限清零后再计算。</p>}
+    </div>
+    <div className={styles.cards}>
+      {GEAR_SLOTS.map((slot) => {
+        // 跨门派装备（如冰心护手）也可以在任何一个门派下选择，只是不计套装。
+        const candidates = catalog.templates.filter((t) => (t.school === loadout.school || t.cross_school) && t.choice.slot === slot);
+        const selected = loadout.choices.find((c) => c.slot === slot);
+        const template = candidates.find((t) => selected && t.school === (selected.school ?? loadout.school) && choiceKey(t.choice) === choiceKey(selected));
+        const sockets = template?.sockets ?? [];
+        const enchantOptions = (catalog.enchants ?? []).filter((e) => e.slot === slot);
+        const enchantId = loadout.enchants?.[slot] ?? "";
+        return <article className={styles.card} key={slot} aria-label={slotNames[slot]}>
+          <h3>{slotNames[slot]}</h3>
+          <strong>{template ? `${template.school === loadout.school ? "" : `${schoolName(template.school)} · `}${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "模板不可用"}</strong>
+          <div className={styles.choices}>
+            {candidates.map((t) => <button key={`${t.school}:${choiceKey(t.choice)}`} disabled={stale} aria-pressed={!!selected && choiceKey(t.choice) === choiceKey(selected) && (selected.school ?? loadout.school) === t.school}
+              onClick={() => change({ ...t.choice, school: t.school === loadout.school ? null : t.school })}
+              title={t.school === loadout.school ? undefined : `跨门派装备：${schoolName(t.school)}，可穿戴但不计本门派套装`}>
+              {t.school === loadout.school ? "" : `${schoolName(t.school)} · `}{sourceNames[t.choice.source]} · {t.choice.tier === "base" ? "基础" : "升级"}{t.choice.variant > 0 ? ` · 属性套${t.choice.variant}` : ""}
+            </button>)}
+          </div>
+          {template && <>
+            <p>{Object.entries(template.stats).filter(([, n]) => n > 0).slice(0, 3).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
+            {slot === "wuqi" && (catalog.wucai ?? []).length > 0 && <label className={styles.enchant}>五彩石 <select aria-label="武器五彩石" value={loadout.wucai ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, wucai: event.target.value || undefined })}>
+              <option value="">不插五彩石</option>
+              {(catalog.wucai ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select></label>}
+                        {sockets.length > 0 && <p>镶嵌（固定）：{sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
+            {enchantOptions.length > 0 && <label className={styles.enchant}>附魔 <select aria-label={`${slotNames[slot]}附魔`} value={enchantId} disabled={stale} onChange={(event) => {
+              const value = event.target.value;
+              const next = { ...(loadout.enchants ?? {}) };
+              if (value) next[slot] = value; else delete next[slot];
+              onChange({ ...loadout, enchants: next });
+            }}>
+              <option value="">无</option>
+              {enchantOptions.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select></label>}
+            <details><summary>属性详情{template.zhuangfen != null ? ` · 参考装分 ${template.zhuangfen}` : ""}</summary>
+              <dl>{Object.entries(template.stats).map(([k, n]) => <div key={k}><dt>{statNames[k as keyof typeof statNames]}</dt><dd>{n}</dd></div>)}</dl>
+            </details>
+          </>}
+        </article>;
+      })}
+    </div>
+    <details className={styles.base}><summary>裸装基础值（不含装备与套装）</summary>
+      <p>{loadout.attribute_rules ? "填写主属性及心法换算前的原始基础点数，不可直接抄裸装最终面板；此处不会自动补入等级或心法基础值。" : "仅填写脱下装备后的基础点数，避免重复叠加。"}</p>
+      {loadout.attribute_rules && <p>主属性会与对应五维字段相加，例如莫问的主属性加到根骨；同一来源只填写一次。</p>}
+      {loadout.attribute_rules && <p>气血填写换算前的基础值；额外气血上限在基础气血加成后加入，两处不要重复填写。</p>}
+      <div className={styles.baseFields}>{Object.entries({ ...emptyGearStats(), ...loadout.base }).map(([k, n]) => <label key={k}>{statNames[k as keyof typeof statNames]}
+        <input type="number" min="0" max="4294967295" step="1" value={n ?? 0} disabled={!loadout.attribute_rules && (convertedFields as readonly string[]).includes(k) && !n} onChange={(e) => { const value = Number(e.target.value); if (Number.isInteger(value) && value >= 0 && value <= 0xffffffff) onChange({ ...loadout, base: { ...loadout.base, [k]: value } }); }} />
+      </label>)}</div>
+    </details>
+    {composition && <div className={styles.summary} aria-live="polite">
+      <strong>{pending ? "正在更新合成结果…" : "合成属性"}</strong>
+      <p>{Object.entries(composition.composed.stats).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
+      {panel && <div aria-label="换算后玩家属性">
+        <strong>换算后玩家属性（不含战斗增益）</strong>
+        {(panel.level !== undefined || panel.value_set !== undefined) && <p>规则版本：{panel.level !== undefined ? `${panel.level} 级` : "等级未提供"}{panel.value_set !== undefined ? ` · ${panel.value_set}` : ""}</p>}
+        <p>气血 {panel.qixue} · 攻击 {panel.gongji}（基础 {panel.gongji_base} + 转化 {panel.gongji_extra}） · 会心等级 {panel.huixin} · 破防等级 {panel.pofang}</p>
+        {panel.qixue_base !== undefined && <p>气血分项：基础换算后 {panel.qixue_base} + 额外气血上限 {panel.qixue_additional ?? 0}</p>}
+        <p>体质 {panel.tizhi} · 力道 {panel.liliang} · 身法 {panel.shenfa} · 根骨 {panel.gengu} · 元气 {panel.yuanqi}</p>
+        {!panel.verified_in_game && <p>此结果尚未通过真实游戏面板验证。</p>}
+      </div>}
+      <p>已激活套装阈值：{composition.composed.active_bonuses.map((b) => `${b.set} ${b.threshold}件${b.tier === "upgraded" ? "升级" : "基础"}`).join(" · ") || "无"}</p>
+      {composition.composed.cooldowns.length > 0 && <p>4 件套 CD 尚未应用到时序计算；此处伤害仅体现属性加成。</p>}
+      {composition.composed.stats.jiasu > 0 && <p>加速点数已合成，时序收益待战斗时序功能支持。</p>}
+      {composition.composed.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+    </div>}
+  </section>;
+}

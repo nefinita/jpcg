@@ -32,6 +32,7 @@ pub fn save_skill_data(profession: String, data: SkillEditorDataDTO) -> Result<(
             xinfa,
             skill: skills,
             version,
+            attributes: data.attributes,
         },
     )
 }
@@ -39,7 +40,7 @@ pub fn save_skill_data(profession: String, data: SkillEditorDataDTO) -> Result<(
 /// 技能池条目（连招编辑器下拉）
 pub fn load_skill_pool(profession: String) -> Vec<jpcg_api::SkillPoolItemDTO> {
     let toml_cfg = store::load_config(&profession);
-    toml_cfg
+    let mut pool: Vec<jpcg_api::SkillPoolItemDTO> = toml_cfg
         .skill
         .into_iter()
         .map(|s| jpcg_api::SkillPoolItemDTO {
@@ -63,6 +64,26 @@ pub fn load_skill_pool(profession: String) -> Vec<jpcg_api::SkillPoolItemDTO> {
             zhenshishanghai: s.zhenshishanghai,
             has_critical_strike: s.has_critical_strike,
             lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
+            cast_time: s.cast_time,
+            gcd_kind: s.gcd_kind,
+            cooldown: s.cooldown,
+            charges: s.charges,
+            recharge: s.recharge,
+            cd_haste: s.cd_haste,
+            channel: s.channel,
+            buff_id: s.buff_id.clone(),
+            gcd_base: s.gcd_base,
+            gcd_group: s.gcd_group,
         })
-        .collect()
+        .collect();
+    // 所有门派都追加「停手」空位（无伤害、无属性、占普通 GCD）
+    if !pool
+        .iter()
+        .any(|s| s.skill_id == crate::type_set::skilltype::IDLE_SKILL_ID)
+    {
+        pool.push(crate::host::conv::skilltype_to_pool_item(
+            &crate::type_set::skilltype::Skilltype::idle(),
+        ));
+    }
+    pool
 }

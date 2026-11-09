@@ -10,6 +10,11 @@ use crate::type_set::{
     player::PlayerConfig, skilltype::Skilltype, xinfa::XinfaConfig,
 };
 
+/// 动态模块能力探测。ABI 1 的旧模块忽略未知 DTO 字段，调用方应在发送已换算攻击前检查。
+pub fn player_attribute_capabilities() -> serde_json::Value {
+    serde_json::json!({"supported": ["converted_attack_v1"]})
+}
+
 /// 将 DTO 计算请求转换为 core 领域类型
 pub(crate) fn into_core(
     req: CalculateRequest,
@@ -20,15 +25,7 @@ pub(crate) fn into_core(
     BuffConfig,
     CoefficientConfig,
 ) {
-    let player = PlayerConfig::new(
-        req.player.jcsx,
-        req.player.jichu_shuxing,
-        req.player.jichu_gongji,
-        req.player.huixin_dengji,
-        req.player.huixin_xiaoguo,
-        req.player.pofang_dengji,
-        req.player.wuqi_shanghai,
-    );
+    let player = PlayerConfig::from(req.player);
     // 数值集：按请求选择（None = index.toml 默认）；加载失败回退内置兜底
     let value_set = crate::store::values::load_value_set(req.value_set.as_deref());
     let hostile = HostilepileConfig {
@@ -72,6 +69,11 @@ pub fn calculate(req: CalculateRequest) -> Result<Vec<SkillResultDTO>, String> {
 
 /// 自动求导（6 属性对全部技能）
 pub fn compute_derivatives(req: CalculateRequest) -> Result<DerivativesOutputDTO, String> {
+    if req.player.zhuanhua_gongji.is_some() {
+        return Err(
+            "配装属性已换算，主属性变化需重新合成配装；当前手填属性求导不支持此输入".into(),
+        );
+    }
     let (player, hostile, xinfa, buff, coeff) = into_core(req);
     let toml_config = crate::store::load_config(&xinfa.profession);
     let output = engine::derivatives::compute_derivatives(
@@ -101,8 +103,81 @@ pub(crate) fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltyp
         wushifangyu: s.wushifangyu,
         wushihuajin: s.wushihuajin,
         dot_flag: s.dot_flag,
+        dot_interval: s.dot_interval,
+        dot_duration: s.dot_duration,
+        dot_up: s.dot_up,
+        wushijianshang: s.wushijianshang,
+        zhenshishanghai: s.zhenshishanghai,
         has_critical_strike: s.has_critical_strike,
         lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request() -> CalculateRequest {
+        CalculateRequest {
+            player: jpcg_api::PlayerConfigDTO {
+                jiasu_dengji: 1234,
+                zhuanhua_gongji: Some(251),
+                jichu_gongji: 1001,
+                jichu_shuxing: 100,
+                ..Default::default()
+            },
+            hostile: Default::default(),
+            xinfa_config: Default::default(),
+            buff: Default::default(),
+            coefficient: Default::default(),
+            value_set: Some("live-130".into()),
+        }
+    }
+
+    #[test]
+    fn panel_uses_engine_quantization_and_percentage_units() {
+        let mut req = request();
+        req.player.huixin_dengji = 250;
+        req.player.pofang_dengji = 333;
+        req.coefficient.huixin_xishu = 1000.0;
+        req.coefficient.pofang_xishu = 1000.0;
+        req.buff.huixin_pct = 5.0;
+        req.buff.pofang_pct = 1.0;
+        req.hostile.jianshang_bili = 10;
+        let stats = panel_stats(req);
+        assert!((stats.huixin_pct - 30.0).abs() < 0.0001);
+        // 引擎截断语义：floor(333*1024/1000)=340 + floor(1*1024/100)=10 → 350。
+        assert_eq!(stats.pofang_pct, 350.0 / 1024.0 * 100.0);
+        assert_eq!(stats.jianshang_pct, 10);
+    }
+
+    #[test]
+    fn single_skill_host_keeps_converted_attack_and_haste() {
+        let (player, _, _, _, _) = into_core(request());
+        assert_eq!(player.jiasu_dengji, 1234);
+        assert_eq!(player.atk_with_buff(100.0, 12.5).total(), 1377);
+    }
+
+    #[test]
+    fn derivative_host_requires_recomposition_for_converted_attributes() {
+        assert!(
+            compute_derivatives(request())
+                .unwrap_err()
+                .contains("重新合成配装")
+        );
+    }
+}
+
+/// 面板展示与伤害引擎共用换算常数、破防整数精度；不在前端重算。
+pub fn panel_stats(req: CalculateRequest) -> jpcg_api::PanelStatsDTO {
+    let (player, hostile, _, buff, coeff) = into_core(req);
+    let pofang = player
+        .guo_pofang_with(&coeff)
+        .saturating_add((buff.pofang_pct * 1024.0 / 100.0) as u32);
+    jpcg_api::PanelStatsDTO {
+        huixin_pct: (player.guo_huixin_with(&coeff) + buff.huixin_pct / 100.0) * 100.0,
+        pofang_pct: pofang as f32 / 1024.0 * 100.0,
+        jianshang_pct: hostile.jianshang_bili,
     }
 }

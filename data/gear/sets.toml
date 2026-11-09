@@ -1,0 +1,47 @@
+# 套装效果（50 级真实数据）。「·悟」为无界手机端技能，PC 端不生效，未收录。
+[version]
+schema = 1
+season = 1
+revision = "live-50-20261106"
+value_set = "live-50"
+sample = false
+provenance = "游戏内截图（50级·恶人谷/名剑大会），莫问；基础档 1260 品按品级系数推算"
+
+[[sets]]
+id = "weiwang-armor"
+source = "weiwang"
+kind = "armor"
+[[sets.tiers]]
+tier = "base"
+bonus2 = { huixin = 102 }
+cooldown4 = [{ skill_id = 14073, seconds = 9.0 }]
+[[sets.tiers]]
+tier = "upgraded"
+bonus2 = { huixin = 102 }
+cooldown4 = [{ skill_id = 14073, seconds = 9.0 }]
+
+[[sets]]
+id = "jingji-armor"
+source = "mingjian"
+kind = "armor"
+[[sets.tiers]]
+tier = "base"
+bonus2 = { pofang = 102 }
+cooldown4 = [{ skill_id = 14081, seconds = 15.0 }]
+[[sets.tiers]]
+tier = "upgraded"
+bonus2 = { pofang = 102 }
+cooldown4 = [{ skill_id = 14081, seconds = 15.0 }]
+
+[[sets]]
+id = "weiwang-accessory"
+source = "weiwang"
+kind = "accessory"
+[[sets.tiers]]
+tier = "base"
+bonus2 = { yujin = 120 }
+bonus3 = { huajin = 120 }
+[[sets.tiers]]
+tier = "upgraded"
+bonus2 = { yujin = 120 }
+bonus3 = { huajin = 120 }
