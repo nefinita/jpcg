@@ -27,13 +27,15 @@ fn desktop_bridge_child() {
         return;
     }
     let catalog: jpcg_gear::Catalog = gear_bridge::call("catalog", &serde_json::json!({})).unwrap();
-    assert!(catalog.version.sample);
+    assert_eq!(catalog.version.revision, "live-50-20261106");
     let text = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../data/gear/sample-loadout.toml"),
     )
     .unwrap();
-    let loadout: jpcg_gear::Loadout = toml::from_str(&text).unwrap();
+    let mut loadout: jpcg_gear::Loadout = toml::from_str(&text).unwrap();
+    // 真实 50 级装备必须走职业 TOML 换算；样例文件保持旧模式供历史用例使用。
+    loadout.attribute_rules = Some("profession-toml".into());
     let composition: jpcg_gear::Composition = gear_bridge::call("compose", &loadout).unwrap();
     assert_eq!(composition.player.jcsx, "根骨");
     let exported: String = gear_bridge::call("export", &loadout).unwrap();

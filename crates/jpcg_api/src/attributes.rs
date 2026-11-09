@@ -49,6 +49,14 @@ pub struct AttributeConversion {
     pub denominator: u32,
 }
 
+/// 心法自带的固定点数加成（如「内功攻击力提高 2282 点」），直接加到目标属性。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AttributeConstant {
+    pub to: AttributeTarget,
+    pub value: u32,
+}
+
 /// 位于 data/shuxing/{profession}.toml 的 [attributes] 表；全部字段必须显式提供。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -61,4 +69,7 @@ pub struct AttributeRules {
     pub damage_kind: AttributeDamageKind,
     pub qixue_multiplier: AttributeRatio,
     pub conversions: Vec<AttributeConversion>,
+    /// 心法固定加成；旧数据缺省为空
+    #[serde(default)]
+    pub constants: Vec<AttributeConstant>,
 }

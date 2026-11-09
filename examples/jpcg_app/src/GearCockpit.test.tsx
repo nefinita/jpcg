@@ -31,6 +31,7 @@ beforeEach(() => {
   vi.mocked(api.calculateDamage).mockResolvedValue(result(100));
   vi.mocked(api.listProfessions).mockResolvedValue([]); vi.mocked(api.loadProfessionConfig).mockResolvedValue(null);
   vi.mocked(api.getModuleVersions).mockResolvedValue({ app: "test", core: "test", combo: "test", update: "test", const: "test" });
+  vi.mocked(api.loadCombatBundle).mockResolvedValue({ skills: [], combat: { meta: { profession: "mowen", version: "test", note: "" }, form: [], qifeng: [], skill_combat: [], buff: [], miji: [], qixue: [] } } as never);
   vi.mocked(api.listValueSets).mockResolvedValue([{ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }]);
   vi.mocked(api.resolveValueSet).mockImplementation(async (id) => ({ id: id ?? "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
   host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
@@ -87,20 +88,20 @@ it("合成失败显示错误且保留上次结果，TOML 导入调用宿主后�
 
 it("连招在驾驶台计算，配置页不计算；钉住恢复连招草稿与击杀率", async () => {
   const draft = defaultComboDraft();
-  draft.sequence = [{ skill: { skill_name: "测试连招", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
+  draft.sequence = [{ kind: "skill", skill: { skill_name: "测试连招", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
   localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 1, data: draft }));
-  vi.mocked(api.calculateCombo).mockResolvedValue({ steps: [], total_expected_damage_wan: 10, final_kill_prob: .5, kill_prob_curve: [] });
+  vi.mocked(api.calculateTimeline).mockResolvedValue({ events: [], steps: [], total_damage: 10000, window_dps: 0, skipped_actions: 0, final_kill_prob: .5, kill_prob_curve: [] });
   await render(); await wait(); await wait();
   expect(section("连招结果").textContent).toContain("击杀率 50.0%"); await click("钉住基准");
   await act(async () => host.querySelector<HTMLButtonElement>('button[title="排轴器"]')!.click());
-  await click("追加连招"); await wait(); expect(api.calculateCombo).toHaveBeenCalledTimes(1);
-  vi.mocked(api.calculateCombo).mockResolvedValue({ steps: [], total_expected_damage_wan: 12, final_kill_prob: .8, kill_prob_curve: [] });
+  await click("追加连招"); await wait(); expect(api.calculateTimeline).toHaveBeenCalledTimes(1);
+  vi.mocked(api.calculateTimeline).mockResolvedValue({ events: [], steps: [], total_damage: 12000, window_dps: 0, skipped_actions: 0, final_kill_prob: .8, kill_prob_curve: [] });
   await act(async () => host.querySelector<HTMLButtonElement>('button[title="计算"]')!.click()); await wait();
   expect(section("连招结果").textContent).toContain("Δ +30.0 个百分点");
-  const count = vi.mocked(api.calculateCombo).mock.calls.length;
+  const count = vi.mocked(api.calculateTimeline).mock.calls.length;
   await click("恢复基准"); await wait();
   expect(section("连招结果").textContent).toContain("击杀率 50.0%");
-  expect(api.calculateCombo).toHaveBeenCalledTimes(count);
+  expect(api.calculateTimeline).toHaveBeenCalledTimes(count);
   expect(JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data.sequence).toHaveLength(1);
 });
 
@@ -153,13 +154,13 @@ it("历史规则即使有匹配缓存也不能继续驱动伤害或连招，保�
     inputKey: gearInputKey(state.form, loadout), results: result(100) };
   localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
   const draft = defaultComboDraft();
-  draft.sequence = [{ skill: { skill_name: "缓存校验", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
+  draft.sequence = [{ kind: "skill", skill: { skill_name: "缓存校验", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
   localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 1, data: draft }));
   await render(); await wait(); await wait();
   expect(host.textContent).toContain("已保存规则已不受支持");
   expect(api.composeGear).not.toHaveBeenCalled();
   expect(api.calculateDamage).not.toHaveBeenCalled();
-  expect(api.calculateCombo).not.toHaveBeenCalled();
+  expect(api.calculateTimeline).not.toHaveBeenCalled();
   expect(saved().loadouts.mowen.attribute_rules).toBe("jx3-130-mowen-20260814");
 });
 
@@ -173,7 +174,7 @@ function persistProfessionSnapshot() {
     composition, inputKey: gearInputKey(state.form, loadout), results: result(100) };
   localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
   const draft = defaultComboDraft();
-  draft.sequence = [{ skill: { skill_name: "职业规则缓存校验", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
+  draft.sequence = [{ kind: "skill", skill: { skill_name: "职业规则缓存校验", skill_id: 1, sub_id: 0, base_damage1: 1, base_damage2: 1, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false, lost_hp_zhenshishanghai: 0 }, overrides: null }];
   localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 1, data: draft }));
   return composition;
 }
@@ -182,16 +183,16 @@ it("重启的职业规则缓存需重新合成；手动重读立即停用旧结�
   const old = persistProfessionSnapshot();
   let resolveComposition!: (value: GearComposition) => void;
   vi.mocked(api.composeGear).mockReturnValueOnce(new Promise((resolve) => { resolveComposition = resolve; }));
-  vi.mocked(api.calculateCombo).mockResolvedValue({ steps: [], total_expected_damage_wan: 10, final_kill_prob: .5, kill_prob_curve: [] });
+  vi.mocked(api.calculateTimeline).mockResolvedValue({ events: [], steps: [], total_damage: 10000, window_dps: 0, skipped_actions: 0, final_kill_prob: .5, kill_prob_curve: [] });
   await render(); await wait();
   expect(api.composeGear).toHaveBeenCalledTimes(1);
   expect(api.calculateDamage).not.toHaveBeenCalled();
-  expect(api.calculateCombo).not.toHaveBeenCalled();
+  expect(api.calculateTimeline).not.toHaveBeenCalled();
   expect(section("连招结果").textContent).toContain("先完成当前属性计算");
   await act(async () => resolveComposition({ ...old, player: { ...old.player, zhuanhua_gongji: 777 } }));
   await wait();
   expect(vi.mocked(api.calculateDamage).mock.lastCall?.[0].player.zhuanhua_gongji).toBe(777);
-  expect(api.calculateCombo).toHaveBeenCalledTimes(1);
+  expect(api.calculateTimeline).toHaveBeenCalledTimes(1);
   const damageCalls = vi.mocked(api.calculateDamage).mock.calls.length;
   let resolveCatalog!: (value: typeof fixture.catalog) => void;
   vi.mocked(api.gearCatalog).mockReturnValueOnce(new Promise((resolve) => { resolveCatalog = resolve; }));
@@ -205,7 +206,7 @@ it("重启的职业规则缓存需重新合成；手动重读立即停用旧结�
   expect(api.composeGear).toHaveBeenCalledTimes(2);
   expect(host.textContent).toContain("职业规则校验失败：等级不匹配");
   expect(vi.mocked(api.calculateDamage).mock.calls).toHaveLength(damageCalls);
-  expect(api.calculateCombo).toHaveBeenCalledTimes(1);
+  expect(api.calculateTimeline).toHaveBeenCalledTimes(1);
   expect(section("连招结果").textContent).toContain("先完成当前属性计算");
 });
 
@@ -215,7 +216,7 @@ it("已保存的职业规则结果不能掩盖启动时缺失规则；失败不�
   await render(); await wait(); await wait();
   expect(api.composeGear).toHaveBeenCalledTimes(1);
   expect(api.calculateDamage).not.toHaveBeenCalled();
-  expect(api.calculateCombo).not.toHaveBeenCalled();
+  expect(api.calculateTimeline).not.toHaveBeenCalled();
   expect(host.textContent).toContain("职业 TOML 缺少 [attributes]");
   expect(saved().calculation.results[0].q).toBe(100);
   expect(section("连招结果").textContent).toContain("先完成当前属性计算");
@@ -410,4 +411,42 @@ it("已启动的自动匹配迟到时不覆盖较新的导入", async () => {
   expect(selectedRingVariant()).toBe(2);
   await act(async () => automatic.resolve({ id: "live-130", name: "正式服", level: 130, is_default: true, available: true, source: "data", coefficient: DEFAULT_COEFFICIENT }));
   expect(selectedRingVariant()).toBe(2);
+});
+
+it.each([false, true])("调优期间锁定整个编辑区，完成或失败后解锁（失败=%s）", async (fails) => {
+  const state = defaultCockpit(); state.form.value_set = "live-130"; state.manualReady = true;
+  state.form.hostile.target_hp = "1000";
+  state.loadouts.mowen = fixture.cases[0].composed.loadout;
+  localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
+  const draft = defaultComboDraft(); draft.sequence = [{ kind: "flag", flag: "start" },
+    {kind: "skill", skill: {skill_id: 1, sub_id: 0, lost_hp_zhenshishanghai: 0, skill_name: "逐步覆盖", base_damage1: 10, base_damage2: 10, atk_xishu: 1, watk_xishu: 0, hit_up: 0, huixin_up: 0, huixiao_up: 0, wushifangyu: 0, wushihuajin: 0, dot_flag: 0, has_critical_strike: false},
+    overrides: {base_damage_override: 777, atk_xishu_override: null, jianshang_bili_override: null, wushihuajin_override: null, extra_atk_pct: null, gain_override: null, extra_crit_pct: null, extra_crit_dmg_pct: null}}];
+  vi.mocked(api.calculateTimeline).mockResolvedValue({events: [], total_damage: 777, window_dps: 777, skipped_actions: 0});
+  localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 3, data: draft }));
+  vi.mocked(api.listenGearOptimizeProgress).mockReturnValue(() => {});
+  let resolve!: (value: any) => void; let reject!: (reason: Error) => void;
+  vi.mocked(api.optimizeGear).mockReturnValue(new Promise((yes, no) => { resolve = yes; reject = no; }));
+  await render(); await wait(); await wait();
+  await act(async () => {
+    const select = [...host.querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "window_dps"))!;
+    select.value = "window_dps"; select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await click("自动调优");
+  expect(api.optimizeGear).toHaveBeenCalledTimes(1);
+  const objective=vi.mocked(api.optimizeGear).mock.lastCall![0].objective;
+  expect(objective.kind).toBe("timeline");
+  if (objective.kind === "timeline") {
+    expect(objective.request.actions).toEqual(vi.mocked(api.calculateTimeline).mock.lastCall![0].actions);
+    expect(objective.request.actions[1]).toMatchObject({overrides: {base_damage_override: 777}});
+  }
+  const locked = host.querySelector('[inert]');
+  expect(locked).not.toBeNull();
+  expect(locked!.querySelector('[aria-label="配装"]')).not.toBeNull();
+  expect(locked!.querySelector('button[title="排轴器"]')).not.toBeNull();
+  expect(host.textContent).toContain("调优期间已锁定配装、属性和连招");
+  await click("手动属性");
+  expect(saved().mode).toBe("gear");
+  await act(async () => { if (fails) reject(new Error("调优失败测试")); else resolve({ best: null, delta: null, complete: true, stop_reason: "exhausted", progress: { evaluated: 1, combinations: 1 }, warnings: [] }); });
+  expect(host.querySelector('[inert]')).toBeNull();
+  expect(host.textContent).not.toContain("调优期间已锁定配装、属性和连招");
 });

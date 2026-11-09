@@ -146,30 +146,15 @@ export interface ComboStepDTO {
   overrides: StepOverrideDTO | null;
 }
 
+/** 排轴器序列项：技能步 或 计算开始/结束标记 */
+export type SequenceItem =
+  | { kind: "skill"; skill: SkillPoolItemDTO; overrides: StepOverrideDTO | null }
+  | { kind: "flag"; flag: "start" | "end" };
+
 export interface ComboPresetDTO {
+  flags?: { position: number; start: boolean }[];
   name: string;
   steps: ComboStepDTO[];
-}
-
-export interface ComboStepResultDTO {
-  skill_name: string;
-  g_damage: number;
-  h_damage: number;
-  q_damage: number;
-  crit_rate: number;
-  cumulative_mean_wan: number;
-  kill_prob: number;
-  dot_jumps: number[];
-  has_critical_strike: boolean;
-  zhenshishanghai: number;
-  lost_hp_zhenshi_damage: number;
-}
-
-export interface ComboResultDTO {
-  steps: ComboStepResultDTO[];
-  total_expected_damage_wan: number;
-  final_kill_prob: number;
-  kill_prob_curve: [number, number][];
 }
 
 export interface UpdateCheckResult {
@@ -343,7 +328,8 @@ export interface FormDefDTO {
 }
 
 export interface OnCastDTO {
-  switch_form: string | null;
+  switch_instrument: string | null;
+  switch_qifeng: string | null;
   gcd_lanes: string[];
   lock_skills: SkillKeyDTO[];
 }
@@ -351,7 +337,14 @@ export interface OnCastDTO {
 export interface SkillCombatDTO {
   skill_id: number;
   sub_id: number;
-  form: string | null;
+  requires_instrument: string | null;
+  requires_qifeng: string | null;
+  /** 激活该技能所需的奇穴 id/名称（空 = 不需要奇穴） */
+  jihuoqixue?: string | null;
+  /** 后端解析出的门控奇穴 qixue id */
+  jihuoqixue_id?: string | null;
+  /** 后端配对好的秘籍 id 列表 */
+  miji_ids?: string[];
   gcd_lane: string;
   on_cast: OnCastDTO;
   cast_time: number | null;
@@ -362,6 +355,7 @@ export interface SkillCombatDTO {
   recharge: number | null;
   cd_haste: boolean | null;
   channel: boolean | null;
+  channel_ticks?: number | null;
   buff_id: string | null;
 }
 
@@ -388,15 +382,59 @@ export interface CombatMetaDTO {
   profession: string;
   version: string;
   note: string;
+  miji_per_skill_cap?: number;
+  mixed_qixue_cap?: number;
+  mixed_slot_from?: number;
+}
+
+export type SkillModifierDTO =
+  | { base_damage_add: number }
+  | { base_damage_mul: number }
+  | { atk_xishu_add: number }
+  | { hit_up_add: number }
+  | { huixin_up_add: number }
+  | { huixiao_up_add: number }
+  | { wushifangyu_add: number }
+  | { cast_time_mul: number }
+  | { cast_time_add: number }
+  | { cooldown_mul: number }
+  | { dot_duration_mul: number }
+  | { dot_interval_mul: number }
+  | { cooldown_add: number }
+  | { dot_ticks_add: number }
+  | { dot_up_add: number };
+
+export interface MijiDefDTO {
+  id: string;
+  name: string;
+  skill_id?: number;
+  sub_id?: number;
+  modifiers?: SkillModifierDTO[];
+  /** 后端生成的效果文案（前端只渲染） */
+  effects?: string[];
+}
+
+export interface QixueDefDTO {
+  id: string;
+  name: string;
+  slot: number;
+  /** 引擎暂未建模（仅记录选择，不参与计算） */
+  shelved?: boolean;
+  /** 后端算好的显示分组（第一重~第六重 / 混选） */
+  group_label?: string;
+  /** 同组一起开关的多个 id（如冻泉 + 冻泉·宫） */
+  group_ids?: string[];
 }
 
 export interface CombatDataDTO {
   meta: CombatMetaDTO;
   form: FormDefDTO[];
+  /** 曲风 id 列表（yangchun / gaoshan / pingsha …） */
+  qifeng: string[];
   skill_combat: SkillCombatDTO[];
   buff: TimedBuffDefDTO[];
-  miji: unknown[];
-  qixue: unknown[];
+  miji: MijiDefDTO[];
+  qixue: QixueDefDTO[];
 }
 
 export interface CombatBundleDTO {
@@ -405,8 +443,9 @@ export interface CombatBundleDTO {
 }
 
 export type TimelineActionDTO =
-  | { kind: "cast"; skill_id: number; sub_id: number; skill_name?: string }
-  | { kind: "switch_form"; form: string };
+  | { kind: "cast"; skill_id: number; sub_id: number; skill_name?: string; overrides?: StepOverrideDTO | null }
+  | { kind: "switch_form"; form: string }
+  | { kind: "flag"; flag: "start" | "end" };
 
 export interface TimelineRequestDTO {
   skills: SkillPoolItemDTO[];
@@ -421,24 +460,70 @@ export interface TimelineRequestDTO {
   coeff: CoefficientConfigDTO;
   value_set?: string | null;
   combat?: CombatDataDTO | null;
+  initial_instrument?: string | null;
+  initial_qifeng?: string;
+  /** 激活的秘籍 id 列表 */
+  miji?: string[];
+  /** 激活的奇穴 id 列表 */
+  qixue?: string[];
+  /** 击杀率蒙特卡洛样本数（0 = 纯确定性） */
+  samples?: number;
+  seed?: number | null;
 }
 
 // 与 Rust `TimelineEventKindDTO` 的 #[serde(tag = "kind")] 内部标签形状一致：
 // 真实 JSON 形如 { "kind": "cast", "skill_name": ..., "damage": ..., "hit_time": ... }
 export type TimelineEventKindDTO =
-  | { kind: "cast"; skill_name: string; damage: number; hit_time: number }
-  | { kind: "dot_tick"; skill_name: string; index: number; damage: number }
+  | { kind: "cast"; skill_name: string; damage: number; hit_time: number; start_time?: number; gcd_secs?: number; gcd_ready_at?: number }
+  | { kind: "channel_tick"; skill_name: string; index: number; damage: number }
+  | { kind: "dot_tick"; skill_name: string; index: number; damage: number; advanced?: boolean }
   | { kind: "form_switch"; from: string; to: string }
+  | { kind: "qifeng_switch"; from: string; to: string }
   | { kind: "buff_gain"; buff_id: string; stacks: number };
 
 export interface TimelineEventDTO {
   time: number;
   kind: TimelineEventKindDTO;
+  /** 后端算好的累计伤害 */
+  cumulative?: number;
+}
+
+export interface TimelineStepSwitchDTO {
+  switch_kind: "form" | "qifeng";
+  from: string;
+  to: string;
+  time: number;
+}
+
+export interface TimelineStepDTO {
+  time: number | null;
+  gcd_secs: number;
+  gcd_ready_at: number;
+  legal: boolean;
+  instrument: string;
+  qifeng: string;
+  skipped_reason: string;
+  required_instrument?: string | null;
+  required_qifeng?: string | null;
+  switches: TimelineStepSwitchDTO[];
 }
 
 export interface TimelineResultDTO {
   events: TimelineEventDTO[];
+  steps?: TimelineStepDTO[];
   total_damage: number;
   window_dps: number;
   skipped_actions: number;
+  final_instrument?: string;
+  final_qifeng?: string;
+  /** 窗口内击杀概率 0..1 */
+  final_kill_prob?: number;
+  /** 累计击杀概率曲线：[动作序号, 概率] */
+  kill_prob_curve?: [number, number][];
+  /** 击杀率测量窗口起止（flag 解析时刻；None = 未提供该 flag） */
+  kill_start?: number | null;
+  kill_end?: number | null;
 }
+
+/** 后端属性面板结果：百分数单位，10 表示 10%。 */
+export interface PanelStatsDTO { huixin_pct: number; pofang_pct: number; jianshang_pct: number }

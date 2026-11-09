@@ -169,11 +169,21 @@ pub struct Choice {
     /// 非饰品固定为 0；饰品为 1 或 2，独立于绿字。
     #[serde(default)]
     pub variant: u8,
+    /// 装备所属门派；省略时同配装门派。跨门派装备不触发套装效果（如莫问穿冰心护手）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub school: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Template {
     pub school: String,
+    /// 固定镶嵌属性：每件装备的五行石孔不可选，按孔位把属性直接计入。
+    #[serde(default)]
+    pub sockets: Vec<Stats>,
+
+    /// 跨门派装备：不参与该门派的套装与覆盖率校验，仅供其他门派穿戴。
+    #[serde(default)]
+    pub cross_school: bool,
     pub choice: Choice,
     pub green: Green,
     pub stats: Stats,
@@ -219,6 +229,31 @@ pub struct Catalog {
     pub schools: Vec<School>,
     pub templates: Vec<Template>,
     pub sets: Vec<GearSet>,
+
+    #[serde(default)]
+    pub enchants: Vec<EnchantDef>,
+    /// 五彩石候选（仅武器可插），loadout 里按 id 选择。
+    #[serde(default)]
+    pub wucai: Vec<WucaiDef>,
+}
+
+/// 五彩石：武器可插，不同组合给不同属性。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WucaiDef {
+    pub id: String,
+    pub name: String,
+    pub stats: Stats,
+}
+
+/// 附魔：按部位给出可选列表，loadout 里按 id 选择。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnchantDef {
+    pub slot: Slot,
+    pub id: String,
+    pub name: String,
+    pub stats: Stats,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -233,6 +268,12 @@ pub struct Loadout {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attribute_rules: Option<String>,
     pub choices: Vec<Choice>,
+    /// 武器五彩石 id；未填则不加五彩石。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wucai: Option<String>,
+    /// 每件装备选择的附魔 id；未填则该部位不加附魔。
+    #[serde(default)]
+    pub enchants: BTreeMap<Slot, String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveBonus {
@@ -252,6 +293,9 @@ pub struct Composed {
     pub active_bonuses: Vec<ActiveBonus>,
     pub cooldowns: Vec<Cooldown>,
     pub warnings: Vec<String>,
+    /// 各套装实际穿戴件数（同门派套装；跨门派装备不计）。
+    #[serde(default)]
+    pub set_counts: BTreeMap<String, usize>,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -270,6 +314,9 @@ pub struct Constraints {
     pub banned_sources: BTreeMap<Slot, Vec<Source>>,
     pub stats: BTreeMap<String, Bounds>,
     pub allow_cross_source_2plus2: bool,
+    /// 必须凑齐的套装件数（set id → 最少件数），如竞技场四件套 { "jingji-armor": 4 }。
+    #[serde(default)]
+    pub required_sets: BTreeMap<String, usize>,
 }
 impl Default for Constraints {
     fn default() -> Self {
@@ -282,6 +329,7 @@ impl Default for Constraints {
             banned_sources: BTreeMap::new(),
             stats: BTreeMap::new(),
             allow_cross_source_2plus2: true,
+            required_sets: BTreeMap::new(),
         }
     }
 }
@@ -297,8 +345,22 @@ pub enum Objective {
         #[serde(default)]
         allow_unapplied_cd: bool,
     },
+    /// 按时间轴连招（含奇穴/秘籍/DOT/引导/曲风/充能/flag）打分；player 由配装合成覆盖。
+    Timeline {
+        request: jpcg_api::TimelineRequestDTO,
+        metric: TimelineMetric,
+    },
 }
-#[derive(Debug, Serialize, Deserialize)]
+
+/// 时间轴连招优化的目标指标。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimelineMetric {
+    TotalDamage,
+    WindowDps,
+    KillProbability,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OptimizeRequest {
     pub loadout: Loadout,

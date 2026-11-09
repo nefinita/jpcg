@@ -30,18 +30,38 @@ export function gearPlayerForm(player: PlayerConfigDTO): Record<string, number |
   return Object.fromEntries(Object.entries(player).filter(([, value]) => value != null));
 }
 export function initialLoadout(catalog: GearCatalog, school: string): GearLoadout | null {
-  const choices = GEAR_SLOTS.map((slot) => catalog.templates.find((t) => t.school === school && t.choice.slot === slot)?.choice);
+  const choices = GEAR_SLOTS.map((slot) => {
+    const own = catalog.templates.find((t) => t.school === school && t.choice.slot === slot);
+    const cross = catalog.templates.find((t) => t.cross_school && t.choice.slot === slot);
+    const picked = own ?? cross;
+    return picked ? { ...picked.choice, school: picked.school === school ? undefined : picked.school } : undefined;
+  });
   if (choices.some((c) => !c)) return null;
-  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: emptyGearStats(), choices: choices as GearChoice[] };
+  const enchants: Record<string, string> = {};
+  for (const slot of GEAR_SLOTS) {
+    const first = (catalog.enchants ?? []).find((e) => e.slot === slot);
+    if (first) enchants[slot] = first.id;
+  }
+  const wucai = catalog.wucai?.[0]?.id;
+  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: { ...emptyGearStats(), tizhi: 18, gengu: 18, shenfa: 18, yuanqi: 17, liliang: 17 }, choices: choices as GearChoice[], enchants, ...(wucai ? { wucai } : {}) };
 }
 export function gearInputKey(form: FormData, loadout: GearLoadout) {
   return JSON.stringify({ mode: "gear", loadout, context: { ...toCalculateRequest(form), player: null } });
 }
+/** 丢弃历史版本遗留字段（例如已删除的 sockets），保证发给 Rust 的 loadout 严格匹配当前结构。 */
+export function sanitizeGearLoadout(loadout: GearLoadout): GearLoadout {
+  const base = { ...loadout } as GearLoadout & Record<string, unknown>;
+  delete base.sockets;
+  return base as GearLoadout;
+}
+
 export function isGearLoadout(x: unknown): x is GearLoadout {
   if (!x || typeof x !== "object") return false;
   const v = x as Partial<GearLoadout>;
   return typeof v.school === "string" && typeof v.revision === "string" && typeof v.value_set === "string"
     && validStats(v.base) && (v.attribute_rules == null || typeof v.attribute_rules === "string")
+    && (v.enchants == null || (typeof v.enchants === "object" && Object.values(v.enchants).every((x) => typeof x === "string")))
+    && (v.wucai == null || typeof v.wucai === "string")
     && Array.isArray(v.choices) && v.choices.length === 12 && new Set(v.choices.map((c) => c?.slot)).size === 12
     && v.choices.every((c) => c && GEAR_SLOTS.includes(c.slot) && ["mingjian", "weiwang", "baowu"].includes(c.source) && ["base", "upgraded"].includes(c.tier) && [0, 1, 2].includes(c.variant));
 }

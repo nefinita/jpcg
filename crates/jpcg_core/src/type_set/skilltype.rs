@@ -6,6 +6,14 @@
 
 use serde::{Deserialize, Serialize};
 
+fn is_one_u8(v: &u8) -> bool {
+    *v <= 1
+}
+
+fn default_channel_ticks() -> u8 {
+    1
+}
+
 fn is_zero_u32(n: &u32) -> bool {
     *n == 0
 }
@@ -27,6 +35,9 @@ fn is_string_empty(s: &String) -> bool {
 /// 技能属性结构
 /// 每个技能实例包含完整的伤害计算所需系数。
 /// TOML 中以 [[skill]] 数组形式存在。
+/// 跨门派通用「停手」技能 id（结构空位：无伤害、无属性、占普通 GCD）
+pub const IDLE_SKILL_ID: u32 = 999_999;
+
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct Skilltype {
@@ -69,7 +80,7 @@ pub struct Skilltype {
     #[serde(skip_serializing_if = "is_zero_u32")]
     pub wushifangyu: u32, // 无视防御（1024 制，如 512 无视 50%）
     #[serde(skip_serializing_if = "is_zero_u32")]
-    pub wushihuajin: u32, // 无视化劲
+    pub wushihuajin: u32, // 无视化劲减免比例（百分比，0..100）
     #[serde(skip_serializing_if = "is_zero_u32")]
     pub wushijianshang: u32, // 无视减伤
     #[serde(skip_serializing_if = "is_zero_u32")]
@@ -92,13 +103,15 @@ pub struct Skilltype {
     #[serde(skip_serializing_if = "is_zero_f32")]
     pub cooldown: f32, // 调息时间（秒，0=无调息）
     #[serde(skip_serializing_if = "is_zero_u8")]
-    pub charges: u8, // 充能层数（0 或 1 = 无充能；>1 = 最大层数）
+    pub charges: u8, // 充能层数（0 = 普通冷却；>=1 = 最大充能次数，使用 recharge 恢复）
     #[serde(skip_serializing_if = "is_zero_f32")]
     pub recharge: f32, // 充能恢复间隔（秒）
     #[serde(skip_serializing_if = "is_false")]
     pub cd_haste: bool, // 调息是否受加速影响
     #[serde(skip_serializing_if = "is_false")]
     pub channel: bool, // 引导技能（吟唱期间持续结算）
+    #[serde(default = "default_channel_ticks", skip_serializing_if = "is_one_u8")]
+    pub channel_ticks: u8, // 引导跳数（1 = 普通单段读条/引导）
     #[serde(skip_serializing_if = "is_string_empty")]
     pub buff_id: String, // 仅提供 buff 的技能所施加的 buff id（空 = 不施加）
     #[serde(skip_serializing_if = "is_zero_f32")]
@@ -108,6 +121,16 @@ pub struct Skilltype {
 }
 
 impl Skilltype {
+    /// 「停手」：用于排轴里表示不输出的空位。伤害 0、无元素/系数，占普通 GCD。
+    pub fn idle() -> Self {
+        Skilltype {
+            skill_name: "停手".to_string(),
+            skill_id: IDLE_SKILL_ID,
+            guaranteed_hit: true,
+            ..Default::default()
+        }
+    }
+
     /// 计算技能基础攻击（base_damage1 和 base_damage2 的平均值）
     pub fn base_atk(&self) -> u32 {
         (self.base_damage1 + self.base_damage2) / 2
@@ -157,7 +180,7 @@ impl Skilltype {
         }
     }
 
-    /// 充能层数（0/1 视作 1 层，即无充能）
+    /// 最大可用次数（至少 1）；是否启用充能机制需单独检查 charges > 0。
     pub fn max_charges(&self) -> u32 {
         if self.charges > 1 {
             self.charges as u32

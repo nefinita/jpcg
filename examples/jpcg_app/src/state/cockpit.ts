@@ -1,4 +1,4 @@
-import type { FormData, SkillResultDTO, ComboStepDTO, ComboResultDTO } from "../types";
+import type { FormData, SkillResultDTO, ComboStepDTO, TimelineResultDTO, SequenceItem } from "../types";
 import { DEFAULT_BUFF, DEFAULT_COEFFICIENT, HOSTILE_FIELDS, PLAYER_FIELDS, STORAGE_KEYS, XINFA_LIST } from "../utils/constants";
 import type { GearLoadout, GearComposition } from "../types/gear";
 import { isGearLoadout, isGearComposition } from "./gear";
@@ -8,7 +8,7 @@ import { readPreference } from "../hooks/usePersistentState";
 export interface CalculationSnapshot {
   form: FormData; results: SkillResultDTO[];
   mode?: "manual" | "gear"; manualForm?: FormData;
-  comboResult?: ComboResultDTO; comboDraft?: ComboDraft;
+  comboResult?: TimelineResultDTO; comboDraft?: ComboDraft;
   loadout?: GearLoadout; composition?: GearComposition; inputKey?: string;
 }
 export interface ManualHydration {
@@ -24,14 +24,18 @@ export interface CockpitState {
   manualHydration?: ManualHydration;
   calculation: CalculationSnapshot | null;
   baseline: CalculationSnapshot | null;
-  combo?: { inputKey: string; result: ComboResultDTO };
+  combo?: { inputKey: string; result: TimelineResultDTO };
 }
 export interface ComboDraft {
-  sequence: ComboStepDTO[];
+  sequence: SequenceItem[];
   presetName: string;
   selectedPreset: string;
   poolQuery: string;
   collapsedGroups: string[];
+  /** 已装备的秘籍 id（跨页面/重挂载保留；旧存档可缺省） */
+  miji?: string[];
+  /** 已激活的奇穴 id（跨页面/重挂载保留；旧存档可缺省） */
+  qixue?: string[];
 }
 
 export function defaultManualForm(): FormData {
@@ -46,7 +50,15 @@ export function defaultManualForm(): FormData {
   };
 }
 export const defaultCockpit = (): CockpitState => ({ mode: "gear", loadouts: {}, form: defaultManualForm(), manualReady: false, calculation: null, baseline: null });
-export const defaultComboDraft = (): ComboDraft => ({ sequence: [], presetName: "", selectedPreset: "", poolQuery: "", collapsedGroups: [] });
+export const defaultComboDraft = (): ComboDraft => ({
+  sequence: [],
+  presetName: "",
+  selectedPreset: "",
+  poolQuery: "",
+  collapsedGroups: [],
+  miji: [],
+  qixue: [],
+});
 
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 const number = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -65,8 +77,10 @@ export function isManualForm(x: unknown): x is FormData {
     && fields(x.coefficient, Object.keys(DEFAULT_COEFFICIENT), numeric)
     && (x.value_set == null || typeof x.value_set === "string");
 }
-function isComboResult(x: unknown): x is ComboResultDTO {
-  return record(x) && number(x.total_expected_damage_wan) && number(x.final_kill_prob) && Array.isArray(x.steps) && Array.isArray(x.kill_prob_curve);
+function isTimelineResult(x: unknown): x is TimelineResultDTO {
+  return record(x) && number(x.total_damage) && Array.isArray(x.events)
+    && (x.final_kill_prob === undefined || number(x.final_kill_prob))
+    && (x.kill_prob_curve === undefined || Array.isArray(x.kill_prob_curve));
 }
 function isSnapshot(x: unknown): x is CalculationSnapshot {
   return record(x) && isManualForm(x.form) && Array.isArray(x.results) && x.results.every((r: unknown) => record(r)
@@ -76,28 +90,59 @@ function isSnapshot(x: unknown): x is CalculationSnapshot {
     && (x.manualForm === undefined || isManualForm(x.manualForm))
     && (x.loadout === undefined || isGearLoadout(x.loadout))
     && (x.composition === undefined || isGearComposition(x.composition))
-    && (x.comboResult === undefined || isComboResult(x.comboResult))
+    && (x.comboResult === undefined || isTimelineResult(x.comboResult))
     && (x.comboDraft === undefined || comboDraftSchema.validate(x.comboDraft))
     && (x.inputKey === undefined || typeof x.inputKey === "string");
 }
 export const cockpitSchema = {
-  version: 2,
+  version: 3,
   validate: (x: unknown): x is CockpitState => record(x) && (x.mode === "manual" || x.mode === "gear") && record(x.loadouts) && Object.entries(x.loadouts).every(([school, loadout]) => isGearLoadout(loadout) && loadout.school === school) && typeof x.manualReady === "boolean"
     && (x.manualHydration === undefined || (record(x.manualHydration) && typeof x.manualHydration.xinfa === "boolean" && typeof x.manualHydration.coefficient === "boolean"))
-    && (x.combo === undefined || (record(x.combo) && typeof x.combo.inputKey === "string" && isComboResult(x.combo.result)))
+    && (x.combo === undefined || (record(x.combo) && typeof x.combo.inputKey === "string" && isTimelineResult(x.combo.result)))
     && isManualForm(x.form) && (x.calculation === null || isSnapshot(x.calculation)) && (x.baseline === null || isSnapshot(x.baseline)),
   // #95/v1 仍按手动模式恢复，既有表单/结果/基准不丢。
-  migrate: (x: unknown, version: number) => version <= 1 && record(x) ? { ...x, loadouts: {}, mode: "manual" } : null,
+  migrate: (x: unknown, version: number) => {
+    if (!record(x) || version > 2) return null;
+    const migrateSnapshot = (snapshot: unknown) => {
+      if (!record(snapshot)) return snapshot;
+      const { comboResult, comboDraft, ...rest } = snapshot;
+      return { ...rest,
+        ...(isTimelineResult(comboResult) ? { comboResult } : {}),
+        ...(comboDraft === undefined ? {} : { comboDraft: comboDraftSchema.migrate(comboDraft, 2) }),
+      };
+    };
+    const { combo, ...rest } = x;
+    return { ...rest,
+      ...(version <= 1 ? { loadouts: {}, mode: "manual" } : {}),
+      calculation: migrateSnapshot(x.calculation), baseline: migrateSnapshot(x.baseline),
+      ...(record(combo) && isTimelineResult(combo.result) ? { combo } : {}),
+    };
+  },
 };
+const isSkillStep = (s: unknown): boolean => record(s)
+  && record(s.skill) && typeof s.skill.skill_name === "string"
+  && ["skill_id", "base_damage1", "base_damage2", "atk_xishu", "watk_xishu", "hit_up", "huixin_up", "huixiao_up", "wushifangyu", "wushihuajin", "dot_flag"].every((k) => number((s as Record<string, unknown>).skill?.[k as never] as unknown))
+  && ((s.skill as Record<string, unknown>).lost_hp_zhenshishanghai === undefined || number((s.skill as Record<string, unknown>).lost_hp_zhenshishanghai))
+  && typeof (s.skill as Record<string, unknown>).has_critical_strike === "boolean"
+  && (s.overrides === null || (record(s.overrides) && Object.values(s.overrides).every((v) => v === null || number(v))));
+
+const isSequenceItem = (s: unknown): boolean => record(s)
+  && ((s.kind === "skill" && isSkillStep(s)) || (s.kind === "flag" && (s.flag === "start" || s.flag === "end")));
+
 export const comboDraftSchema = {
-  version: 1,
-  validate: (x: unknown): x is ComboDraft => record(x) && Array.isArray(x.sequence) && x.sequence.every((s: unknown) => record(s)
-    && record(s.skill) && typeof s.skill.skill_name === "string"
-    && ["skill_id", "base_damage1", "base_damage2", "atk_xishu", "watk_xishu", "hit_up", "huixin_up", "huixiao_up", "wushifangyu", "wushihuajin", "dot_flag"].every((k) => record(s.skill) && number(s.skill[k]))
-    && (s.skill.lost_hp_zhenshishanghai === undefined || number(s.skill.lost_hp_zhenshishanghai))
-    && typeof s.skill.has_critical_strike === "boolean"
-    && (s.overrides === null || (record(s.overrides) && Object.values(s.overrides).every((v) => v === null || number(v)))))
+  version: 3,
+  validate: (x: unknown): x is ComboDraft => record(x) && Array.isArray(x.sequence) && x.sequence.every(isSequenceItem)
     && ["presetName", "selectedPreset", "poolQuery"].every((k) => typeof x[k] === "string")
-    && Array.isArray(x.collapsedGroups) && x.collapsedGroups.every((s: unknown) => typeof s === "string"),
-  migrate: (x: unknown, version: number) => version === 0 ? x : null,
+    && Array.isArray(x.collapsedGroups) && x.collapsedGroups.every((s: unknown) => typeof s === "string")
+    && (x.miji === undefined || (Array.isArray(x.miji) && x.miji.every((s: unknown) => typeof s === "string")))
+    && (x.qixue === undefined || (Array.isArray(x.qixue) && x.qixue.every((s: unknown) => typeof s === "string"))),
+  migrate: (x: unknown, version: number) => {
+    if (!record(x)) return null;
+    // v1：补 miji/qixue；v2：技能步加 kind 判别；统一迁移到 v3 形状
+    const seq = Array.isArray(x.sequence)
+      ? x.sequence.map((s: unknown) => record(s) && record(s.skill) ? { kind: "skill", skill: s.skill, overrides: s.overrides ?? null } : s)
+      : x.sequence;
+    if (version <= 2) return { ...x, sequence: seq, miji: x.miji ?? [], qixue: x.qixue ?? [] };
+    return null;
+  },
 };

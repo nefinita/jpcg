@@ -9,7 +9,7 @@
 
 use jpcg_api::{
     CombatDataDTO, TimelineActionDTO, TimelineEventDTO, TimelineEventKindDTO, TimelineRequestDTO,
-    TimelineResultDTO,
+    TimelineResultDTO, TimelineStepDTO, TimelineStepSwitchDTO,
 };
 use jpcg_core::type_set::buff::TimedBuffDef;
 use jpcg_core::type_set::combat::{CombatData, FormDef};
@@ -30,6 +30,122 @@ pub fn load_combat_bundle(profession: String) -> Result<jpcg_api::CombatBundleDT
     Ok(jpcg_api::CombatBundleDTO { skills, combat })
 }
 
+/// 桌面/FFI 入口：展示 DTO 不能作为计算定义，使用本机完整数据并校验选择。
+pub fn calculate_timeline_from_store(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    calculate_timeline(prepare_timeline_from_store(req)?)
+}
+
+/// 搜索开始时冻结完整定义，候选评估只替换玩家属性，不反复读取展示 DTO。
+pub fn prepare_timeline_from_store(
+    mut req: TimelineRequestDTO,
+) -> Result<TimelineRequestDTO, String> {
+    let profession = req.xinfa.profession.clone();
+    let bundle = load_combat_bundle(profession.clone())?;
+    validate_selection(&bundle.combat, &req.qixue, &req.miji)?;
+    validate_flags(&req.actions)?;
+    // 同一格的多个效果必须一起启用，外部调用者不能只传半组。
+    req.qixue = bundle
+        .combat
+        .qixue
+        .iter()
+        .filter(|q| {
+            req.qixue.contains(&q.id) || q.group_ids.iter().any(|id| req.qixue.contains(id))
+        })
+        .flat_map(|q| {
+            if q.group_ids.is_empty() {
+                vec![q.id.clone()]
+            } else {
+                q.group_ids.clone()
+            }
+        })
+        .collect();
+    req.skills = bundle.skills;
+    let combat = load_combat(profession)?;
+    req.forms = combat.form.clone();
+    req.timed_buffs = combat.buff.clone();
+    req.combat = Some(combat);
+    Ok(req)
+}
+
+/// 计算开始/结束 flag 各最多一个，且开始必须早于结束。
+fn validate_flags(actions: &[TimelineActionDTO]) -> Result<(), String> {
+    let mut start: Option<usize> = None;
+    let mut end: Option<usize> = None;
+    for (i, a) in actions.iter().enumerate() {
+        if let TimelineActionDTO::Flag { flag } = a {
+            match flag.as_str() {
+                "start" => {
+                    if start.is_some() {
+                        return Err("计算开始 flag 只能有一个".into());
+                    }
+                    start = Some(i);
+                }
+                "end" => {
+                    if end.is_some() {
+                        return Err("计算结束 flag 只能有一个".into());
+                    }
+                    end = Some(i);
+                }
+                other => return Err(format!("未知 flag：{other}")),
+            }
+        }
+    }
+    if let (Some(s), Some(e)) = (start, end)
+        && s >= e
+    {
+        return Err("计算开始 flag 必须早于计算结束 flag".into());
+    }
+    Ok(())
+}
+
+/// 按后端生成的格子计数；同格多个效果 id 不重复占槽。
+fn validate_selection(
+    data: &CombatDataDTO,
+    qixue: &[String],
+    miji: &[String],
+) -> Result<(), String> {
+    use std::collections::{HashMap, HashSet};
+    let mut selected = HashSet::new();
+    for id in qixue {
+        let index = data
+            .qixue
+            .iter()
+            .position(|q| q.id == *id || q.group_ids.contains(id))
+            .ok_or_else(|| format!("未知奇穴：{id}"))?;
+        if data.qixue[index].shelved {
+            return Err(format!("奇穴暂未建模：{id}"));
+        }
+        selected.insert(index);
+    }
+    let mut slots = HashSet::new();
+    let mut mixed = 0;
+    for index in selected {
+        let q = &data.qixue[index];
+        if q.slot >= data.meta.mixed_slot_from {
+            mixed += 1;
+        } else if !slots.insert(q.slot) {
+            return Err(format!("第 {} 重只能选择一个奇穴", q.slot));
+        }
+    }
+    if mixed > data.meta.mixed_qixue_cap {
+        return Err("混选奇穴超过上限".into());
+    }
+    let mut counts = HashMap::new();
+    for id in miji.iter().collect::<HashSet<_>>() {
+        let m = data
+            .miji
+            .iter()
+            .find(|m| m.id == *id)
+            .ok_or_else(|| format!("未知秘籍：{id}"))?;
+        let count = counts.entry((m.skill_id, m.sub_id)).or_insert(0usize);
+        *count += 1;
+        if *count > usize::from(data.meta.miji_per_skill_cap) {
+            return Err(format!("技能 {} 的秘籍超过上限", m.skill_id));
+        }
+    }
+    Ok(())
+}
+
 /// 时间轴模拟（DTO 请求 → 结果 DTO）
 pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
     let (player, hostile, xinfa, buff, coeff) = super::host::into_core(
@@ -41,24 +157,79 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         req.value_set,
     );
 
+    // overlay 提供的形态定义可以作为默认值；调用方显式给了 forms 则以调用方为准
+    let default_forms: Vec<jpcg_api::FormDefDTO> = req
+        .combat
+        .as_ref()
+        .map(|c| c.form.clone())
+        .unwrap_or_default();
     let combat = req.combat.map(CombatData::from);
+    // 激活的奇穴：先按 id 取出定义，后面逐个技能套 modifiers
+    let active_qixue: Vec<jpcg_core::type_set::modifier::QixueDef> = combat
+        .as_ref()
+        .map(|data| {
+            data.qixue
+                .iter()
+                .filter(|q| req.qixue.iter().any(|id| id == &q.id))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    let qixue_refs: Vec<&jpcg_core::type_set::modifier::QixueDef> = active_qixue.iter().collect();
+    // 已激活秘籍：按 id 取定义，逐个技能套修正项
+    let active_miji: Vec<jpcg_core::type_set::modifier::MijiDef> = combat
+        .as_ref()
+        .map(|data| {
+            data.miji
+                .iter()
+                .filter(|m| req.miji.iter().any(|id| id == &m.id))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    let miji_refs: Vec<&jpcg_core::type_set::modifier::MijiDef> = active_miji.iter().collect();
     let skills: Vec<TimingSkill> = req
         .skills
         .iter()
         .map(|dto| {
             let skill = conv::skill_dto_to_skilltype(dto);
-            match &combat {
+            // 先套 overlay 时序字段（cast_time/cooldown 等以 combat 为准），
+            // 再套秘籍/奇穴修正项，避免定值覆盖掉秘籍的读条/调息修正。
+            let mut ts = match &combat {
                 Some(data) => TimingSkill::from_combat(&skill, data),
                 None => TimingSkill {
                     skill,
-                    form: None,
+                    qifeng_gain: 0,
+                    spend_all_qifeng: false,
+                    requires_instrument: None,
+                    requires_qifeng: None,
+                    dot_tick: None,
                     gcd_lane: String::new(),
                     on_cast: Default::default(),
                 },
+            };
+            ts.skill =
+                jpcg_core::type_set::modifier::resolve_skill(&ts.skill, &miji_refs, &qixue_refs);
+            // 独立 DOT 也要吃秘籍/奇穴修正（殊曲缩短间隔、冻泉加跳数等），
+            // 但 DOT 的每跳技能是合成条目，需要单独 resolve 后回写时长/间隔。
+            if let Some(spec) = &mut ts.dot_tick {
+                let resolved = jpcg_core::type_set::modifier::resolve_skill(
+                    &spec.skill,
+                    &miji_refs,
+                    &qixue_refs,
+                );
+                spec.interval = resolved.dot_interval;
+                spec.duration = resolved.dot_duration;
+                spec.skill = resolved;
             }
+            ts
         })
         .collect();
-    let forms: Vec<FormDef> = req.forms.into_iter().map(FormDef::from).collect();
+    let forms: Vec<FormDef> = if req.forms.is_empty() {
+        default_forms.into_iter().map(FormDef::from).collect()
+    } else {
+        req.forms.into_iter().map(FormDef::from).collect()
+    };
     let timed_buffs: Vec<TimedBuffDef> = req
         .timed_buffs
         .into_iter()
@@ -72,11 +243,46 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
                 skill_id,
                 sub_id,
                 skill_name,
-            } => match skill_name {
-                Some(name) => TimelineAction::cast_named(skill_id, sub_id, name),
-                None => TimelineAction::cast(skill_id, sub_id),
+                overrides,
+            } => TimelineAction::Cast {
+                skill_id,
+                sub_id,
+                skill_name,
+                overrides,
             },
             TimelineActionDTO::SwitchForm { form } => TimelineAction::SwitchForm(form),
+            TimelineActionDTO::Flag { flag } => TimelineAction::Flag {
+                start: flag == "start",
+            },
+        })
+        .collect();
+    // 门控用的激活奇穴集合：请求里的 id + 对应奇穴名（技能 `jihuoqixue` 可能写 id 或名称）
+    let mut combat_qixue_names: Vec<String> = req.qixue.clone();
+    if let Some(data) = combat.as_ref() {
+        for q in data.qixue.iter() {
+            if req.qixue.iter().any(|id| id == &q.id) {
+                combat_qixue_names.push(q.name.clone());
+            }
+        }
+    }
+    // 第 3 层钩子：把激活奇穴的 hooks 转成带作用技能的 ActiveHook
+    let hooks: Vec<timeline::ActiveHook> = active_qixue
+        .iter()
+        .flat_map(|q| {
+            let targets: Vec<timeline::SkillKey> = if !q.applies_to.is_empty() {
+                q.applies_to.clone()
+            } else if q.replaces_skill_id != 0 {
+                vec![(q.replaces_skill_id, q.replaces_sub_id)]
+            } else {
+                Vec::new()
+            };
+            q.hooks
+                .iter()
+                .cloned()
+                .map(move |hook| timeline::ActiveHook {
+                    targets: targets.clone(),
+                    hook,
+                })
         })
         .collect();
     let window = if req.window > 0.0 { req.window } else { 300.0 };
@@ -89,9 +295,15 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         coeff,
         skills,
         forms,
+        initial_instrument: req.initial_instrument,
+        initial_qifeng: req.initial_qifeng,
         timed_buffs,
+        active_qixue: combat_qixue_names,
+        hooks,
         actions,
         window,
+        samples: req.samples,
+        seed: req.seed,
     });
 
     Ok(TimelineResultDTO::from(result))
@@ -99,37 +311,121 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
 
 impl From<timeline::TimelineResult> for TimelineResultDTO {
     fn from(r: timeline::TimelineResult) -> Self {
+        // 伤害日志按实际命中排序，起手另存 start_time；窗口外命中不进入日志。
+        let settlement = |e: &TimelineEvent| match e.kind {
+            TimelineEventKind::Cast { hit_time, .. } => hit_time,
+            _ => e.time,
+        };
+        let mut events = r.events;
+        events.retain(|e| settlement(e) <= r.window);
+        events.sort_by(|a, b| settlement(a).total_cmp(&settlement(b)));
+        let mut cumulative = 0.0;
+        let events = events
+            .into_iter()
+            .map(|e| {
+                cumulative += event_damage(&e.kind);
+                let time = settlement(&e);
+                let mut dto = event_to_dto(e);
+                dto.time = time;
+                dto.cumulative = cumulative;
+                dto
+            })
+            .collect();
+        let steps = r
+            .steps
+            .into_iter()
+            .map(|step| TimelineStepDTO {
+                time: step.time,
+                gcd_secs: step.gcd_secs,
+                gcd_ready_at: step.gcd_ready_at,
+                legal: step.legal,
+                instrument: step.instrument,
+                qifeng: step.qifeng,
+                skipped_reason: step.skipped_reason,
+                required_instrument: step.required_instrument,
+                required_qifeng: step.required_qifeng,
+                switches: step
+                    .switches
+                    .into_iter()
+                    .map(|sw| TimelineStepSwitchDTO {
+                        switch_kind: sw.switch_kind,
+                        from: sw.from,
+                        to: sw.to,
+                        time: sw.time,
+                    })
+                    .collect(),
+            })
+            .collect();
         TimelineResultDTO {
-            events: r.events.into_iter().map(event_to_dto).collect(),
+            events,
+            steps,
             total_damage: r.total_damage,
             window_dps: r.window_dps,
             skipped_actions: r.skipped_actions,
+            final_instrument: r.final_instrument,
+            final_qifeng: r.final_qifeng,
+            final_kill_prob: r.final_kill_prob,
+            kill_prob_curve: r.kill_prob_curve,
+            kill_start: r.kill_start,
+            kill_end: r.kill_end,
         }
+    }
+}
+
+fn event_damage(kind: &TimelineEventKind) -> f64 {
+    match kind {
+        TimelineEventKind::Cast { damage, .. } => *damage as f64,
+        TimelineEventKind::ChannelTick { damage, .. } => *damage as f64,
+        TimelineEventKind::DotTick { damage, .. } => *damage as f64,
+        _ => 0.0,
     }
 }
 
 fn event_to_dto(e: TimelineEvent) -> TimelineEventDTO {
     TimelineEventDTO {
         time: e.time,
+        cumulative: 0.0,
         kind: match e.kind {
             TimelineEventKind::Cast {
                 skill_name,
                 damage,
                 hit_time,
+                gcd_secs,
+                gcd_ready_at,
+                ..
             } => TimelineEventKindDTO::Cast {
+                start_time: e.time,
                 skill_name,
                 damage,
                 hit_time,
+                gcd_secs,
+                gcd_ready_at,
+            },
+            TimelineEventKind::ChannelTick {
+                skill_name,
+                index,
+                damage,
+                ..
+            } => TimelineEventKindDTO::ChannelTick {
+                skill_name,
+                index,
+                damage,
             },
             TimelineEventKind::DotTick {
                 skill_name,
                 index,
                 damage,
+                advanced,
+                ..
             } => TimelineEventKindDTO::DotTick {
                 skill_name,
                 index,
                 damage,
+                advanced,
             },
+            TimelineEventKind::QifengSwitch { from, to } => {
+                TimelineEventKindDTO::QifengSwitch { from, to }
+            }
             TimelineEventKind::FormSwitch { from, to } => {
                 TimelineEventKindDTO::FormSwitch { from, to }
             }
@@ -161,17 +457,23 @@ mod tests {
                 ..Default::default()
             }],
             forms: Vec::new(),
+            initial_instrument: None,
+            initial_qifeng: String::new(),
             timed_buffs: Vec::new(),
+            qixue: Vec::new(),
+            miji: Vec::new(),
             actions: vec![
                 TimelineActionDTO::Cast {
                     skill_id: 1,
                     sub_id: 0,
                     skill_name: None,
+                    overrides: None,
                 },
                 TimelineActionDTO::Cast {
                     skill_id: 1,
                     sub_id: 0,
                     skill_name: None,
+                    overrides: None,
                 },
             ],
             window: 10.0,
@@ -197,7 +499,67 @@ mod tests {
             },
             value_set: None,
             combat: None,
+            samples: 0,
+            seed: None,
         }
+    }
+
+    #[test]
+    fn rejects_invalid_selections_and_counts_grouped_effects_once() {
+        use jpcg_api::{CombatMetaDTO, MijiDefDTO, QixueDefDTO};
+        let mut data = CombatDataDTO {
+            meta: CombatMetaDTO {
+                mixed_slot_from: 7,
+                mixed_qixue_cap: 1,
+                miji_per_skill_cap: 1,
+                ..Default::default()
+            },
+            qixue: vec![
+                QixueDefDTO {
+                    id: "a".into(),
+                    slot: 1,
+                    ..Default::default()
+                },
+                QixueDefDTO {
+                    id: "b".into(),
+                    slot: 1,
+                    ..Default::default()
+                },
+                QixueDefDTO {
+                    id: "c".into(),
+                    slot: 7,
+                    group_ids: vec!["c".into(), "c2".into()],
+                    ..Default::default()
+                },
+                QixueDefDTO {
+                    id: "d".into(),
+                    slot: 8,
+                    ..Default::default()
+                },
+            ],
+            miji: vec![
+                MijiDefDTO {
+                    id: "m1".into(),
+                    skill_id: 1,
+                    ..Default::default()
+                },
+                MijiDefDTO {
+                    id: "m2".into(),
+                    skill_id: 1,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let ids = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(validate_selection(&data, &ids(&["a", "b"]), &[]).is_err());
+        assert!(validate_selection(&data, &ids(&["c", "d"]), &[]).is_err());
+        assert!(validate_selection(&data, &ids(&["c", "c2"]), &[]).is_ok());
+        assert!(validate_selection(&data, &ids(&["unknown"]), &[]).is_err());
+        assert!(validate_selection(&data, &[], &ids(&["m1", "m2"])).is_err());
+        assert!(validate_selection(&data, &[], &ids(&["unknown"])).is_err());
+        data.qixue[0].shelved = true;
+        assert!(validate_selection(&data, &ids(&["a"]), &[]).is_err());
     }
 
     #[test]
@@ -215,8 +577,10 @@ mod tests {
         let casts: Vec<f32> = result
             .events
             .iter()
-            .filter(|e| matches!(e.kind, TimelineEventKindDTO::Cast { .. }))
-            .map(|e| e.time)
+            .filter_map(|e| match e.kind {
+                TimelineEventKindDTO::Cast { start_time, .. } => Some(start_time),
+                _ => None,
+            })
             .collect();
         assert_eq!(casts.len(), 2);
         assert!((casts[0] - 0.0).abs() < 1e-4, "起手应在 0s: {:?}", casts);

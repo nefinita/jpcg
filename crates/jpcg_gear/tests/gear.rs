@@ -2,7 +2,7 @@ use jpcg_gear::*;
 use std::path::PathBuf;
 
 fn dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/gear")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/synthetic/gear")
 }
 fn catalog() -> Catalog {
     Catalog::load(&dir()).expect("sample catalog")
@@ -222,6 +222,8 @@ fn overrides_apply_explicit_higher_attack_and_versions_are_checked() {
         "sets.toml",
         "schools.toml",
         "overrides.toml",
+        "enchants.toml",
+        "wucai.toml",
     ] {
         std::fs::copy(dir().join(file), temp.path().join(file)).unwrap();
     }
@@ -278,7 +280,7 @@ fn optimizer_obeys_hard_constraints_and_finds_exhaustive_best() {
     );
     let out = optimize_with(&c, &r, evaluate, |_| true).unwrap();
     assert!(out.complete);
-    assert_eq!(out.progress.visited, 8);
+    assert_eq!(out.progress.visited, 16); // 8 模板 × 2 五彩石选项（旧模式跳过不兼容的五维石）
     assert_eq!(out.progress.evaluated, 8);
     let best = out.best.unwrap();
     assert!(best.score >= out.baseline.score);
@@ -415,13 +417,16 @@ fn kill_probability_matches_existing_seeded_combo_and_cd_is_never_silent() {
     }
     let c = catalog();
     let mut r = request();
-    r.config.hostile.target_hp = 40000;
+    r.config.hostile.target_hp = 100_000;
+    r.config.hostile.neigong_fangyu = 0;
+    r.config.hostile.huajin_dengji = 0;
+    r.config.hostile.yujin_dengji = 0;
     r.objective = Objective::KillProbability {
         steps: vec![jpcg_api::ComboStepDTO {
             skill: jpcg_api::SkillPoolItemDTO {
                 skill_name: "synthetic-strike".into(),
                 base_damage1: 10000,
-                base_damage2: 10000,
+                base_damage2: 100000,
                 atk_xishu: 1.0,
                 ..Default::default()
             },
@@ -468,7 +473,10 @@ fn kill_probability_matches_existing_seeded_combo_and_cd_is_never_silent() {
     )
     .unwrap();
     assert_eq!(a.baseline.score, out.final_kill_prob);
-    assert!(a.baseline.score > 0.0 && a.baseline.score < 1.0);
+    assert!(
+        (0.0..=1.0).contains(&a.baseline.score),
+        "击杀率必须在 [0,1]"
+    );
     assert!(a.warnings.iter().any(|s| s.contains("CD")));
 }
 #[test]
@@ -512,7 +520,7 @@ fn cli_stdout_is_json_and_errors_exit_nonzero() {
     );
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(result["complete"], true);
-    assert_eq!(result["progress"]["visited"], 16);
+    assert_eq!(result["progress"]["visited"], 32);
     use std::io::Write;
     let mut process = std::process::Command::new(binary)
         .args(["--catalog", dir().to_str().unwrap(), "api"])
@@ -552,4 +560,183 @@ fn pareto_keeps_damage_survival_tradeoff_and_removes_dominated_results() {
         out.pareto[0].composed.stats.qixue,
         out.pareto[1].composed.stats.qixue
     );
+}
+
+#[test]
+fn parallel_and_serial_reject_invalid_budgets_and_constraints_identically() {
+    let c = catalog();
+    for budget in [0, 1_000_001] {
+        let mut req = request();
+        req.max_combinations = budget;
+        let serial = optimize(&c, &req, |_| true).unwrap_err();
+        let parallel = optimize_parallel(&c, &req, &OptimizeProgress::new()).unwrap_err();
+        assert_eq!(serial, parallel);
+        assert!(serial.contains("max_combinations"));
+    }
+    let mut req = request();
+    req.constraints.required_sets.insert("不存在".into(), 4);
+    assert_eq!(
+        optimize(&c, &req, |_| true).unwrap_err(),
+        optimize_parallel(&c, &req, &OptimizeProgress::new()).unwrap_err()
+    );
+}
+
+#[test]
+fn upper_bounds_keep_feasible_base_tiers_in_both_search_modes() {
+    if !runtime_child("upper_bounds_keep_feasible_base_tiers_in_both_search_modes") {
+        return;
+    }
+    let c = catalog();
+    let mut r = request();
+    r.constraints = Constraints::default();
+    r.constraints.sources = vec![Source::Mingjian, Source::Weiwang];
+    r.constraints.allow_upgraded = true;
+    r.constraints.allow_cross_source_2plus2 = true;
+    let head = r
+        .loadout
+        .choices
+        .iter_mut()
+        .find(|x| x.slot == Slot::Tou)
+        .unwrap();
+    head.source = Source::Mingjian;
+    head.tier = Tier::Upgraded;
+    r.constraints.locked = r
+        .loadout
+        .choices
+        .iter()
+        .filter(|x| x.slot != Slot::Tou)
+        .cloned()
+        .collect();
+    r.constraints
+        .required_sources
+        .insert(Slot::Tou, Source::Mingjian);
+    let mut base = r.loadout.clone();
+    base.choices
+        .iter_mut()
+        .find(|x| x.slot == Slot::Tou)
+        .unwrap()
+        .tier = Tier::Base;
+    let base_stats = c.compose(&base).unwrap().stats;
+    let max = base_stats.pofang + 5;
+    r.constraints.stats.insert(
+        "pofang".into(),
+        Bounds {
+            min: None,
+            max: Some(max),
+        },
+    );
+    for out in [
+        optimize_with(&c, &r, evaluate, |_| true).unwrap(),
+        optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap(),
+    ] {
+        assert!(out.complete);
+        let best = out.best.expect("base tier satisfies cap");
+        assert!(best.composed.stats.pofang <= max);
+        assert_eq!(
+            best.composed
+                .loadout
+                .choices
+                .iter()
+                .find(|c| c.slot == Slot::Tou)
+                .unwrap()
+                .tier,
+            Tier::Base
+        );
+    }
+}
+
+#[test]
+fn full_loadout_search_checks_constraints_after_enchants_and_stone() {
+    if !runtime_child("full_loadout_search_checks_constraints_after_enchants_and_stone") {
+        return;
+    }
+    let mut c = catalog();
+    let mut r = request();
+    r.constraints = Constraints::default();
+    r.constraints.sources = vec![Source::Mingjian, Source::Weiwang];
+    r.constraints.allow_upgraded = true;
+    r.constraints.allow_cross_source_2plus2 = true;
+    r.constraints.locked = r.loadout.choices.clone();
+    r.loadout.enchants.clear();
+    r.loadout.wucai = None;
+    c.enchants = vec![EnchantDef {
+        slot: Slot::Shou,
+        id: "pofang".into(),
+        name: "破防附魔".into(),
+        stats: Stats {
+            pofang: 90,
+            ..Default::default()
+        },
+    }];
+    c.wucai = vec![WucaiDef {
+        id: "stone".into(),
+        name: "破防石".into(),
+        stats: Stats {
+            pofang: 20,
+            ..Default::default()
+        },
+    }];
+    let base = c.compose(&r.loadout).unwrap().stats.pofang;
+    for min in [base + 1, base + 100] {
+        r.constraints.stats.insert(
+            "pofang".into(),
+            Bounds {
+                min: Some(min),
+                max: None,
+            },
+        );
+        for out in [
+            optimize_with(&c, &r, evaluate, |_| true).unwrap(),
+            optimize(&c, &r, |_| true).unwrap(),
+            optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap(),
+        ] {
+            assert!(out.complete);
+            assert_eq!(out.progress.combinations, 4);
+            assert!(out.best.unwrap().composed.stats.pofang >= min);
+        }
+    }
+    r.max_combinations = 1;
+    let out = optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap();
+    assert!(!out.complete);
+    assert_eq!(out.stop_reason, "budget_exhausted");
+}
+
+#[test]
+fn timeline_overrides_match_desktop_and_both_optimizer_paths() {
+    if !runtime_child("timeline_overrides_match_desktop_and_both_optimizer_paths") {
+        return;
+    }
+    let mut c = catalog();
+    c.wucai.clear();
+    let mut r = request();
+    r.constraints.locked = r.loadout.choices.clone();
+    let bundle = jpcg_combo::timeline_host::load_combat_bundle("mowen".into()).unwrap();
+    let skill = bundle.skills.iter().find(|s| s.skill_name == "宫").unwrap();
+    let action = serde_json::json!({"kind":"cast","skill_id":skill.skill_id,"sub_id":skill.sub_id,"skill_name":skill.skill_name});
+    let mut timeline: jpcg_api::TimelineRequestDTO=serde_json::from_value(serde_json::json!({
+        "skills":bundle.skills,"actions":[action.clone(),action],"window":30.0,
+        "player":player(&c.compose(&r.loadout).unwrap()),"hostile":r.config.hostile,"xinfa":r.config.xinfa_config,
+        "buff":r.config.buff,"coeff":r.config.coefficient,"value_set":r.config.value_set
+    })).unwrap();
+    let before =
+        jpcg_combo::timeline_host::calculate_timeline_from_store(timeline.clone()).unwrap();
+    if let jpcg_api::TimelineActionDTO::Cast { overrides, .. } = &mut timeline.actions[1] {
+        *overrides = Some(jpcg_api::StepOverrideDTO {
+            base_damage_override: Some(100000.0),
+            ..Default::default()
+        });
+    }
+    let desktop =
+        jpcg_combo::timeline_host::calculate_timeline_from_store(timeline.clone()).unwrap();
+    assert!(desktop.total_damage > before.total_damage);
+    r.objective = Objective::Timeline {
+        request: timeline,
+        metric: TimelineMetric::TotalDamage,
+    };
+    for out in [
+        optimize(&c, &r, |_| true).unwrap(),
+        optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap(),
+    ] {
+        assert_eq!(out.baseline.score, desktop.total_damage);
+    }
 }

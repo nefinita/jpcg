@@ -68,6 +68,7 @@ impl From<ComboStepResult> for ComboStepResultDTO {
 impl From<ComboResult> for ComboResultDTO {
     fn from(r: ComboResult) -> Self {
         ComboResultDTO {
+            total_lost_hp_damage: r.steps.iter().map(|s| s.lost_hp_zhenshi_damage).sum(),
             total_expected_damage_wan: r.total_expected_damage_wan,
             final_kill_prob: r.final_kill_prob,
             kill_prob_curve: r.kill_prob_curve,

@@ -32,6 +32,14 @@ pub struct StepOverride {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComboPreset {
+    #[serde(default)]
+    pub flags: Vec<ComboFlag>,
     pub name: String,
     pub steps: Vec<ComboStep>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComboFlag {
+    pub position: usize,
+    pub start: bool,
 }

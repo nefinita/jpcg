@@ -32,6 +32,7 @@ fn editor_entrypoints_child() {
             numerator: 1,
             denominator: 1,
         },
+        constants: vec![],
         conversions: vec![],
     };
     jpcg_core::host::skill::save_skill_data(

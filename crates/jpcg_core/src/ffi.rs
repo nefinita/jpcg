@@ -146,6 +146,12 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
         "player_attribute_capabilities" => {
             Ok(crate::host::calc::player_attribute_capabilities().to_string())
         }
+        "panel_stats" => {
+            let req: jpcg_api::CalculateRequest =
+                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {e}"))?;
+            serde_json::to_string(&crate::host::calc::panel_stats(req))
+                .map_err(|e| format!("响应序列化失败: {e}"))
+        }
         "calculate" => {
             let req: jpcg_api::CalculateRequest =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;

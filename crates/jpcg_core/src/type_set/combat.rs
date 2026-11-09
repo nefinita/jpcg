@@ -23,7 +23,7 @@ fn is_zero_u32(v: &u32) -> bool {
     *v == 0
 }
 
-/// 形态定义（`[[form]]`）
+/// 器形定义（`[[form]]`；琴 / 剑这类会替换技能组与 GCD 的形态）
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct FormDef {
@@ -35,7 +35,7 @@ pub struct FormDef {
     pub gcd_base: f32,
     /// 是否初始形态（至多一个；都不标则以第一条为准）
     pub initial: bool,
-    /// 该形态可用技能（空 = 不限）
+    /// 该器形下的可用技能（空 = 不限）
     pub skills: Vec<SkillKey>,
 }
 
@@ -54,12 +54,18 @@ impl FormDef {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OnCast {
-    /// 施放后切换到的形态 id
-    pub switch_form: Option<String>,
+    /// 施放后切换到的器形 id（如 "jian" / "qin"）
+    pub switch_instrument: Option<String>,
+    /// 施放后切换到的曲风 id（如 "yangchun" / "gaoshan" / "pingsha"）
+    pub switch_qifeng: Option<String>,
     /// 本次施放额外占用的 GCD 通道（如刀宗断云同时顶住双持通道）
     pub gcd_lanes: Vec<String>,
     /// 施放后直接把指定技能顶进 GCD（把该技能置为不可用至本次 GCD 结束）
     pub lock_skills: Vec<SkillKey>,
+    /// 施放时让指定技能的持续伤害「下一跳」立刻生效（如羽：商/角下两跳）
+    pub advance_dot_targets: Vec<SkillKey>,
+    /// 施放时提前的跳数（0/1 = 1 跳）
+    pub advance_dot_ticks: u8,
 }
 
 /// 单个技能的时序 overlay（`[[skill_combat]]`）
@@ -70,8 +76,10 @@ pub struct SkillCombatDef {
     pub skill_id: u32,
     /// 子技能 id（0 = 主技能）
     pub sub_id: u32,
-    /// 所属形态 id（None = 任意形态可用）
-    pub form: Option<String>,
+    /// 要求当前器形（None = 任意器形可用）
+    pub requires_instrument: Option<String>,
+    /// 要求当前曲风（None = 任意曲风可用；如 变宫/变徵 需要 gaoshan）
+    pub requires_qifeng: Option<String>,
     /// 占用的 GCD 通道（空 = "default"）
     pub gcd_lane: String,
     /// 施放副作用
@@ -93,8 +101,27 @@ pub struct SkillCombatDef {
     pub cd_haste: Option<bool>,
     /// 是否引导技能
     pub channel: Option<bool>,
+    /// 引导/倒读条跳数（如徵 3 段；None = 1 段）
+    pub channel_ticks: Option<u8>,
     /// 施放后施加的定时 buff id（空 = 不施加）
     pub buff_id: Option<String>,
+    /// 技能激活所需奇穴 id（空 = 不限；用于奇穴主动技能门控）
+    pub jihuoqixue: Option<String>,
+    /// 施放获得曲风点数（None = 0）
+    pub qifeng_gain: Option<u8>,
+    /// 施放消耗全部曲风（None = false）
+    pub spend_all_qifeng: Option<bool>,
+    /// ---- DOT（独立于本体伤害的持续伤害；None = 无 DOT） ----
+    /// 每跳间隔（秒）
+    pub dot_interval: Option<f32>,
+    /// 总持续时长（秒）
+    pub dot_duration: Option<f32>,
+    /// 每跳基础伤害下限
+    pub dot_tick_base1: Option<u32>,
+    /// 每跳基础伤害上限
+    pub dot_tick_base2: Option<u32>,
+    /// 每跳攻击系数（伤害 = base + 攻击力 × 系数）
+    pub dot_tick_xishu: Option<f32>,
 }
 
 impl SkillCombatDef {
@@ -129,8 +156,14 @@ impl SkillCombatDef {
         if let Some(v) = self.channel {
             skill.channel = v;
         }
+        if let Some(v) = self.channel_ticks {
+            skill.channel_ticks = v.max(1);
+        }
         if let Some(v) = &self.buff_id {
             skill.buff_id = v.clone();
+        }
+        if let Some(v) = &self.jihuoqixue {
+            skill.jihuoqixue = v.clone();
         }
     }
 }
@@ -153,8 +186,11 @@ pub struct CombatMeta {
 #[serde(default, deny_unknown_fields)]
 pub struct CombatData {
     pub meta: CombatMeta,
-    /// `[[form]]`
+    /// `[[form]]`：器形（琴 / 剑）；不参与曲风切换
     pub form: Vec<FormDef>,
+    /// 曲风 id 列表（如 yangchun / gaoshan / pingsha），由数据声明
+    #[serde(default)]
+    pub qifeng: Vec<String>,
     /// `[[skill_combat]]`
     pub skill_combat: Vec<SkillCombatDef>,
     /// `[[buff]]`
@@ -212,13 +248,22 @@ impl CombatData {
                     sc.sub_id
                 ));
             }
-            if let Some(f) = &sc.form
+            if let Some(f) = &sc.requires_instrument
                 && !f.trim().is_empty()
                 && !seen_forms.contains(&f.as_str())
             {
                 errors.push(format!(
-                    "skill_combat {}:{}: 引用了不存在的形态 `{}`",
+                    "skill_combat {}:{}: 引用了不存在的器形 `{}`",
                     sc.skill_id, sc.sub_id, f
+                ));
+            }
+            if let Some(q) = &sc.requires_qifeng
+                && !q.trim().is_empty()
+                && !self.qifeng.iter().any(|x| x == q)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: 引用了未声明的曲风 `{}`",
+                    sc.skill_id, sc.sub_id, q
                 ));
             }
             if let Some(t) = sc.cast_time
@@ -237,6 +282,30 @@ impl CombatData {
                     sc.skill_id, sc.sub_id
                 ));
             }
+            if let Some(i) = sc.dot_interval
+                && (!i.is_finite() || i <= 0.0)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: dot_interval 必须为正数",
+                    sc.skill_id, sc.sub_id
+                ));
+            }
+            if let Some(d) = sc.dot_duration
+                && (!d.is_finite() || d < 0.0)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: dot_duration 非法",
+                    sc.skill_id, sc.sub_id
+                ));
+            }
+            if let Some(x) = sc.dot_tick_xishu
+                && (!x.is_finite() || x < 0.0)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: dot_tick_xishu 非法",
+                    sc.skill_id, sc.sub_id
+                ));
+            }
             if let Some(r) = sc.recharge
                 && (!r.is_finite() || r < 0.0)
             {
@@ -245,12 +314,21 @@ impl CombatData {
                     sc.skill_id, sc.sub_id
                 ));
             }
-            if let Some(to) = &sc.on_cast.switch_form
+            if let Some(to) = &sc.on_cast.switch_instrument
                 && !to.trim().is_empty()
                 && !seen_forms.contains(&to.as_str())
             {
                 errors.push(format!(
-                    "skill_combat {}:{}: on_cast 切到不存在的形态 `{}`",
+                    "skill_combat {}:{}: on_cast 切到不存在的器形 `{}`",
+                    sc.skill_id, sc.sub_id, to
+                ));
+            }
+            if let Some(to) = &sc.on_cast.switch_qifeng
+                && !to.trim().is_empty()
+                && !self.qifeng.iter().any(|x| x == to)
+            {
+                errors.push(format!(
+                    "skill_combat {}:{}: on_cast 切到未声明的曲风 `{}`",
                     sc.skill_id, sc.sub_id, to
                 ));
             }
@@ -297,8 +375,28 @@ impl CombatData {
             } else {
                 seen_qixue.push(q.id.as_str());
             }
-            if q.replaces_skill_id == 0 {
-                errors.push(format!("qixue `{}`: replaces_skill_id 为 0", q.id));
+            if q.shelved {
+                continue;
+            }
+            if q.replaces_skill_id == 0
+                && q.applies_to.is_empty()
+                && q.grants_skills.is_empty()
+                && q.hooks.is_empty()
+            {
+                errors.push(format!(
+                    "qixue `{}`: replaces_skill_id 为 0 且未提供 applies_to",
+                    q.id
+                ));
+            }
+            for (id, _) in &q.applies_to {
+                if *id == 0 {
+                    errors.push(format!("qixue `{}`: applies_to 含 0 技能 id", q.id));
+                }
+            }
+            for (id, _) in &q.grants_skills {
+                if *id == 0 {
+                    errors.push(format!("qixue `{}`: grants_skills 含 0 技能 id", q.id));
+                }
             }
         }
 
@@ -360,6 +458,46 @@ impl CombatData {
             }
         }
         for q in &self.qixue {
+            if !q.grants_skills.is_empty() {
+                for (id, sub) in &q.grants_skills {
+                    if !skills
+                        .iter()
+                        .any(|s| s.skill_id == *id && (*sub == 0 || s.sub_id == *sub))
+                    {
+                        errors.push(format!(
+                            "qixue `{}`: 解锁技能 {id}:{sub} 不在技能表中",
+                            q.id
+                        ));
+                    }
+                }
+            }
+            if q.replaces_skill_id == 0 && q.applies_to.is_empty() {
+                continue;
+            }
+            if q.shelved {
+                continue;
+            }
+            if q.replaces_skill_id == 0
+                && q.applies_to.is_empty()
+                && q.grants_skills.is_empty()
+                && q.hooks.is_empty()
+            {
+                continue;
+            }
+            if !q.applies_to.is_empty() {
+                for (id, sub) in &q.applies_to {
+                    if !skills
+                        .iter()
+                        .any(|s| s.skill_id == *id && (*sub == 0 || s.sub_id == *sub))
+                    {
+                        errors.push(format!(
+                            "qixue `{}`: 作用技能 {id}:{sub} 不在技能表中",
+                            q.id
+                        ));
+                    }
+                }
+                continue;
+            }
             if !skills.iter().any(|s| {
                 s.skill_id == q.replaces_skill_id
                     && (q.replaces_sub_id == 0 || s.sub_id == q.replaces_sub_id)
@@ -440,16 +578,16 @@ gcd_base = 1.0
 [[skill_combat]]
 skill_id = 101
 sub_id = 0
-form = "single"
+requires_instrument = "single"
 gcd_lane = "single"
 
 [[skill_combat]]
 skill_id = 102
 sub_id = 0
-form = "dual"
+requires_instrument = "dual"
 gcd_lane = "dual"
 buff_id = "jiasu_10"
-on_cast = { switch_form = "dual", gcd_lanes = ["dual"], lock_skills = [[102, 0]] }
+on_cast = { switch_instrument = "dual", gcd_lanes = ["dual"], lock_skills = [[102, 0]] }
 
 [[buff]]
 id = "jiasu_10"
@@ -495,7 +633,7 @@ modifiers = [{ atk_xishu_add = 0.2 }]
         assert_eq!(data.form[0].skills, vec![(101, 0)]);
         assert_eq!(data.skill_combat.len(), 2);
         assert_eq!(
-            data.skill_combat[1].on_cast.switch_form.as_deref(),
+            data.skill_combat[1].on_cast.switch_instrument.as_deref(),
             Some("dual")
         );
         assert_eq!(data.buff.len(), 1);
@@ -538,11 +676,11 @@ modifiers = [{ atk_xishu_add = 0.2 }]
         let mut data = parse();
         data.skill_combat.push(data.skill_combat[0].clone());
         data.form[0].id = String::new();
-        data.skill_combat[0].form = Some("nope".into());
+        data.skill_combat[0].requires_instrument = Some("nope".into());
         let err = data.validate().unwrap_err();
         assert!(err.contains("重复配置"), "{err}");
         assert!(err.contains("空 id"), "{err}");
-        assert!(err.contains("不存在的形态 `nope`"), "{err}");
+        assert!(err.contains("不存在的器形 `nope`"), "{err}");
     }
 
     #[test]

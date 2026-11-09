@@ -102,6 +102,7 @@ impl From<SkillEditorItemDTO> for Skilltype {
             has_critical_strike: dto.has_critical_strike,
             effect_type: dto.effect_type,
             jihuoqixue: dto.jihuoqixue,
+            channel_ticks: 1,
             base_damage1: dto.base_damage1,
             base_damage2: dto.base_damage2,
             atk_xishu: dto.atk_xishu,
@@ -303,6 +304,14 @@ pub(crate) fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
 impl From<ComboPreset> for ComboPresetDTO {
     fn from(core: ComboPreset) -> Self {
         ComboPresetDTO {
+            flags: core
+                .flags
+                .into_iter()
+                .map(|f| jpcg_api::ComboFlagDTO {
+                    position: f.position,
+                    start: f.start,
+                })
+                .collect(),
             name: core.name,
             steps: core
                 .steps
@@ -390,6 +399,16 @@ mod tests {
         };
         // 与保存/加载预设相同的转换及 TOML 往返，不读写文件或修改全局状态。
         let preset = ComboPreset {
+            flags: vec![
+                crate::type_set::combo::ComboFlag {
+                    position: 0,
+                    start: true,
+                },
+                crate::type_set::combo::ComboFlag {
+                    position: 1,
+                    start: false,
+                },
+            ],
             name: "regression".into(),
             steps: vec![ComboStep::from(ComboStepDTO {
                 skill: input.clone(),
@@ -400,6 +419,16 @@ mod tests {
         let decoded: ComboPreset = toml::from_str(&encoded)?;
         let actual = ComboPresetDTO::from(decoded);
         assert_eq!(actual.steps.len(), 1);
+        assert_eq!(
+            actual
+                .flags
+                .iter()
+                .map(|f| (f.position, f.start))
+                .collect::<Vec<_>>(),
+            vec![(0, true), (1, false)]
+        );
+        let old: ComboPreset = toml::from_str("name = 'old'\nsteps = []")?;
+        assert!(ComboPresetDTO::from(old).flags.is_empty());
         assert_eq!(
             serde_json::to_value(&actual.steps[0].skill)?,
             serde_json::to_value(&input)?,

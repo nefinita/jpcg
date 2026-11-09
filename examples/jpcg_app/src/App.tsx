@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, type SetStateAction } from "react";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
-import type { FormData, ComboResultDTO } from "./types";
+import type { FormData, TimelineResultDTO } from "./types";
 import * as api from "./api/commands";
 import ActivityBar from "./components/ActivityBar";
 import ThemeToggle from "./components/ThemeToggle";
@@ -16,10 +16,11 @@ import StatusBar from "./components/StatusBar";
 import Toast from "./components/Toast";
 import { IconBug, IconCalc } from "./components/icons";
 import { toCalculateRequest } from "./utils/normalize";
+import { buildTimelineRequest } from "./utils/timelineRequest";
 import { usePersistentState, writePreference, readPreference } from "./hooks/usePersistentState";
 import { cockpitSchema, defaultCockpit, comboDraftSchema, defaultComboDraft } from "./state/cockpit";
 import SnapshotDiff from "./components/SnapshotDiff";
-import type { GearCatalog, GearLoadout, GearComposition } from "./types/gear";
+import type { GearCatalog, GearLoadout, GearComposition, OptimizeOptions, GearOptimizeResult } from "./types/gear";
 import { initialLoadout, gearInputKey, gearPlayerForm, PROFESSION_ATTRIBUTE_RULES } from "./state/gear";
 import CockpitCombo from "./components/CockpitCombo";
 import GearPanel from "./components/GearPanel";
@@ -55,7 +56,11 @@ export default function App() {
   const formData = cockpit.form;
   const [comboDraft, setComboDraft] = usePersistentState(`${STORAGE_KEYS.comboDraft}:${encodeURIComponent(formData.xinfa)}`, defaultComboDraft, comboDraftSchema);
   const [comboBusy, setComboBusy] = useState(false);
-  const saveComboResult = useCallback((inputKey: string, result: ComboResultDTO) => {
+  const [optimizing, setOptimizing] = useState(false);
+  const optimizeLock = useRef(false);
+  const [optProgress, setOptProgress] = useState<number | null>(null);
+  const [optResult, setOptResult] = useState<{ result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null>(null);
+  const saveComboResult = useCallback((inputKey: string, result: TimelineResultDTO) => {
     setCockpit((previous) => ({ ...previous, combo: { inputKey, result } }));
   }, [setCockpit]);
   const loadout = cockpit.loadouts[formData.xinfa];
@@ -68,6 +73,7 @@ export default function App() {
     update: SetStateAction<FormData>,
     options?: FormChangeOptions,
   ) => {
+    if (optimizeLock.current) return;
     // 旧选择的异步元数据回填不是新用户意图，不能取消后选的导入。
     if (options?.source !== "metadata") ++actionRevision.current;
     // 同一微任务批次里的导入可能先于 React 下一次 render 继续执行。
@@ -164,27 +170,31 @@ export default function App() {
       return { ...previous, mode: base.mode ?? "manual", form: base.manualForm ?? base.form,
         loadouts: base.loadout ? { ...previous.loadouts, [base.loadout.school]: base.loadout } : previous.loadouts,
         calculation: base, manualReady: true, manualHydration: { xinfa: true, coefficient: true },
-        combo: base.comboResult && base.comboDraft ? { inputKey: JSON.stringify({ request: toCalculateRequest(base.form), sequence: base.comboDraft.sequence }), result: base.comboResult } : undefined };
+        combo: base.comboResult && base.comboDraft ? { inputKey: JSON.stringify({ request: toCalculateRequest(base.form), sequence: base.comboDraft.sequence, miji: base.comboDraft.miji, qixue: base.comboDraft.qixue }), result: base.comboResult } : undefined };
     });
     setRestoreRevision((value) => value + 1); setStatus("已恢复钉住时的配装、属性与结果");
   };
   const adoptValueSet = async (nextLoadout?: GearLoadout, action = ++actionRevision.current) => {
     const selected = nextLoadout ?? loadout; if (!selected || action !== actionRevision.current) return;
+    // 旧存档的版本/数值集可能落后于模板：统一按模板版本口径迁移，避免与模板版本校验互卡。
+    const migrated: GearLoadout = catalog
+      ? { ...selected, revision: catalog.version.revision, value_set: catalog.version.value_set }
+      : selected;
     try {
-      const vs = await api.resolveValueSet(selected.value_set);
+      const vs = await api.resolveValueSet(migrated.value_set);
       if (action !== actionRevision.current) return;
-      if (!vs.available || vs.id !== selected.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
+      if (!vs.available || vs.id !== migrated.value_set || !vs.coefficient) throw new Error("模板对应数值集不可用，请先更新数据");
       // 目录/文件等待期间可能已收到初始化回填，不能使用导入开始时的旧就绪状态。
       const current = cockpitRef.current;
-      const needsConfig = selected.school !== current.form.xinfa || !manualHydrationRef.current.xinfa;
-      const config = needsConfig ? await api.loadProfessionConfig(selected.school) : null;
+      const needsConfig = migrated.school !== current.form.xinfa || !manualHydrationRef.current.xinfa;
+      const config = needsConfig ? await api.loadProfessionConfig(migrated.school) : null;
       if (needsConfig && !config) throw new Error("配装心法的数据不可用，请先更新技能数据");
       if (action !== actionRevision.current) return;
       setCockpit((previous) => ({ ...previous, mode: "gear", manualReady: true, manualHydration: { xinfa: true, coefficient: true },
-        loadouts: { ...previous.loadouts, [selected.school]: selected },
-        form: { ...previous.form, xinfa: selected.school, value_set: selected.value_set,
-          coefficient: previous.form.value_set === selected.value_set && (previous.manualHydration?.coefficient ?? previous.manualReady) ? previous.form.coefficient : { ...vs.coefficient! },
-          xinfa_config: config ? { profession: selected.school, xinfa_name: String(config.xinfa_name ?? selected.school),
+        loadouts: { ...previous.loadouts, [migrated.school]: migrated },
+        form: { ...previous.form, xinfa: migrated.school, value_set: migrated.value_set,
+          coefficient: previous.form.value_set === migrated.value_set && (previous.manualHydration?.coefficient ?? previous.manualReady) ? previous.form.coefficient : { ...vs.coefficient! },
+          xinfa_config: config ? { profession: migrated.school, xinfa_name: String(config.xinfa_name ?? migrated.school),
             xinfa_nom: String(config.xinfa_nom ?? previous.form.xinfa_config.xinfa_nom), atk_up: Number(config.atk_up) || 0,
             pofang_up: Number(config.pofang_up) || 0, huixin_up: Number(config.huixin_up) || 0 }
             : previous.form.xinfa_config } }));
@@ -198,6 +208,54 @@ export default function App() {
     void adoptValueSet(loadout, startupAction.current);
   }, [gearMode, loadout, contextReady]);
   const changeLoadout = (next: GearLoadout) => { ++actionRevision.current; setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } })); };
+
+  const handleOptimize = useCallback(async (opts: OptimizeOptions) => {
+    if (optimizeLock.current) return;
+    if (!catalog || !loadout || !compatible || !rulesCurrent) { addToast("配装模板或职业规则尚未就绪", "warning"); return; }
+    if (!comboDraft.sequence.length) { addToast("请先在排轴器编辑连招", "warning"); return; }
+    const targetHp = Number(formData.hostile?.target_hp) || 0;
+    if (opts.metric === "kill_probability" && targetHp <= 0) { addToast("击杀率目标需要先设置目标血量", "warning"); return; }
+    const arenaSet = catalog.sets.find((x) => x.source === "mingjian" && x.kind === "armor");
+    const requiredSets: Record<string, number> = opts.arena4 && arenaSet ? { [arenaSet.id]: 4 } : {};
+    const stats: Record<string, { min?: number; max?: number }> = opts.hasteMin != null ? { jiasu: { min: opts.hasteMin } } : {};
+    const samples = opts.metric === "kill_probability" ? 50000 : 0;
+    optimizeLock.current = true;
+    ++actionRevision.current; // 作废调优开始前尚未完成的导入/环境切换
+    setOptimizing(true); setOptProgress(null); setStatus("配装自动调优中…");
+    let unlisten = () => {};
+    try {
+      unlisten = api.listenGearOptimizeProgress((pct) => setOptProgress(pct));
+      const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
+      const request = buildTimelineRequest(formData, bundle, comboDraft.sequence, comboDraft.miji ?? [], comboDraft.qixue ?? [], samples, samples > 0 ? 12345 : null);
+      const result = await api.optimizeGear({
+        loadout,
+        config: toCalculateRequest(formData),
+        objective: { kind: "timeline", request, metric: opts.metric },
+        constraints: { sources: ["mingjian", "weiwang", "baowu"], allow_upgraded: true, locked: [], banned: [], required_sources: {}, banned_sources: {}, stats, allow_cross_source_2plus2: true, required_sets: requiredSets },
+        max_combinations: 100000,
+      });
+      setOptResult({ result, metric: opts.metric });
+      if (result.best) {
+        changeLoadout(result.best.composed.loadout);
+        const value = opts.metric === "kill_probability"
+          ? `${(result.best.score * 100).toFixed(1)}%`
+          : Math.round(result.best.score).toLocaleString();
+        addToast(`调优完成：${opts.metric === "kill_probability" ? "击杀率" : "区间DPS"} ${value}`, "success");
+        setStatus("配装自动调优完成");
+      } else {
+        addToast("调优未找到更优配装", "info");
+        setStatus("配装自动调优完成");
+      }
+    } catch (err) {
+      addToast(String(err), "error");
+      setStatus("配装自动调优失败");
+    } finally {
+      unlisten();
+      setOptProgress(null);
+      optimizeLock.current = false;
+      setOptimizing(false);
+    }
+  }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, changeLoadout, addToast]);
   const exportLoadout = async () => {
     if (!loadout) return;
     try {
@@ -219,7 +277,7 @@ export default function App() {
   };
   const composition = cockpit.calculation?.mode === "gear" && cockpit.calculation.loadout?.school === formData.xinfa ? cockpit.calculation.composition : undefined;
   const activeForm = gearMode ? (compatible && rulesCurrent && !stale && cockpit.calculation?.mode === "gear" ? cockpit.calculation.form : null) : formData;
-  const comboKey = JSON.stringify({ request: activeForm ? toCalculateRequest(activeForm) : null, sequence: comboDraft.sequence });
+  const comboKey = JSON.stringify({ request: activeForm ? toCalculateRequest(activeForm) : null, sequence: comboDraft.sequence, miji: comboDraft.miji, qixue: comboDraft.qixue });
   const resultPanel = <div className={styles.resultPanel}>
     <SnapshotDiff snapshot={cockpit.baseline} calculation={cockpit.calculation} stale={stale} calculating={calculating || comboBusy}
       onToggle={() => setCockpit((previous) => ({ ...previous, baseline: previous.baseline ? null : previous.calculation ? { ...previous.calculation, comboDraft, comboResult: previous.combo?.inputKey === comboKey ? previous.combo.result : undefined } : null }))} onRestore={restoreBaseline} />
@@ -232,7 +290,8 @@ export default function App() {
     playerPreview={composition ? gearPlayerForm(composition.player) : undefined}
     onCalculate={handleCalculate} calculating={calculating} addToast={addToast} setStatus={setStatus} />;
 
-  return <div className={styles.container}><div className={styles.body}>
+  return <div className={styles.container}><div className={styles.body} inert={optimizing} aria-busy={optimizing}
+    onClickCapture={(event) => { if (optimizeLock.current) { event.preventDefault(); event.stopPropagation(); } }}>
     <ActivityBar currentPage={curPage} onNavigate={navigate} />
     <div className={styles.main}>
           <header className={styles.header}>
@@ -266,19 +325,23 @@ export default function App() {
           {gearError && <div role="alert" className={styles.gearAlert}>{gearError}<button onClick={reloadGearRules}>重新读取模板</button></div>}
           {!catalog && !gearError && <p role="status">正在读取配装模板…</p>}
           {catalog && !loadout && <p>当前心法没有完整的 12 部位模板，请选择其他心法或切换手动属性。</p>}
-          {catalog && loadout && !compatible && <div className={styles.gearAlert}>配装需要匹配模板版本与数值集。<button onClick={() => void adoptValueSet()}>使用模板数值集 {loadout.value_set}</button></div>}
+          {catalog && loadout && !compatible && <div className={styles.gearAlert}>配装需要匹配模板版本与数值集。<button onClick={() => void adoptValueSet()}>使用模板数值集 {catalog.version.value_set}</button></div>}
           <div className={styles.gearBody}>
             {catalog && loadout && <GearPanel catalog={catalog} loadout={loadout} composition={composition} pending={stale || calculating}
-              onChange={changeLoadout} onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
+              onOptimize={(options) => void handleOptimize(options)} optimizing={optimizing} optProgress={optProgress} optResult={optResult} onChange={changeLoadout}
+              onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
               onExport={() => void exportLoadout()} onImport={importLoadout} />}
             {resultPanel}
           </div>
         </> : <div className={styles.manualBody}><div className={styles.configPanel}>{configPanel}</div>{resultPanel}</div>}
       </div>
       {visitedPages.has("forum") && <div className={styles.residentPage} hidden={curPage !== "forum"}><ForumPage addToast={addToast} /></div>}
-      {visitedPages.has("combo") && <div className={styles.residentPage} hidden={curPage !== "combo"}><ComboPage key={formData.xinfa} xinfaName={formData.xinfa} formData={activeForm} draft={comboDraft} onDraftChange={setComboDraft} configurationOnly /></div>}
+      {visitedPages.has("combo") && <div className={styles.residentPage} hidden={curPage !== "combo"}><ComboPage key={formData.xinfa} xinfaName={formData.xinfa} formData={activeForm} draft={comboDraft} onDraftChange={setComboDraft} /></div>}
       {visitedPages.has("optimize") && <div className={styles.residentPage} hidden={curPage !== "optimize"}><OptimizePage formData={activeForm} /></div>}
       {visitedPages.has("editor") && <div className={styles.residentPage} hidden={curPage !== "editor"}><SkillEditorPage addToast={addToast} /></div>}
     </div>
-  </div><StatusBar message={status} /><Toast toasts={toasts} onRemove={removeToast} /></div>;
+  </div>{optimizing && <div className={styles.optimizeLock} role="status" aria-live="polite">
+    <strong>正在调优配装{optProgress == null ? "…" : ` · ${optProgress}%`}</strong>
+    <p>调优期间已锁定配装、属性和连招，完成后自动解锁。</p>
+  </div>}<StatusBar message={status} /><Toast toasts={toasts} onRemove={removeToast} /></div>;
 }

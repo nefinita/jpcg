@@ -91,12 +91,18 @@ impl<'a> JpcgConfig<'a> {
         [0, atk, x, 0, 0]
     }
 
+    /// 无视化劲为百分比；零值保持原有截断与数值路径。
+    fn effective_huajin(&self) -> f32 {
+        self.hostilepile.guo_huajin_with(self.coeff) as f32
+            * (1.0 - self.skilltype.wushihuajin.min(100) as f32 / 100.0)
+    }
+
     fn g_cal(&self) -> [u32; 5] {
         let i = self.i_cal();
         let y = self.y_cal();
         let i_hit = i[2];
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(self.coeff);
+        let huajin = self.effective_huajin();
         let pvp = self.coeff.pvp_global_jianshang;
 
         // 游戏实测截断点（顺序与取整策略源自实际检测结果，勿改动逻辑）
@@ -108,7 +114,7 @@ impl<'a> JpcgConfig<'a> {
                 * (y as f32 / 1024.0),
         );
         // ② × 化劲减免 → 截断
-        x = truncate(x * (1.0 - huajin as f32 / 1024.0));
+        x = truncate(x * (1.0 - huajin / 1024.0));
         // ③ × 全局 PVP 减伤 × (1 - 目标减伤比) → 截断输出
         x = x * pvp * (1.0 - self.hostilepile.jianshang_bili as f32 / 100.0);
         let x = x as u32;
@@ -134,11 +140,11 @@ impl<'a> JpcgConfig<'a> {
     /// 目标已损失生命 = max_hp - 结算后当前血量（封顶 max_hp），× lost_hp_zhenshishanghai 系数。
     /// 语义 A（结算后）：current_hp_after 为本步伤害扣完后剩余血量。
     pub fn lost_hp_append(&self, max_hp: u32, current_hp_after: u32) -> f64 {
-        if self.skilltype.lost_hp_zhenshishanghai <= 0.0 {
-            return 0.0;
-        }
-        let lost = (max_hp as f64 - current_hp_after as f64).max(0.0);
-        lost * self.skilltype.lost_hp_zhenshishanghai as f64
+        lost_hp_append_damage(
+            self.skilltype.lost_hp_zhenshishanghai,
+            max_hp as f64,
+            current_hp_after as f64,
+        )
     }
 
     /// 期望通道 + 可选 hp：q_cal() 基础上结算追加真伤。
@@ -220,7 +226,7 @@ impl<'a> JpcgConfig<'a> {
 
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
         let hit_up = self.skilltype.hit_up as f32 / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(self.coeff) as f32;
+        let huajin = self.effective_huajin();
         let pvp = self.coeff.pvp_global_jianshang;
         let jianshang_bili = self.hostilepile.jianshang_bili as f32 / 100.0;
 
@@ -808,4 +814,12 @@ mod converted_derivative_tests {
         let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
         assert_eq!(calc.q_cal().q_damage, 1310);
     }
+}
+
+/// 时间轴与连招共享追加真伤公式：本次直接伤害结算后按已损血量追加。
+pub fn lost_hp_append_damage(coefficient: f32, max_hp: f64, current_hp_after: f64) -> f64 {
+    if coefficient <= 0.0 {
+        return 0.0;
+    }
+    (max_hp - current_hp_after).clamp(0.0, max_hp) * coefficient as f64
 }

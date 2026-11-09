@@ -1,4 +1,12 @@
 :root {
+  --accent: var(--primary-600);
+  --bg-default: var(--bg-base);
+  --bg-primary: var(--bg-surface);
+  --glass-bg-strong: var(--bg-surface);
+  --danger: var(--error);
+  --danger-bg: color-mix(in srgb, var(--error) 12%, var(--bg-surface));
+  --danger-text: #b91c1c;
+  --warning-text: #92400e;
   --glass-bg: rgba(255, 255, 255, 0.6);
   --glass-border: rgba(13, 148, 136, 0.12);
   --glass-highlight: rgba(45, 212, 191, 0.12);
@@ -56,6 +64,9 @@
 }
 
 [data-theme="dark"] {
+  --accent: var(--primary-400);
+  --danger-text: #fca5a5;
+  --warning-text: #fcd34d;
   --glass-bg: rgba(255, 255, 255, 0.04);
   --glass-border: rgba(45, 212, 191, 0.14);
   --glass-highlight: rgba(45, 212, 191, 0.10);
@@ -68,7 +79,7 @@
 
   --text-primary: #ecfeff;
   --text-secondary: #a5b4c2;
-  --text-muted: #64748b;
+  --text-muted: #94a3b8;
 
   --border-subtle: rgba(45, 212, 191, 0.10);
   --border-default: rgba(45, 212, 191, 0.20);

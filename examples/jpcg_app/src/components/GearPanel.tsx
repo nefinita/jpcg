@@ -1,24 +1,32 @@
-import type { GearCatalog, GearChoice, GearComposition, GearLoadout } from "../types/gear";
+import { useState } from "react";
+import type { GearCatalog, GearChoice, GearComposition, GearLoadout, OptimizeOptions, GearOptimizeResult } from "../types/gear";
 import { GEAR_SLOTS, emptyGearStats } from "../types/gear";
 import { choiceKey, slotNames, sourceNames, greenNames, statNames, PROFESSION_ATTRIBUTE_RULES } from "../state/gear";
 import styles from "./GearPanel.module.css";
 
 const convertedFields = ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue_additional"] as const;
+/** 跨门派装备的显示名；后端 schools 里暂无 name 字段。 */
+const SCHOOL_NAMES: Record<string, string> = { mowen: "莫问", bingxin: "冰心" };
 
-export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, pending }: {
+export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, optimizing, optProgress, optResult, pending }: {
   catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
   onChange: (loadout: GearLoadout) => void; onReset: () => void; onExport: () => void;
-  onImport: (file: File) => Promise<void>; pending: boolean;
+  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
+  optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
 }) {
+  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: false, hasteMin: null });
+  const arenaSet = catalog.sets.find((s) => s.source === "mingjian" && s.kind === "armor");
   const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
   const panel = loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
     && composition?.composed.loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES ? composition.composed.panel : undefined;
   const legacyHasBasics = !loadout.attribute_rules && convertedFields.some((key) => (loadout.base[key] ?? 0) > 0);
   const change = (choice: GearChoice) => onChange({ ...loadout, choices: loadout.choices.map((c) => c.slot === choice.slot ? choice : c) });
+  const schoolName = (id?: string) => SCHOOL_NAMES[id ?? ""] ?? id ?? "";
   return <section className={styles.panel} aria-label="配装">
     <header className={styles.header}>
       <div><h2>当前配装</h2><p>{catalog.version.sample ? "合成测试样例 · 非游戏装备数值" : `赛季 ${catalog.version.season}`} · {catalog.version.revision}</p></div>
       <div className={styles.actions}>
+        <button onClick={() => onOptimize(opts)} disabled={optimizing || pending}>{optimizing ? (optProgress != null ? `调优中 ${optProgress}%` : "调优中…") : "自动调优"}</button>
         <button onClick={onReset}>重置配装</button>
         <button onClick={onExport} disabled={stale}>导出配装</button>
         <label>导入配装<input type="file" accept=".toml" onChange={(e) => {
@@ -27,6 +35,64 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
         }} /></label>
       </div>
     </header>
+    <div className={styles.optimizeBar} aria-label="调优设置">
+      <label>调优目标
+        <select value={opts.metric} onChange={(e) => setOpts((p) => ({ ...p, metric: e.target.value as OptimizeOptions["metric"] }))}>
+          <option value="kill_probability">击杀率</option>
+          <option value="window_dps">区间 DPS</option>
+        </select>
+      </label>
+      <label><input type="checkbox" checked={opts.arena4} disabled={!arenaSet}
+        onChange={(e) => setOpts((p) => ({ ...p, arena4: e.target.checked }))} /> 必须竞技场四件套</label>
+      <label>加速 ≥
+        <input type="number" min={0} step={1} value={opts.hasteMin ?? ""}
+          onChange={(e) => setOpts((p) => ({ ...p, hasteMin: e.target.value === "" ? null : Number(e.target.value) }))} />
+      </label>
+    </div>
+    {optResult && <div className={styles.optResult} aria-label="调优结果">
+      <div className={styles.optResultHead}>
+        <strong>调优结果 · {optResult.metric === "kill_probability" ? "击杀率" : "区间 DPS"}</strong>
+        <span>
+          {optResult.metric === "kill_probability"
+            ? `${((optResult.result.best?.score ?? 0) * 100).toFixed(1)}%`
+            : Math.round(optResult.result.best?.score ?? 0).toLocaleString()}
+          {optResult.result.delta != null && <em>（{optResult.result.delta >= 0 ? "+" : ""}
+            {optResult.metric === "kill_probability"
+              ? `${(optResult.result.delta * 100).toFixed(2)} 个百分点`
+              : Math.round(optResult.result.delta).toLocaleString()}）</em>}
+        </span>
+        <span>
+          {optResult.result.complete ? "已遍历全部组合"
+            : optResult.result.stop_reason === "budget_exhausted" ? "预算内最优"
+            : optResult.result.stop_reason === "cancelled" ? "已取消" : optResult.result.stop_reason}
+          {" · "}评估 {optResult.result.progress.evaluated} / {optResult.result.progress.combinations}
+        </span>
+      </div>
+      {optResult.result.best && <div className={styles.optResultSlots}>
+        {GEAR_SLOTS.map((slot) => {
+          const best = optResult.result.best!.composed.loadout;
+          const choice = best.choices.find((c) => c.slot === slot);
+          const template = choice
+            ? catalog.templates.find((t) => t.school === (choice.school ?? best.school) && t.choice.slot === slot && choiceKey(t.choice) === choiceKey(choice))
+            : undefined;
+          const enchantId = best.enchants?.[slot];
+          const enchant = enchantId ? catalog.enchants?.find((e) => e.slot === slot && e.id === enchantId) : undefined;
+          const wucai = slot === "wuqi" && best.wucai ? catalog.wucai?.find((w) => w.id === best.wucai) : undefined;
+          const detail = [
+            template ? `${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "—",
+            enchant ? `附魔：${enchant.name}` : "",
+            wucai ? wucai.name : "",
+          ].filter(Boolean).join(" · ");
+          return <span key={slot} title={`${slotNames[slot]}：${detail}`}>
+            <b>{slotNames[slot]}</b>
+            {detail}
+          </span>;
+        })}
+      </div>}
+      {optResult.result.warnings.length > 0 && <ul className={styles.optResultWarnings}>
+        {optResult.result.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+      </ul>}
+    </div>}
     {stale && <div role="alert" className={styles.notice}>保存的配装与当前模板版本不一致。<button onClick={onReset}>按当前模板重置</button></div>}
     <div className={styles.base}>
       <label>属性换算规则 <select aria-label="属性换算规则" value={loadout.attribute_rules ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, attribute_rules: event.target.value || null })}>
@@ -42,19 +108,39 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
     </div>
     <div className={styles.cards}>
       {GEAR_SLOTS.map((slot) => {
-        const candidates = catalog.templates.filter((t) => t.school === loadout.school && t.choice.slot === slot);
+        // 跨门派装备（如冰心护手）也可以在任何一个门派下选择，只是不计套装。
+        const candidates = catalog.templates.filter((t) => (t.school === loadout.school || t.cross_school) && t.choice.slot === slot);
         const selected = loadout.choices.find((c) => c.slot === slot);
-        const template = candidates.find((t) => selected && choiceKey(t.choice) === choiceKey(selected));
+        const template = candidates.find((t) => selected && t.school === (selected.school ?? loadout.school) && choiceKey(t.choice) === choiceKey(selected));
+        const sockets = template?.sockets ?? [];
+        const enchantOptions = (catalog.enchants ?? []).filter((e) => e.slot === slot);
+        const enchantId = loadout.enchants?.[slot] ?? "";
         return <article className={styles.card} key={slot} aria-label={slotNames[slot]}>
           <h3>{slotNames[slot]}</h3>
-          <strong>{template ? `${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "模板不可用"}</strong>
+          <strong>{template ? `${template.school === loadout.school ? "" : `${schoolName(template.school)} · `}${sourceNames[template.choice.source]} · ${greenNames[template.green]}` : "模板不可用"}</strong>
           <div className={styles.choices}>
-            {candidates.map((t) => <button key={choiceKey(t.choice)} disabled={stale} aria-pressed={!!selected && choiceKey(t.choice) === choiceKey(selected)} onClick={() => change(t.choice)}>
-              {sourceNames[t.choice.source]} · {t.choice.tier === "base" ? "基础" : "升级"}{t.choice.variant > 0 ? ` · 属性套${t.choice.variant}` : ""}
+            {candidates.map((t) => <button key={`${t.school}:${choiceKey(t.choice)}`} disabled={stale} aria-pressed={!!selected && choiceKey(t.choice) === choiceKey(selected) && (selected.school ?? loadout.school) === t.school}
+              onClick={() => change({ ...t.choice, school: t.school === loadout.school ? null : t.school })}
+              title={t.school === loadout.school ? undefined : `跨门派装备：${schoolName(t.school)}，可穿戴但不计本门派套装`}>
+              {t.school === loadout.school ? "" : `${schoolName(t.school)} · `}{sourceNames[t.choice.source]} · {t.choice.tier === "base" ? "基础" : "升级"}{t.choice.variant > 0 ? ` · 属性套${t.choice.variant}` : ""}
             </button>)}
           </div>
           {template && <>
             <p>{Object.entries(template.stats).filter(([, n]) => n > 0).slice(0, 3).map(([k, n]) => `${statNames[k as keyof typeof statNames]} ${n}`).join(" · ")}</p>
+            {slot === "wuqi" && (catalog.wucai ?? []).length > 0 && <label className={styles.enchant}>五彩石 <select aria-label="武器五彩石" value={loadout.wucai ?? ""} disabled={stale} onChange={(event) => onChange({ ...loadout, wucai: event.target.value || undefined })}>
+              <option value="">不插五彩石</option>
+              {(catalog.wucai ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select></label>}
+                        {sockets.length > 0 && <p>镶嵌（固定）：{sockets.map((st) => Object.entries(st).filter(([, n]) => n > 0).map(([k, n]) => `${statNames[k as keyof typeof statNames]} +${n}`).join("、")).join("；")}</p>}
+            {enchantOptions.length > 0 && <label className={styles.enchant}>附魔 <select aria-label={`${slotNames[slot]}附魔`} value={enchantId} disabled={stale} onChange={(event) => {
+              const value = event.target.value;
+              const next = { ...(loadout.enchants ?? {}) };
+              if (value) next[slot] = value; else delete next[slot];
+              onChange({ ...loadout, enchants: next });
+            }}>
+              <option value="">无</option>
+              {enchantOptions.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select></label>}
             <details><summary>属性详情{template.zhuangfen != null ? ` · 参考装分 ${template.zhuangfen}` : ""}</summary>
               <dl>{Object.entries(template.stats).map(([k, n]) => <div key={k}><dt>{statNames[k as keyof typeof statNames]}</dt><dd>{n}</dd></div>)}</dl>
             </details>

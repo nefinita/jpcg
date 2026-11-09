@@ -36,3 +36,50 @@ pub async fn import_gear(toml: String) -> Result<Composition, String> {
         .await
         .map_err(|e| e.to_string())?
 }
+#[cfg(feature = "static")]
+#[tauri::command]
+pub async fn optimize_gear(
+    app: tauri::AppHandle,
+    request: jpcg_gear::OptimizeRequest,
+) -> Result<jpcg_gear::OptimizeResult, String> {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    use tauri::Emitter;
+    let progress = Arc::new(jpcg_gear::OptimizeProgress::new());
+    let monitor = {
+        let progress = Arc::clone(&progress);
+        let app = app.clone();
+        std::thread::spawn(move || {
+            let mut last = u64::MAX;
+            while !progress.done.load(Ordering::Relaxed) {
+                let pct = progress.percent();
+                if pct != last {
+                    last = pct;
+                    let _ = app.emit("gear-optimize-progress", pct);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            let _ = app.emit("gear-optimize-progress", 100u64);
+        })
+    };
+    let p = Arc::clone(&progress);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let catalog = jpcg_gear::host::catalog()?;
+        jpcg_gear::optimize_parallel(&catalog, &request, &p)
+    })
+    .await
+    .map_err(|e| e.to_string());
+    progress.done.store(true, Ordering::Relaxed);
+    let _ = monitor.join();
+    result?
+}
+
+#[cfg(feature = "dynamic")]
+#[tauri::command]
+pub async fn optimize_gear(
+    request: jpcg_gear::OptimizeRequest,
+) -> Result<jpcg_gear::OptimizeResult, String> {
+    tauri::async_runtime::spawn_blocking(move || call("optimize", &request))
+        .await
+        .map_err(|e| e.to_string())?
+}

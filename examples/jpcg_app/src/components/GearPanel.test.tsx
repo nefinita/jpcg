@@ -17,7 +17,7 @@ const onChange = vi.fn();
 async function render(loadout: GearLoadout, composition?: GearComposition) {
   onChange.mockReset();
   await act(async () => root.render(<GearPanel catalog={fixture.catalog} loadout={loadout} composition={composition}
-    onChange={onChange} onReset={vi.fn()} onExport={vi.fn()} onImport={async () => {}} pending={false} />));
+    onChange={onChange} onReset={vi.fn()} onExport={vi.fn()} onImport={async () => {}} onOptimize={vi.fn()} optimizing={false} pending={false} />));
 }
 function statInput(name: string) {
   return [...host.querySelectorAll("label")].find((label) => label.textContent === name)!.querySelector("input")!;
@@ -79,7 +79,7 @@ it("未知已保存规则保留以供修正，不自动迁移或声称已核对"
   await render(loadout);
   expect(host.querySelector(`option[value="${PROFESSION_ATTRIBUTE_RULES}"]`)).not.toBeNull();
   await render({ ...loadout, attribute_rules: "future-rules" });
-  expect(host.querySelector<HTMLSelectElement>("select")!.value).toBe("future-rules");
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!.value).toBe("future-rules");
   expect(host.textContent).toContain("当前范围不支持");
   expect(onChange).not.toHaveBeenCalled();
   expect(host.textContent).not.toContain("参考规则已核对来源");
@@ -105,9 +105,9 @@ it.each([
 it.each(["jx3-130-mowen-20260814", "jx3-130-aoxue-20260814", "jx3-130-fenshan-20260814", "jx3-130-huajian-20260814"])("历史规则 %s 保留原标记并要求显式重新选择", async (rule) => {
   const loadout = { ...fixture.cases[0].composed.loadout, school: "10021", value_set: "experience-140" };
   await render(loadout);
-  expect(host.querySelector<HTMLSelectElement>("select")!.options).toHaveLength(2);
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!.options).toHaveLength(2);
   await render({ ...loadout, attribute_rules: rule });
-  expect(host.querySelector<HTMLSelectElement>("select")!.value).toBe(rule);
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="属性换算规则"]')!.value).toBe(rule);
   expect(host.textContent).toContain("已保存规则已不受支持");
   expect(host.textContent).toContain("不会自动沿用历史系数");
   expect(onChange).not.toHaveBeenCalled();
@@ -138,4 +138,19 @@ it("已填写五维后切回旧模式仍可清零，不会困在禁用输入框�
   expect(current.base.gengu).toBe(0);
   expect(current.base.qixue_additional).toBe(0);
   expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("跨门派同键装备显示所选门派的属性和镶嵌", async () => {
+  const loadout = structuredClone(fixture.cases[0].composed.loadout);
+  const selected = loadout.choices[0];
+  const own = fixture.catalog.templates.find((t) => t.school === loadout.school && t.choice.slot === selected.slot && t.choice.source === selected.source && t.choice.tier === selected.tier && t.choice.variant === selected.variant)!;
+  expect(own).toBeDefined();
+  selected.school = "bingxin";
+  const foreign = { ...own, school: "bingxin", cross_school: true, stats: { ...own.stats, pofang: 98765 }, sockets: [{ ...own.stats, pofang: 54321 }] };
+  await act(async () => root.render(<GearPanel catalog={{ ...fixture.catalog, templates: [...fixture.catalog.templates, foreign] }} loadout={loadout}
+    onChange={onChange} onReset={vi.fn()} onExport={vi.fn()} onImport={async () => {}} onOptimize={vi.fn()} optimizing={false} pending={false} />));
+  const card = [...host.querySelectorAll("article")].find((a) => a.querySelector('button[aria-pressed="true"]')?.getAttribute("title")?.includes("跨门派"))!;
+  expect(card).toBeDefined();
+  expect(card.textContent).toContain("98765");
+  expect(card.textContent).toContain("54321");
 });

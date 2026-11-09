@@ -1,516 +1,419 @@
-[xinfa]
-xinfa_name = "莫问"
-xinfa_nom = "根骨"
-atk_up = 1.96
-pofang_up = 2
-huixin_up = 0
+# ============================================================================
+# 莫问（50 级）技能数据 —— 由 data/skill-shots/mowen-final.json 生成
+# 倍率 = 攻击加成 / 攻击力（连续值，不以 160 截断）；160 口径只用于展示
+# 技能 id/sub_id 与基础伤害均来自 tooltip 实测；时序见 data/combat/mowen.toml
+# ============================================================================
 
 [version]
-level = 130
-season = 3
-modified = 20260814
+level = 50
+modified = 20261106
+note = "由 mowen-final.json 生成：ratio = 攻击加成 / 8438"
+
+[xinfa]
+xinfa_nom = "根骨"
+xinfa_name = "莫问"
+atk_up = 0.72
+pofang_up = 0.0
+huixin_up = 0.28
+
+[attributes]
+id = "jx3-50-mowen-20261106"
+level = 50
+value_set = "live-50"
+source = "https://www.jx3box.com/bps/109665 + https://www.jx3box.com/bps/109685"
+main_stat = "gengu"
+damage_kind = "lunar"
+qixue_multiplier = { numerator = 1, denominator = 1 }
+
+[[attributes.conversions]]
+from = "gengu"
+to = "gongji_extra"
+numerator = 72
+denominator = 100
+
+[[attributes.conversions]]
+from = "gengu"
+to = "huixin"
+numerator = 28
+denominator = 100
+
+[[attributes.conversions]]
+from = "tizhi"
+to = "qixue_base"
+numerator = 10
+denominator = 1
+
+[[attributes.constants]]
+to = "gongji_base"
+value = 2282
+
+[[attributes.constants]]
+to = "huixin"
+value = 308
+
+[[attributes.constants]]
+to = "gongji_base"
+value = 3
+
+[[attributes.constants]]
+to = "pofang"
+value = 1
+
+[[attributes.constants]]
+to = "qixue_base"
+value = 3956
+[[skill]]
+skill_name = "宫"
+skill_id = 14064
+sub_id = 14474
+base_damage1 = 80
+base_damage2 = 90
+atk_xishu = 0.321759
 
 [[skill]]
-skill_name = "五音六律"           #名字
-skill_id = 10447            #技能ID（数据源池内 id）
-sub_id = 14063              #子ID
-atk_xishu = 0.1        #伤害系数
+skill_name = "商"
+skill_id = 14065
+sub_id = 14311
+base_damage1 = 95
+base_damage2 = 100
+atk_xishu = 0.302678
 
 [[skill]]
-skill_name = "宫"           #名字
-skill_id = 14064            #技能ID（数据源池内 id）
-sub_id = 14474              #子ID
-base_damage1 = 160          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.609375        #伤害系数
+skill_name = "徵"
+skill_id = 14067
+sub_id = 14227
+base_damage1 = 84
+base_damage2 = 92
+atk_xishu = 0.219602
 
 [[skill]]
-skill_name = "商"           #名字
-skill_id = 14065            #技能ID（数据源池内 id）
-sub_id = 14311              #子ID
-base_damage1 = 14          #基本伤害
-base_damage2 = 19          #基本伤害2
-atk_xishu = 2.4479167        #伤害系数
+skill_name = "羽"
+skill_id = 14068
+sub_id = 14100
+base_damage1 = 156
+base_damage2 = 175
+atk_xishu = 0.321996
 
 [[skill]]
-skill_name = "角"           #名字
-skill_id = 14066            #技能ID（数据源池内 id）
-sub_id = 14312              #子ID
-base_damage1 = 14          #基本伤害
-base_damage2 = 19          #基本伤害2
-atk_xishu = 2.4479167        #伤害系数
+skill_name = "角"
+skill_id = 14066
+sub_id = 14312
+base_damage1 = 95
+base_damage2 = 100
+atk_xishu = 0.302678
 
 [[skill]]
-skill_name = "徵"           #名字
-skill_id = 14067            #技能ID（数据源池内 id）
-sub_id = 14227              #子ID
-base_damage1 = 190          #基本伤害
-base_damage2 = 210          #基本伤害2
-atk_xishu = 1.7760416        #伤害系数
+skill_name = "剑·宫"
+skill_id = 14449
+sub_id = 18656
+base_damage1 = 170
+base_damage2 = 182
+atk_xishu = 0.459232
 
 [[skill]]
-skill_name = "羽"           #名字
-skill_id = 14068            #技能ID（数据源池内 id）
-sub_id = 14100              #子ID
-base_damage1 = 143          #基本伤害
-base_damage2 = 156          #基本伤害2
-atk_xishu = 2.6041667        #伤害系数
+skill_name = "剑·商"
+skill_id = 25225
+sub_id = 25225
+base_damage1 = 480
+base_damage2 = 500
+atk_xishu = 1.004029
 
 [[skill]]
-skill_name = "阳春白雪(lv1)"           #名字
-skill_id = 14070            #技能ID（数据源池内 id）
-sub_id = 14494              #子ID
-base_damage1 = 14          #基本伤害
-base_damage2 = 17          #基本伤害2
-atk_xishu = 1.5364584        #伤害系数
+skill_name = "剑·徵"
+skill_id = 14451
+sub_id = 0
+base_damage1 = 156
+base_damage2 = 162
+atk_xishu = 0.390258
 
 [[skill]]
-skill_name = "阳春白雪·<50%血量"           #名字
-skill_id = 14070            #技能ID（数据源池内 id）
-sub_id = 30762              #子ID
-base_damage1 = 14          #基本伤害
-base_damage2 = 17          #基本伤害2
-atk_xishu = 1.6927084        #伤害系数
+skill_name = "剑·羽"
+skill_id = 14452
+sub_id = 14455
+base_damage1 = 248
+base_damage2 = 256
+atk_xishu = 0.633088
 
 [[skill]]
-skill_name = "宫"           #名字
-skill_id = 14082            #技能ID（数据源池内 id）
-sub_id = 15076              #子ID
-base_damage1 = 160          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 0.31770834        #伤害系数
+skill_name = "剑·角"
+skill_id = 40291
+sub_id = 40293
+base_damage1 = 260
+base_damage2 = 270
+atk_xishu = 0.425101
 
 [[skill]]
-skill_name = "冲秋冥"           #名字
-skill_id = 14093            #技能ID（数据源池内 id）
-sub_id = 41871              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 4.4270835        #伤害系数
+skill_name = "高山流水"
+skill_id = 14069
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "相依·1段"           #名字
-skill_id = 14163            #技能ID（数据源池内 id）
-sub_id = 43043              #子ID
-base_damage1 = 4600          #基本伤害
-base_damage2 = 4738          #基本伤害2
-atk_xishu = 8.838542        #伤害系数
-has_critical_strike = true   #无质（伤害固定=期望 Q）
+skill_name = "高山流水曲"
+skill_id = 14229
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "相依·2段"           #名字
-skill_id = 14163            #技能ID（数据源池内 id）
-sub_id = 43043              #子ID
-base_damage1 = 5520          #基本伤害
-base_damage2 = 5658          #基本伤害2
-atk_xishu = 10.916667        #伤害系数
-has_critical_strike = true   #无质（伤害固定=期望 Q）
+skill_name = "阳春白雪"
+skill_id = 14070
+sub_id = 14494
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "变宫"           #名字
-skill_id = 14298            #技能ID（数据源池内 id）
-sub_id = 18860              #子ID
-base_damage1 = 160          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.609375        #伤害系数
+skill_name = "阳春白雪曲"
+skill_id = 14230
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "变徵"           #名字
-skill_id = 14299            #技能ID（数据源池内 id）
-sub_id = 18859              #子ID
-atk_xishu = 1.7760416        #伤害系数
+skill_name = "平沙落雁"
+skill_id = 14072
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "剑·宫"           #名字
-skill_id = 14449            #技能ID（数据源池内 id）
-sub_id = 18656              #子ID
-base_damage1 = 330          #基本伤害
-base_damage2 = 350          #基本伤害2
-atk_xishu = 3.7135417        #伤害系数
+skill_name = "平沙落雁曲"
+skill_id = 14232
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "剑·羽(lv25)"           #名字
-skill_id = 14452            #技能ID（数据源池内 id）
-sub_id = 14455              #子ID
-base_damage1 = 110          #基本伤害
-base_damage2 = 120          #基本伤害2
-atk_xishu = 5.1197915        #伤害系数
+skill_name = "九衢闻曲"
+skill_id = 45730
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "剑·羽·影子"           #名字
-skill_id = 14452            #技能ID（数据源池内 id）
-sub_id = 18663              #子ID
-base_damage1 = 127          #基本伤害
-base_damage2 = 133          #基本伤害2
-atk_xishu = 1.7291666        #伤害系数
+skill_name = "青霄飞羽"
+skill_id = 14076
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "照雪"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 41793              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.0729167        #伤害系数
+skill_name = "云生结海"
+skill_id = 14075
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·1层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 0.45833334        #伤害系数
+skill_name = "江逐月天"
+skill_id = 14074
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·2层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 0.9166667        #伤害系数
+skill_name = "迴梦逐光"
+skill_id = 14154
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·3层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 1.375        #伤害系数
+skill_name = "笑傲光阴"
+skill_id = 14073
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·4层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 1.8333334        #伤害系数
+skill_name = "疏影横斜"
+skill_id = 14082
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·5层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.2916667        #伤害系数
+skill_name = "清绝影歌"
+skill_id = 14083
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·6层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.75        #伤害系数
+skill_name = "孤影化双"
+skill_id = 14081
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·7层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 3.2083333        #伤害系数
+skill_name = "清绝影歌·回"
+skill_id = 14522
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "入月·8层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 3.6666667        #伤害系数
+skill_name = "变宫"
+skill_id = 14298
+sub_id = 18860
+base_damage1 = 80
+base_damage2 = 90
+atk_xishu = 0.321759
 
 [[skill]]
-skill_name = "入月·9层"           #名字
-skill_id = 14870            #技能ID（数据源池内 id）
-sub_id = 44386              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 4.125        #伤害系数
+skill_name = "变徵"
+skill_id = 14299
+sub_id = 18859
+base_damage1 = 84
+base_damage2 = 92
+atk_xishu = 0.219602
 
 [[skill]]
-skill_name = "剑·商"           #名字
-skill_id = 25225            #技能ID（数据源池内 id）
-sub_id = 25225              #子ID
-base_damage1 = 385          #基本伤害
-base_damage2 = 405          #基本伤害2
-atk_xishu = 8.119792        #伤害系数
+skill_name = "不愧君"
+skill_id = 29071
+sub_id = 29077
+base_damage1 = 850
+base_damage2 = 875
+atk_xishu = 1.35660109
 
 [[skill]]
-skill_name = "不愧君(lv1)"           #名字
-skill_id = 29071            #技能ID（数据源池内 id）
-sub_id = 29077              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 125          #基本伤害2
-atk_xishu = 8.854167        #伤害系数
-has_critical_strike = true   #无质（伤害固定=期望 Q）
+skill_name = "太常律"
+skill_id = 30564
+sub_id = 0
+base_damage1 = 180
+base_damage2 = 195
+atk_xishu = 0.65442048
 
 [[skill]]
-skill_name = "不愧君·>70%血量"           #名字
-skill_id = 29071            #技能ID（数据源池内 id）
-sub_id = 29077              #子ID
-base_damage1 = 125          #基本伤害
-base_damage2 = 150          #基本伤害2
-atk_xishu = 17.708334        #伤害系数
-has_critical_strike = true   #无质（伤害固定=期望 Q）
+skill_name = "断水流"
+skill_id = 42529
+sub_id = 41903
+base_damage1 = 4099
+base_damage2 = 4099
+atk_xishu = 0
 
 [[skill]]
-skill_name = "音彻"           #名字
-skill_id = 30589            #技能ID（数据源池内 id）
-sub_id = 40330              #子ID
-base_damage1 = 107          #基本伤害
-base_damage2 = 134          #基本伤害2
-atk_xishu = 2.0625        #伤害系数
+skill_name = "斩长鲸"
+skill_id = 36489
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 
 [[skill]]
-skill_name = "太常清乐·清角"           #名字
-skill_id = 30797            #技能ID（数据源池内 id）
-sub_id = 30833              #子ID
-base_damage1 = 330          #基本伤害
-base_damage2 = 350          #基本伤害2
-atk_xishu = 7.03125        #伤害系数
+skill_name = "冲秋冥"
+skill_id = 14093
+sub_id = 41871
+base_damage1 = 463
+base_damage2 = 463
+atk_xishu = 0
 
 [[skill]]
-skill_name = "破·斩长鲸"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 32738              #子ID
-atk_xishu = 8.534        #伤害系数
+skill_name = "飞鸾动羽"
+skill_id = 40325
+sub_id = 40334
+base_damage1 = 999
+base_damage2 = 999
+atk_xishu = 0
 
 [[skill]]
-skill_name = "斩长鲸"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 34676              #子ID
-base_damage1 = 40          #基本伤害
-base_damage2 = 46          #基本伤害2
-atk_xishu = 52.078125        #伤害系数
-has_critical_strike = true   #无质（伤害固定=期望 Q）
+skill_name = "音彻"
+skill_id = 30589
+sub_id = 40330
+base_damage1 = 2159
+base_damage2 = 2159
+atk_xishu = 0
 
 [[skill]]
-skill_name = "青莲剑·宫"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 42007              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 8.958333        #伤害系数
+skill_name = "净植"
+skill_id = 41796
+sub_id = 41791
+base_damage1 = 1330
+base_damage2 = 1330
+atk_xishu = 0
 
 [[skill]]
-skill_name = "青莲剑·商"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 42008              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 7.8125        #伤害系数
+skill_name = "鹿鸣"
+skill_id = 41830
+sub_id = 41831
+base_damage1 = 5
+base_damage2 = 6
+atk_xishu = 1.08532828
 
 [[skill]]
-skill_name = "青莲剑·角"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 42009              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 8.020833        #伤害系数
+skill_name = "相依·1段"
+skill_id = 14163
+sub_id = 43043
+base_damage1 = 459
+base_damage2 = 472
+atk_xishu = 0.58011377
 
 [[skill]]
-skill_name = "青莲剑·羽"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 42011              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.7083333        #伤害系数
+skill_name = "相依·2段"
+skill_id = 14163
+sub_id = 43043
+base_damage1 = 552
+base_damage2 = 565
+atk_xishu = 0.83846883
 
 [[skill]]
-skill_name = "青莲歌·和鸣"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 42303              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 0.26041666        #伤害系数
+skill_name = "入月·1层"
+skill_id = 14870
+sub_id = 44386
+base_damage1 = 360
+base_damage2 = 360
+atk_xishu = 0
 
 [[skill]]
-skill_name = "破·凌冬"           #名字
-skill_id = 37287            #技能ID（数据源池内 id）
-sub_id = 32738              #子ID
-atk_xishu = 8.534        #伤害系数
-
+skill_name = "入月·9层"
+skill_id = 14870
+sub_id = 44386
+base_damage1 = 3238
+base_damage2 = 3238
+atk_xishu = 0
 [[skill]]
-skill_name = "剑·角·蓄力0帧1段"           #名字
-skill_id = 40291            #技能ID（数据源池内 id）
-sub_id = 40293              #子ID
-base_damage1 = 60          #基本伤害
-base_damage2 = 70          #基本伤害2
-atk_xishu = 3.4375        #伤害系数
-
+skill_name = "技能14065:0"
+skill_id = 14065
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 [[skill]]
-skill_name = "剑·角·蓄力16帧2段"           #名字
-skill_id = 40291            #技能ID（数据源池内 id）
-sub_id = 40293              #子ID
-base_damage1 = 75          #基本伤害
-base_damage2 = 85          #基本伤害2
-atk_xishu = 5.15625        #伤害系数
-
+skill_name = "技能14066:0"
+skill_id = 14066
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 [[skill]]
-skill_name = "剑·角·蓄力32帧3段"           #名字
-skill_id = 40291            #技能ID（数据源池内 id）
-sub_id = 40293              #子ID
-base_damage1 = 90          #基本伤害
-base_damage2 = 110          #基本伤害2
-atk_xishu = 6.875        #伤害系数
-
+skill_name = "技能14067:0"
+skill_id = 14067
+sub_id = 0
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
 [[skill]]
-skill_name = "剑·徵"           #名字
-skill_id = 40314            #技能ID（数据源池内 id）
-sub_id = 40285              #子ID
-base_damage1 = 330          #基本伤害
-base_damage2 = 350          #基本伤害2
-atk_xishu = 3.15625        #伤害系数
-
-[[skill]]
-skill_name = "飞鸾动羽"           #名字
-skill_id = 40325            #技能ID（数据源池内 id）
-sub_id = 40334              #子ID
-base_damage1 = 400          #基本伤害
-base_damage2 = 415          #基本伤害2
-atk_xishu = 3.28125        #伤害系数
-
-[[skill]]
-skill_name = "破·崭芒"           #名字
-skill_id = 40743            #技能ID（数据源池内 id）
-sub_id = 32738              #子ID
-atk_xishu = 8.534        #伤害系数
-
-[[skill]]
-skill_name = "崭芒"           #名字
-skill_id = 40743            #技能ID（数据源池内 id）
-sub_id = 40811              #子ID
-base_damage1 = 40          #基本伤害
-base_damage2 = 42          #基本伤害2
-atk_xishu = 12.5        #伤害系数
-
-[[skill]]
-skill_name = "净植"           #名字
-skill_id = 41796            #技能ID（数据源池内 id）
-sub_id = 41791              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 1.1770834        #伤害系数
-
-[[skill]]
-skill_name = "放鹿"           #名字
-skill_id = 41830            #技能ID（数据源池内 id）
-sub_id = 41831              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 8.75        #伤害系数
-
-[[skill]]
-skill_name = "鹿鸣"           #名字
-skill_id = 41830            #技能ID（数据源池内 id）
-sub_id = 41831              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 2.34375        #伤害系数
-
-[[skill]]
-skill_name = "神兵·放鹿"           #名字
-skill_id = 41830            #技能ID（数据源池内 id）
-sub_id = 41831              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 5.5104165        #伤害系数
-
-[[skill]]
-skill_name = "破·青崖间"           #名字
-skill_id = 41838            #技能ID（数据源池内 id）
-sub_id = 32738              #子ID
-atk_xishu = 8.534        #伤害系数
-
-[[skill]]
-skill_name = "青崖间"           #名字
-skill_id = 41838            #技能ID（数据源池内 id）
-sub_id = 41831              #子ID
-base_damage1 = 100          #基本伤害
-base_damage2 = 200          #基本伤害2
-atk_xishu = 5.46875        #伤害系数
-
-[[skill]]
-skill_name = "断水流"           #名字
-skill_id = 42529            #技能ID（数据源池内 id）
-sub_id = 41903              #子ID
-base_damage1 = 385          #基本伤害
-base_damage2 = 405          #基本伤害2
-atk_xishu = 3.9166667        #伤害系数
-
-[[skill]]
-skill_name = "商（dot）"           #名字
-skill_id = 14065            #技能ID（数据源池内 id）
-sub_id = 9357              #子ID
-base_damage1 = 58          #基本伤害
-base_damage2 = 58          #基本伤害2
-atk_xishu = 0.68359375        #伤害系数
-dot_flag = 1                #dot伤害标签
-dot_interval = 3          #每跳间隔（秒，16帧=1秒）
-dot_duration = 18          #持续时长（秒，总跳数×间隔）
-
-[[skill]]
-skill_name = "角（dot）"           #名字
-skill_id = 14067            #技能ID（数据源池内 id）
-sub_id = 9361              #子ID
-base_damage1 = 58          #基本伤害
-base_damage2 = 58          #基本伤害2
-atk_xishu = 0.66536456        #伤害系数
-dot_flag = 1                #dot伤害标签
-dot_interval = 3          #每跳间隔（秒，16帧=1秒）
-dot_duration = 18          #持续时长（秒，总跳数×间隔）
-
-[[skill]]
-skill_name = "商（dot）"           #名字
-skill_id = 14285            #技能ID（数据源池内 id）
-sub_id = 9360              #子ID
-base_damage1 = 58          #基本伤害
-base_damage2 = 58          #基本伤害2
-atk_xishu = 0.6840278        #伤害系数
-dot_flag = 1                #dot伤害标签
-dot_interval = 2          #每跳间隔（秒，16帧=1秒）
-dot_duration = 18          #持续时长（秒，总跳数×间隔）
-dot_up = 0.12                 #每跳递增比例（等比）
-
-[[skill]]
-skill_name = "角（dot）"           #名字
-skill_id = 14285            #技能ID（数据源池内 id）
-sub_id = 9364              #子ID
-base_damage1 = 58          #基本伤害
-base_damage2 = 58          #基本伤害2
-atk_xishu = 0.6657986        #伤害系数
-dot_flag = 1                #dot伤害标签
-dot_interval = 2          #每跳间隔（秒，16帧=1秒）
-dot_duration = 18          #持续时长（秒，总跳数×间隔）
-dot_up = 0.12                 #每跳递增比例（等比）
-
-[[skill]]
-skill_name = "青莲剑·徵（dot）"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 31544              #子ID
-base_damage1 = 26          #基本伤害
-base_damage2 = 26          #基本伤害2
-atk_xishu = 0.7682292        #伤害系数
-dot_flag = 1                #dot伤害标签
-dot_interval = 0.25          #每跳间隔（秒，16帧=1秒）
-dot_duration = 2          #持续时长（秒，总跳数×间隔）
-
-[[skill]]
-skill_name = "青莲剑·角（dot）"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 31545              #子ID
-base_damage1 = 26          #基本伤害
-base_damage2 = 126          #基本伤害2
-atk_xishu = 2.0052083        #伤害系数
-dot_flag = 1                #dot伤害标签
-dot_interval = 1          #每跳间隔（秒，16帧=1秒）
-dot_duration = 4          #持续时长（秒，总跳数×间隔）
-
-[[skill]]
-skill_name = "青莲剑·商（dot）"           #名字
-skill_id = 34344            #技能ID（数据源池内 id）
-sub_id = 31546              #子ID
-base_damage1 = 26          #基本伤害
-base_damage2 = 126          #基本伤害2
-atk_xishu = 7.8125        #伤害系数
-dot_flag = 1                #dot伤害标签
-dot_interval = 1.5          #每跳间隔（秒，16帧=1秒）
-dot_duration = 1.5          #持续时长（秒，总跳数×间隔）
-
+skill_name = "技能14082:15076"
+skill_id = 14082
+sub_id = 15076
+base_damage1 = 0
+base_damage2 = 0
+atk_xishu = 0
