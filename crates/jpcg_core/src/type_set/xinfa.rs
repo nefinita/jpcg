@@ -9,9 +9,20 @@ pub struct XinfaConfig {
     pub atk_up: f32,
     pub pofang_up: f32,
     pub huixin_up: f32,
+    /// 门派基础公共 CD（秒；0/缺失 = 1.5；特殊门派 1.0，双形态门派按技能 `gcd_base` 再覆盖）
+    pub gcd_base: f32,
 }
 
 impl XinfaConfig {
+    /// 门派基础公共 CD（秒；未配置时默认 1.5）
+    pub fn gcd_base_secs(&self) -> f32 {
+        if self.gcd_base > 0.0 {
+            self.gcd_base
+        } else {
+            1.5
+        }
+    }
+
     pub fn new(
         profession: String,
         xinfa_name: String,
@@ -27,6 +38,7 @@ impl XinfaConfig {
             atk_up,
             pofang_up,
             huixin_up,
+            gcd_base: 0.0,
         }
     }
 }

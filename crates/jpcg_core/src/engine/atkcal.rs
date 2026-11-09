@@ -91,12 +91,18 @@ impl<'a> JpcgConfig<'a> {
         [0, atk, x, 0, 0]
     }
 
+    /// 无视化劲为百分比；零值保持原有截断与数值路径。
+    fn effective_huajin(&self) -> f32 {
+        self.hostilepile.guo_huajin_with(self.coeff) as f32
+            * (1.0 - self.skilltype.wushihuajin.min(100) as f32 / 100.0)
+    }
+
     fn g_cal(&self) -> [u32; 5] {
         let i = self.i_cal();
         let y = self.y_cal();
         let i_hit = i[2];
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(self.coeff);
+        let huajin = self.effective_huajin();
         let pvp = self.coeff.pvp_global_jianshang;
 
         // 游戏实测截断点（顺序与取整策略源自实际检测结果，勿改动逻辑）
@@ -108,7 +114,7 @@ impl<'a> JpcgConfig<'a> {
                 * (y as f32 / 1024.0),
         );
         // ② × 化劲减免 → 截断
-        x = truncate(x * (1.0 - huajin as f32 / 1024.0));
+        x = truncate(x * (1.0 - huajin / 1024.0));
         // ③ × 全局 PVP 减伤 × (1 - 目标减伤比) → 截断输出
         x = x * pvp * (1.0 - self.hostilepile.jianshang_bili as f32 / 100.0);
         let x = x as u32;
@@ -134,11 +140,11 @@ impl<'a> JpcgConfig<'a> {
     /// 目标已损失生命 = max_hp - 结算后当前血量（封顶 max_hp），× lost_hp_zhenshishanghai 系数。
     /// 语义 A（结算后）：current_hp_after 为本步伤害扣完后剩余血量。
     pub fn lost_hp_append(&self, max_hp: u32, current_hp_after: u32) -> f64 {
-        if self.skilltype.lost_hp_zhenshishanghai <= 0.0 {
-            return 0.0;
-        }
-        let lost = (max_hp as f64 - current_hp_after as f64).max(0.0);
-        lost * self.skilltype.lost_hp_zhenshishanghai as f64
+        lost_hp_append_damage(
+            self.skilltype.lost_hp_zhenshishanghai,
+            max_hp as f64,
+            current_hp_after as f64,
+        )
     }
 
     /// 期望通道 + 可选 hp：q_cal() 基础上结算追加真伤。
@@ -190,7 +196,9 @@ impl<'a> JpcgConfig<'a> {
     }
 
     /// 正向计算伤害 + 反向求导（链式法则）
-    /// 对 6 个玩家属性分别计算 ∂Q/∂attr，忽略中间 as u32 截断（连续近似）
+    /// 对 6 个玩家属性分别计算 ∂Q/∂attr，忽略中间 as u32 截断（连续近似）。
+    /// 已换算输入只对当前 DTO 求偏导：额外攻击/会心等视为固定，主属性偏导为 0。
+    /// 这不代表配装主属性收益；完整配装敏感度必须修改原属性并重新合成。
     pub fn q_cal_with_derivatives(&self) -> DamageResultWithDerivatives {
         // ---- forward：一次计算全程，复用各段中间结果，避免二次走链 ----
         let y = self.y_cal();
@@ -218,7 +226,7 @@ impl<'a> JpcgConfig<'a> {
 
         let shanghai_buff = 1.0 + self.buff.shanghai_pct / 100.0;
         let hit_up = self.skilltype.hit_up as f32 / 100.0;
-        let huajin = self.hostilepile.guo_huajin_with(self.coeff) as f32;
+        let huajin = self.effective_huajin();
         let pvp = self.coeff.pvp_global_jianshang;
         let jianshang_bili = self.hostilepile.jianshang_bili as f32 / 100.0;
 
@@ -254,7 +262,12 @@ impl<'a> JpcgConfig<'a> {
         let d_jichu_gongji = dq_di2 * self.skilltype.atk_xishu * db_d_jg;
 
         // 2. jichu_shuxing: dB/d(js) = atk_up * (1+buff%)
-        let db_d_js = self.xinfa.atk_up * (1.0 + self.buff.base_atk_pct / 100.0);
+        let db_d_js = if self.player.zhuanhua_gongji.is_some() {
+            // 固定面板快照的主属性不会再参与攻击换算；与正向路径保持一致。
+            0.0
+        } else {
+            self.xinfa.atk_up * (1.0 + self.buff.base_atk_pct / 100.0)
+        };
         let d_jichu_shuxing = dq_di2 * self.skilltype.atk_xishu * db_d_js;
 
         // 3. huixin_dengji: 仅影响会心率
@@ -415,6 +428,8 @@ mod golden_tests {
             pofang_dengji: 109160,
             wuqi_shanghai: 0,
             zuizhong_gongji: 0,
+            jiasu_dengji: 0,
+            zhuanhua_gongji: None,
         }
     }
 
@@ -439,6 +454,7 @@ mod golden_tests {
             atk_up: 1.96,
             pofang_up: 2.0,
             huixin_up: 0.0,
+            gcd_base: 0.0,
         }
     }
 
@@ -752,4 +768,58 @@ mod golden_tests {
             },
         );
     }
+}
+
+#[cfg(test)]
+mod converted_derivative_tests {
+    use super::*;
+
+    #[test]
+    fn frozen_converted_panel_derivatives_match_forward_path() {
+        let mut player = PlayerConfig {
+            jichu_gongji: 1000,
+            jichu_shuxing: 100,
+            zhuanhua_gongji: Some(200),
+            ..Default::default()
+        };
+        let hostile = HostilepileConfig::default();
+        let skill = Skilltype {
+            atk_xishu: 1.0,
+            ..Default::default()
+        };
+        let xinfa = XinfaConfig {
+            atk_up: 99.0,
+            ..Default::default()
+        };
+        let buff = BuffConfig {
+            base_atk_pct: 25.0,
+            ..Default::default()
+        };
+        let coeff = CoefficientConfig {
+            pvp_global_jianshang: 1.0,
+            ..Default::default()
+        };
+        let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
+        let derivative = calc.q_cal_with_derivatives();
+        assert_eq!(derivative.result.q_damage, calc.q_cal().q_damage);
+        assert_eq!(derivative.result.b, 1450);
+        // 既有零化劲目标仍有 102/1024 基础减伤，保留该数值口径。
+        assert_eq!(derivative.result.q_damage, 1305);
+        assert_eq!(derivative.derivatives.d_jichu_shuxing, 0.0);
+        assert_eq!(derivative.derivatives.d_jichu_gongji, 1.1254883);
+        player.jichu_shuxing += 4;
+        let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
+        assert_eq!(calc.q_cal().q_damage, 1305);
+        player.jichu_gongji += 4;
+        let calc = JpcgConfig::new_with_config(&player, &hostile, &skill, &xinfa, &buff, &coeff);
+        assert_eq!(calc.q_cal().q_damage, 1310);
+    }
+}
+
+/// 时间轴与连招共享追加真伤公式：本次直接伤害结算后按已损血量追加。
+pub fn lost_hp_append_damage(coefficient: f32, max_hp: f64, current_hp_after: f64) -> f64 {
+    if coefficient <= 0.0 {
+        return 0.0;
+    }
+    (max_hp - current_hp_after).clamp(0.0, max_hp) * coefficient as f64
 }

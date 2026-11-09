@@ -1,72 +1,31 @@
 use crate::commands::types::*;
 
 #[tauri::command]
-pub fn calculate_combo_cmd(
+pub fn save_combo_preset(
+    name: String,
     steps: Vec<ComboStepDTO>,
-    player: PlayerConfigDTO,
-    hostile: HostileConfigDTO,
-    xinfa: XinfaConfigDTO,
-    buff: BuffConfigDTO,
-    coefficient: CoefficientConfigDTO,
-    value_set: Option<String>,
-) -> Result<ComboResultDTO, String> {
-    calculate_combo_impl(steps, player, hostile, xinfa, buff, coefficient, value_set)
+    flags: Option<Vec<ComboFlagDTO>>,
+) -> Result<(), String> {
+    save_combo_preset_impl(name, steps, flags)
 }
 
 #[cfg(feature = "static")]
-fn calculate_combo_impl(
+fn save_combo_preset_impl(
+    name: String,
     steps: Vec<ComboStepDTO>,
-    player: PlayerConfigDTO,
-    hostile: HostileConfigDTO,
-    xinfa: XinfaConfigDTO,
-    buff: BuffConfigDTO,
-    coefficient: CoefficientConfigDTO,
-    value_set: Option<String>,
-) -> Result<ComboResultDTO, String> {
-    use jpcg_combo::engine::ComboConfig;
-    jpcg_combo::host::calculate_combo(
-        steps,
-        player,
-        hostile,
-        xinfa,
-        buff,
-        coefficient,
-        value_set,
-        ComboConfig::default(),
-    )
+    flags: Option<Vec<ComboFlagDTO>>,
+) -> Result<(), String> {
+    jpcg_combo::host::save_combo_preset_with_flags(name, steps, flags.unwrap_or_default())
 }
 
 #[cfg(feature = "dynamic")]
-fn calculate_combo_impl(
+fn save_combo_preset_impl(
+    name: String,
     steps: Vec<ComboStepDTO>,
-    player: PlayerConfigDTO,
-    hostile: HostileConfigDTO,
-    xinfa: XinfaConfigDTO,
-    buff: BuffConfigDTO,
-    coefficient: CoefficientConfigDTO,
-    value_set: Option<String>,
-) -> Result<ComboResultDTO, String> {
-    let req = serde_json::json!({
-        "steps": steps, "player": player, "hostile": hostile,
-        "xinfa": xinfa, "buff": buff, "coefficient": coefficient,
-        "value_set": value_set
-    });
-    crate::commands::ffi_bridge::call_combo("calculate_combo", &req)
-}
-
-#[tauri::command]
-pub fn save_combo_preset(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
-    save_combo_preset_impl(name, steps)
-}
-
-#[cfg(feature = "static")]
-fn save_combo_preset_impl(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
-    jpcg_combo::host::save_combo_preset(name, steps)
-}
-
-#[cfg(feature = "dynamic")]
-fn save_combo_preset_impl(name: String, steps: Vec<ComboStepDTO>) -> Result<(), String> {
-    let req = serde_json::json!({ "name": name, "steps": steps });
+    flags: Option<Vec<ComboFlagDTO>>,
+) -> Result<(), String> {
+    let req =
+        serde_json::json!({ "name": name, "steps": steps, "flags": flags.unwrap_or_default() });
     crate::commands::ffi_bridge::call_combo::<_, serde_json::Value>("save_combo_preset", &req)
         .map(|_| ())
 }
@@ -149,4 +108,39 @@ fn import_config_impl(toml_str: String) -> Result<(), String> {
     let req = serde_json::json!({ "toml_str": toml_str });
     crate::commands::ffi_bridge::call_combo::<_, serde_json::Value>("import_config", &req)
         .map(|_| ())
+}
+
+// ============ #92 时序引擎（时间轴模拟） ============
+
+/// 读取某门派的战斗时序 overlay + 技能池（已套 overlay）
+#[tauri::command]
+pub fn load_combat_bundle(profession: String) -> Result<CombatBundleDTO, String> {
+    load_combat_bundle_impl(profession)
+}
+
+#[cfg(feature = "static")]
+fn load_combat_bundle_impl(profession: String) -> Result<CombatBundleDTO, String> {
+    jpcg_combo::timeline_host::load_combat_bundle(profession)
+}
+
+#[cfg(feature = "dynamic")]
+fn load_combat_bundle_impl(profession: String) -> Result<CombatBundleDTO, String> {
+    let req = serde_json::json!({ "profession": profession });
+    crate::commands::ffi_bridge::call_combo("load_combat_with_skills", &req)
+}
+
+/// 时间轴模拟（窗口伤害 / DPS / 事件序列）
+#[tauri::command]
+pub fn calculate_timeline_cmd(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    calculate_timeline_impl(req)
+}
+
+#[cfg(feature = "static")]
+fn calculate_timeline_impl(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    jpcg_combo::timeline_host::calculate_timeline_from_store(req)
+}
+
+#[cfg(feature = "dynamic")]
+fn calculate_timeline_impl(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    crate::commands::ffi_bridge::call_combo("calculate_timeline", &req)
 }

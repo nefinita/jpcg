@@ -33,6 +33,16 @@ pub fn skill_dto_to_skilltype(s: &jpcg_api::SkillPoolItemDTO) -> Skilltype {
         zhenshishanghai: s.zhenshishanghai,
         has_critical_strike: s.has_critical_strike,
         lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
+        cast_time: s.cast_time,
+        gcd_kind: s.gcd_kind,
+        cooldown: s.cooldown,
+        charges: s.charges,
+        recharge: s.recharge,
+        cd_haste: s.cd_haste,
+        channel: s.channel,
+        buff_id: s.buff_id.clone(),
+        gcd_base: s.gcd_base,
+        gcd_group: s.gcd_group,
         ..Default::default()
     }
 }
@@ -58,6 +68,7 @@ impl From<ComboStepResult> for ComboStepResultDTO {
 impl From<ComboResult> for ComboResultDTO {
     fn from(r: ComboResult) -> Self {
         ComboResultDTO {
+            total_lost_hp_damage: r.steps.iter().map(|s| s.lost_hp_zhenshi_damage).sum(),
             total_expected_damage_wan: r.total_expected_damage_wan,
             final_kill_prob: r.final_kill_prob,
             kill_prob_curve: r.kill_prob_curve,

@@ -96,6 +96,11 @@ pub mod skill_editor {
         store::load_config(profession)
     }
 
+    /// 从本心法 TOML 严格读取显式属性规则，不使用历史规则或默认系数兜底。
+    pub fn load_attribute_rules(profession: &str) -> Result<jpcg_api::AttributeRules, String> {
+        store::load_attribute_rules(profession)
+    }
+
     pub fn save_skills(
         profession: &str,
         xinfa: XinfaConfig,
@@ -106,6 +111,7 @@ pub mod skill_editor {
             xinfa,
             skill: skills,
             version,
+            attributes: None, // 旧 Rust 编辑器入口由 store 保留现有规则。
         };
         store::save_skill_toml(profession, config)
     }
@@ -118,6 +124,8 @@ pub mod derivatives {
         player::PlayerConfig, skilltype::Skilltype, xinfa::XinfaConfig,
     };
 
+    /// 固定面板偏导；已换算输入的转换结果视为常量，不能用来估算配装主属性收益。
+    /// 装备敏感度应重新合成原属性后比较；host::calc::compute_derivatives 对此输入报错。
     pub fn compute_derivatives(
         player: &PlayerConfig,
         hostile: &HostilepileConfig,
@@ -156,4 +164,9 @@ pub mod calculate {
     ) -> Result<Vec<cal::CalculateResult>, Error> {
         cal::start_calculation_with_config(player, hostilepile, xinfa, buff, coeff)
     }
+}
+
+/// 与现有 data 通道同源的宿主数据路径（不暴露存储实现）。
+pub mod data_paths {
+    pub use crate::store::paths::gear_dir;
 }

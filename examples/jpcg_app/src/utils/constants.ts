@@ -84,6 +84,9 @@ export const HOSTILE_FIELDS = [
 
 export const STORAGE_KEYS = {
   config: "jpcg_user_config",
+  cockpit: "jpcg_cockpit",
+  comboDraft: "jpcg_combo_draft",
+  favorites: "jpcg_favorites",
   theme: "jpcg_theme",
   lastXinfa: "jpcg_last_xinfa",
   betaChannel: "jpcg_beta_channel",

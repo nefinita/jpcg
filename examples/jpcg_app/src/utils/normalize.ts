@@ -17,6 +17,8 @@ export function toCalculateRequest(f: FormData): CalculateRequest {
       huixin_xiaoguo: toNum(f.player.huixin_xiaoguo),
       pofang_dengji: toNum(f.player.pofang_dengji),
       wuqi_shanghai: toNum(f.player.wuqi_shanghai),
+      jiasu_dengji: toNum(f.player.jiasu_dengji),
+      ...(f.player.zhuanhua_gongji != null ? { zhuanhua_gongji: toNum(f.player.zhuanhua_gongji) } : {}),
     },
     hostile: {
       waigong_fangyu: toNum(f.hostile.waigong_fangyu),

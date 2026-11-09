@@ -102,6 +102,7 @@ impl From<SkillEditorItemDTO> for Skilltype {
             has_critical_strike: dto.has_critical_strike,
             effect_type: dto.effect_type,
             jihuoqixue: dto.jihuoqixue,
+            channel_ticks: 1,
             base_damage1: dto.base_damage1,
             base_damage2: dto.base_damage2,
             atk_xishu: dto.atk_xishu,
@@ -118,6 +119,17 @@ impl From<SkillEditorItemDTO> for Skilltype {
             dot_interval: dto.dot_interval,
             dot_duration: dto.dot_duration,
             dot_up: dto.dot_up,
+            // ---- #92 时序字段 ----
+            cast_time: dto.cast_time,
+            gcd_kind: dto.gcd_kind,
+            cooldown: dto.cooldown,
+            charges: dto.charges,
+            recharge: dto.recharge,
+            cd_haste: dto.cd_haste,
+            channel: dto.channel,
+            buff_id: dto.buff_id,
+            gcd_base: dto.gcd_base,
+            gcd_group: dto.gcd_group,
         }
     }
 }
@@ -153,6 +165,16 @@ impl From<Skilltype> for SkillEditorItemDTO {
             dot_interval: core.dot_interval,
             dot_duration: core.dot_duration,
             dot_up: core.dot_up,
+            cast_time: core.cast_time,
+            gcd_kind: core.gcd_kind,
+            cooldown: core.cooldown,
+            charges: core.charges,
+            recharge: core.recharge,
+            cd_haste: core.cd_haste,
+            channel: core.channel,
+            buff_id: core.buff_id,
+            gcd_base: core.gcd_base,
+            gcd_group: core.gcd_group,
         }
     }
 }
@@ -189,8 +211,10 @@ pub fn toml_to_editor_data(toml_cfg: &TomlConfig) -> SkillEditorDataDTO {
             atk_up: toml_cfg.xinfa.atk_up,
             pofang_up: toml_cfg.xinfa.pofang_up,
             huixin_up: toml_cfg.xinfa.huixin_up,
+            gcd_base: toml_cfg.xinfa.gcd_base,
         },
         version: toml_cfg.version.clone().map(VersionInfoDTO::from),
+        attributes: toml_cfg.attributes.clone(),
         skills: toml_cfg
             .skill
             .iter()
@@ -242,7 +266,7 @@ impl From<ComboStepDTO> for ComboStep {
 }
 
 /// Skilltype → 技能池条目（预设加载时用快照还原完整属性）
-fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
+pub(crate) fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
     SkillPoolItemDTO {
         skill_name: s.skill_name.clone(),
         skill_id: s.skill_id,
@@ -264,12 +288,30 @@ fn skilltype_to_pool_item(s: &Skilltype) -> SkillPoolItemDTO {
         zhenshishanghai: s.zhenshishanghai,
         has_critical_strike: s.has_critical_strike,
         lost_hp_zhenshishanghai: s.lost_hp_zhenshishanghai,
+        cast_time: s.cast_time,
+        gcd_kind: s.gcd_kind,
+        cooldown: s.cooldown,
+        charges: s.charges,
+        recharge: s.recharge,
+        cd_haste: s.cd_haste,
+        channel: s.channel,
+        buff_id: s.buff_id.clone(),
+        gcd_base: s.gcd_base,
+        gcd_group: s.gcd_group,
     }
 }
 
 impl From<ComboPreset> for ComboPresetDTO {
     fn from(core: ComboPreset) -> Self {
         ComboPresetDTO {
+            flags: core
+                .flags
+                .into_iter()
+                .map(|f| jpcg_api::ComboFlagDTO {
+                    position: f.position,
+                    start: f.start,
+                })
+                .collect(),
             name: core.name,
             steps: core
                 .steps
@@ -323,5 +365,75 @@ impl From<XinfaSummary> for XinfaSummaryDTO {
             nom: core.nom,
             version_label: core.version_label,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preset_roundtrip_keeps_damage_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let input = SkillPoolItemDTO {
+            skill_name: "预设伤害属性回归".into(),
+            skill_id: 1,
+            sub_id: 2,
+            base_damage1: 100,
+            base_damage2: 200,
+            atk_xishu: 1.5,
+            watk_xishu: 16,
+            hit_up: 32,
+            huixin_up: 64,
+            huixiao_up: 128,
+            wushifangyu: 256,
+            wushihuajin: 512,
+            dot_flag: 1,
+            dot_interval: 2.0,
+            dot_duration: 18.0,
+            dot_up: 0.12,
+            wushijianshang: 128,
+            zhenshishanghai: 12345,
+            has_critical_strike: true,
+            lost_hp_zhenshishanghai: 0.18,
+            ..Default::default()
+        };
+        // 与保存/加载预设相同的转换及 TOML 往返，不读写文件或修改全局状态。
+        let preset = ComboPreset {
+            flags: vec![
+                crate::type_set::combo::ComboFlag {
+                    position: 0,
+                    start: true,
+                },
+                crate::type_set::combo::ComboFlag {
+                    position: 1,
+                    start: false,
+                },
+            ],
+            name: "regression".into(),
+            steps: vec![ComboStep::from(ComboStepDTO {
+                skill: input.clone(),
+                overrides: None,
+            })],
+        };
+        let encoded = toml::to_string_pretty(&preset)?;
+        let decoded: ComboPreset = toml::from_str(&encoded)?;
+        let actual = ComboPresetDTO::from(decoded);
+        assert_eq!(actual.steps.len(), 1);
+        assert_eq!(
+            actual
+                .flags
+                .iter()
+                .map(|f| (f.position, f.start))
+                .collect::<Vec<_>>(),
+            vec![(0, true), (1, false)]
+        );
+        let old: ComboPreset = toml::from_str("name = 'old'\nsteps = []")?;
+        assert!(ComboPresetDTO::from(old).flags.is_empty());
+        assert_eq!(
+            serde_json::to_value(&actual.steps[0].skill)?,
+            serde_json::to_value(&input)?,
+            "预设往返必须保留技能池条目的全部属性"
+        );
+        Ok(())
     }
 }

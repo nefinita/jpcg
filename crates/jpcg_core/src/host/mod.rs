@@ -8,6 +8,7 @@
 // ============================================================================
 
 pub mod calc;
+pub mod combat;
 pub mod config;
 pub mod conv;
 pub mod skill;

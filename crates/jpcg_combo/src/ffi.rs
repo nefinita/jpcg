@@ -51,10 +51,14 @@ unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
 /// 业务方法分发：method + request_json → response_json
 fn dispatch(method: &str, request: &str) -> Result<String, String> {
     match method {
+        "player_attribute_capabilities" => {
+            Ok(jpcg_core::host::calc::player_attribute_capabilities().to_string())
+        }
         "calculate_combo" => {
             #[derive(serde::Deserialize)]
             struct ComboRequest {
                 steps: Vec<jpcg_api::ComboStepDTO>,
+
                 player: jpcg_api::PlayerConfigDTO,
                 hostile: jpcg_api::HostileConfigDTO,
                 xinfa: jpcg_api::XinfaConfigDTO,
@@ -82,10 +86,12 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
             struct ComboPresetReq {
                 name: String,
                 steps: Vec<jpcg_api::ComboStepDTO>,
+                #[serde(default)]
+                flags: Vec<jpcg_api::ComboFlagDTO>,
             }
             let req: ComboPresetReq =
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
-            crate::host::save_combo_preset(req.name, req.steps)?;
+            crate::host::save_combo_preset_with_flags(req.name, req.steps, req.flags)?;
             serde_json::to_string(&()).map_err(|e| format!("响应序列化失败: {}", e))
         }
         "list_combo_presets" => {
@@ -125,6 +131,32 @@ fn dispatch(method: &str, request: &str) -> Result<String, String> {
                 serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
             crate::host::import_config(req.toml_str)?;
             serde_json::to_string(&()).map_err(|e| format!("响应序列化失败: {}", e))
+        }
+        "load_combat" => {
+            #[derive(serde::Deserialize)]
+            struct LoadCombatReq {
+                profession: String,
+            }
+            let req: LoadCombatReq =
+                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
+            let out = crate::timeline_host::load_combat(req.profession)?;
+            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
+        }
+        "load_combat_with_skills" => {
+            #[derive(serde::Deserialize)]
+            struct LoadCombatReq {
+                profession: String,
+            }
+            let req: LoadCombatReq =
+                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
+            let bundle = crate::timeline_host::load_combat_bundle(req.profession)?;
+            serde_json::to_string(&bundle).map_err(|e| format!("响应序列化失败: {}", e))
+        }
+        "calculate_timeline" => {
+            let req: jpcg_api::TimelineRequestDTO =
+                serde_json::from_str(request).map_err(|e| format!("请求解析失败: {}", e))?;
+            let out = crate::timeline_host::calculate_timeline_from_store(req)?;
+            serde_json::to_string(&out).map_err(|e| format!("响应序列化失败: {}", e))
         }
         _ => Err(format!("未知方法: {}", method)),
     }
@@ -251,11 +283,31 @@ mod tests {
                 CStr::from_ptr(out).to_string_lossy().into_owned()
             }
         };
+        if s.is_empty() {
+            let err = unsafe { jpcg_combo_last_error() };
+            if !err.is_null() {
+                let e = unsafe { CStr::from_ptr(err) }
+                    .to_string_lossy()
+                    .into_owned();
+                unsafe { jpcg_combo_free_string(err) };
+                eprintln!("FFI error: {}", e);
+            }
+        }
         unsafe {
             jpcg_combo_free_string(out);
             jpcg_combo_handle_free(handle);
         }
         s
+    }
+
+    #[test]
+    fn converted_attack_capability_is_available_through_ffi() {
+        let output = call("player_attribute_capabilities", "{}");
+        let output: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(
+            output["supported"],
+            serde_json::json!(["converted_attack_v1"])
+        );
     }
 
     #[test]
@@ -291,5 +343,40 @@ mod tests {
         assert!(out.contains("final_kill_prob"), "应返回击杀率: {}", out);
         assert!(out.contains("kill_prob_curve"));
         assert!(out.contains("steps"));
+    }
+
+    #[test]
+    fn calculate_timeline_roundtrip() {
+        let req = r#"{
+            "skills": [{"skill_name": "宫", "skill_id": 1, "sub_id": 0, "base_damage1": 160, "base_damage2": 200, "atk_xishu": 2.609375, "cast_time": 1.5}],
+            "forms": [],
+            "timed_buffs": [],
+            "actions": [{"kind": "cast", "skill_id": 1, "sub_id": 0}, {"kind": "cast", "skill_id": 1, "sub_id": 0}],
+            "window": 10.0,
+            "player": {"jcsx": "gengu", "jichu_shuxing": 21371, "jichu_gongji": 64329, "huixin_dengji": 61877, "huixin_xiaoguo": 2925, "pofang_dengji": 109160, "wuqi_shanghai": 0},
+            "hostile": {"waigong_fangyu": 15176, "neigong_fangyu": 21388, "yujin_dengji": 5047, "huajin_dengji": 59402, "jianshang_bili": 0, "target_hp": 2000000, "max_hp": 0, "current_hp": 0},
+            "xinfa": {"profession": "mowen", "xinfa_name": "莫问", "xinfa_nom": "gengu", "atk_up": 1.96, "pofang_up": 2.0, "huixin_up": 0.0},
+            "buff": {},
+            "coeff": {"pofang_xishu": 225957.6, "huixin_xishu": 197703.0, "huixiao_xishu": 72844.2, "huajin_xishu": 30115.8, "fangyu_xishu": 126007.2, "pvp_global_jianshang": 0.9}
+        }"#;
+        let out = call("calculate_timeline", req);
+        assert!(out.contains("window_dps"), "应返回窗口 DPS: {}", out);
+        assert!(
+            out.contains("\"skipped_actions\":2"),
+            "客户端伪造技能不能参与计算: {}",
+            out
+        );
+        assert!(out.contains("total_damage"));
+    }
+
+    #[test]
+    fn load_combat_without_data_file_returns_empty() {
+        let out = call("load_combat", r#"{"profession": "no_such_profession_xyz"}"#);
+        assert!(out.contains("\"meta\""), "应返回空 combat 数据: {}", out);
+        assert!(
+            out.contains("\"form\":[]") || out.contains("\"form\": []"),
+            "form 应为空: {}",
+            out
+        );
     }
 }

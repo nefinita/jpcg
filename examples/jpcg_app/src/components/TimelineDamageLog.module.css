@@ -1,0 +1,107 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 12px;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated, var(--glass-bg, #fff));
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-align: left;
+  padding: 4px 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 4px 4px;
+  vertical-align: top;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+}
+
+.idx {
+  color: var(--text-secondary);
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kind {
+  display: inline-block;
+  font-size: 9.5px;
+  line-height: 15px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.kindCast {
+  color: #2f7fb8;
+  border-color: color-mix(in srgb, #2f7fb8 45%, transparent);
+}
+
+.kindDot {
+  color: #9a6b2f;
+  border-color: color-mix(in srgb, #9a6b2f 45%, transparent);
+}
+
+.kindSwitch {
+  color: #7a5bc8;
+  border-color: color-mix(in srgb, #7a5bc8 45%, transparent);
+}
+
+.skillName {
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.skillDetail {
+  margin-top: 1px;
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cum {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.right {
+  text-align: right;
+}

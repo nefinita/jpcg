@@ -1,0 +1,34 @@
+import type { TimelineEventDTO } from "../types";
+
+/**
+ * 时间轴事件 → 列表文案。
+ *
+ * 注意：Rust 侧 `TimelineEventKindDTO` 是 `#[serde(tag = "kind", rename_all = "snake_case")]`，
+ * 真实 JSON 是 { kind: "cast", skill_name, damage, hit_time } 这种**内部标签**形状，
+ * 不是 { cast: { ... } } 的外部标签形状。
+ */
+export function formatTimelineEvent(e: TimelineEventDTO): string {
+  const k = e.kind;
+  switch (k.kind) {
+    case "cast": {
+      const gcd = k.gcd_secs && k.gcd_secs > 0
+        ? `，GCD ${k.gcd_secs.toFixed(2)}s（就绪 ${(k.gcd_ready_at ?? 0).toFixed(2)}s）`
+        : "";
+      return `施放 ${k.skill_name} @${k.hit_time.toFixed(2)}s 伤害 ${k.damage}${gcd}`;
+    }
+    case "dot_tick":
+      return `dot ${k.skill_name} #${k.index} 伤害 ${k.damage}${k.advanced ? "（提前）" : ""}`;
+    case "channel_tick":
+      return `引导 ${k.skill_name} 第 ${k.index} 段 伤害 ${k.damage}`;
+    case "form_switch":
+      return `切器形 ${k.from} → ${k.to}`;
+    case "qifeng_switch":
+      return `切曲风 ${k.from} → ${k.to}`;
+    case "buff_gain":
+      return `buff ${k.buff_id} ×${k.stacks}`;
+    default: {
+      const never: never = k;
+      return String(never);
+    }
+  }
+}

@@ -5,6 +5,12 @@
 // 双端通过本 crate 保证 JSON 契约单一来源，防止漂移。
 // ============================================================================
 
+pub mod attributes;
+pub use attributes::{
+    AttributeConversion, AttributeDamageKind, AttributeRatio, AttributeRules, AttributeTarget,
+    BasicAttribute,
+};
+
 // ============ 玩家/目标/心法/增益/系数 配置 DTO ============
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -26,6 +32,13 @@ pub struct PlayerConfigDTO {
     pub huixin_xiaoguo: u32,
     pub pofang_dengji: u32,
     pub wuqi_shanghai: u32,
+    /// 加速等级（#92 时序引擎；0=无加速）
+    #[serde(default)]
+    pub jiasu_dengji: u32,
+    /// 已换算的心法额外攻击；Some(0) 也禁用旧主属性转换。
+    /// 基础攻击增益只作用于 jichu_gongji，此项在其取整后相加。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zhuanhua_gongji: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -70,6 +83,9 @@ pub struct CoefficientConfigDTO {
     pub huajin_xishu: f32,
     pub fangyu_xishu: f32,
     pub pvp_global_jianshang: f32,
+    /// 加速等级系数（加速率 = 加速等级 / 该系数 / 100；0 = 不启用加速换算）
+    #[serde(default)]
+    pub jiasu_xishu: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -81,9 +97,12 @@ pub struct XinfaConfigDTO {
     pub atk_up: f32,
     pub pofang_up: f32,
     pub huixin_up: f32,
+    /// 门派基础公共 CD（秒；0/缺失 = 1.5；特殊门派 1.0，双形态门派另有 per-skill gcd_base）
+    #[serde(default)]
+    pub gcd_base: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalculateRequest {
     pub player: PlayerConfigDTO,
     pub hostile: HostileConfigDTO,
@@ -93,6 +112,14 @@ pub struct CalculateRequest {
     /// 数值集 id（None = 使用默认值集，见 data/values/index.toml 的 default）
     #[serde(default)]
     pub value_set: Option<String>,
+}
+
+/// 属性面板结果；百分数单位（10 表示 10%），不含技能专属增益。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PanelStatsDTO {
+    pub huixin_pct: f32,
+    pub pofang_pct: f32,
+    pub jianshang_pct: u32,
 }
 
 /// 完整配置数据（对应 saved_config.toml 的加载结果）
@@ -194,6 +221,37 @@ pub struct SkillPoolItemDTO {
     /// 追加真伤系数（已损失生命值 × 系数，0=无；连招中动态结算）
     #[serde(default)]
     pub lost_hp_zhenshishanghai: f32,
+    // ---- #92 时序字段（与 SkillEditorItemDTO 同义） ----
+    /// 吟唱/读条时长（秒，0=瞬发）
+    #[serde(default)]
+    pub cast_time: f32,
+    /// GCD 类型（0=占普通 GCD，1=不占 GCD，2=固定 GCD 不受加速）
+    #[serde(default)]
+    pub gcd_kind: u8,
+    /// 调息时间（秒，0=无调息）
+    #[serde(default)]
+    pub cooldown: f32,
+    /// 充能层数（0 = 普通冷却；>=1 = 最大充能次数，使用 recharge 恢复）
+    #[serde(default)]
+    pub charges: u8,
+    /// 充能恢复间隔（秒）
+    #[serde(default)]
+    pub recharge: f32,
+    /// 调息是否受加速影响
+    #[serde(default)]
+    pub cd_haste: bool,
+    /// 引导技能
+    #[serde(default)]
+    pub channel: bool,
+    /// 仅提供 buff 的技能所施加的 buff id（空 = 不施加）
+    #[serde(default)]
+    pub buff_id: String,
+    /// 该技能所在形态的基础公共 CD（秒；0 = 用门派默认）
+    #[serde(default)]
+    pub gcd_base: f32,
+    /// GCD 分组（0 = 默认组；双形态门派另一套技能用 1，两组 GCD 互相独立）
+    #[serde(default)]
+    pub gcd_group: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -216,9 +274,17 @@ pub struct ComboStepDTO {
     pub overrides: Option<StepOverrideDTO>,
 }
 
+/// 标记位于第 position 个技能之前（等于技能数时位于末尾）；同位置按数组顺序。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComboFlagDTO {
+    pub position: usize,
+    pub start: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct ComboPresetDTO {
+    pub flags: Vec<ComboFlagDTO>,
     pub name: String,
     pub steps: Vec<ComboStepDTO>,
 }
@@ -248,6 +314,8 @@ pub struct ComboStepResultDTO {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComboResultDTO {
+    #[serde(default)]
+    pub total_lost_hp_damage: f64,
     pub steps: Vec<ComboStepResultDTO>,
     pub total_expected_damage_wan: f64,
     pub final_kill_prob: f64,
@@ -297,8 +365,6 @@ pub struct DerivativesOutputDTO {
     pub recommendation: OptimizeRecommendationDTO,
 }
 
-// ============ 技能编辑器 DTO ============
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SkillEditorItemDTO {
@@ -330,6 +396,37 @@ pub struct SkillEditorItemDTO {
     pub dot_interval: f32,
     pub dot_duration: f32,
     pub dot_up: f32,
+    // ---- #92 时序字段（旧数据缺省 = 瞬发 / 占普通 GCD / 无调息 / 无充能） ----
+    /// 吟唱/读条时长（秒，0=瞬发）
+    #[serde(default)]
+    pub cast_time: f32,
+    /// GCD 类型（0=占普通 GCD，1=不占 GCD，2=固定 GCD 不受加速）
+    #[serde(default)]
+    pub gcd_kind: u8,
+    /// 调息时间（秒，0=无调息）
+    #[serde(default)]
+    pub cooldown: f32,
+    /// 充能层数（0 = 普通冷却；>=1 = 最大充能次数，使用 recharge 恢复）
+    #[serde(default)]
+    pub charges: u8,
+    /// 充能恢复间隔（秒）
+    #[serde(default)]
+    pub recharge: f32,
+    /// 调息是否受加速影响
+    #[serde(default)]
+    pub cd_haste: bool,
+    /// 引导技能（吟唱期间持续结算，伤害按引导跳数）
+    #[serde(default)]
+    pub channel: bool,
+    /// 仅提供 buff 的技能所施加的 buff id（空 = 不施加）
+    #[serde(default)]
+    pub buff_id: String,
+    /// 该技能所在形态的基础公共 CD（秒；0 = 用门派默认）
+    #[serde(default)]
+    pub gcd_base: f32,
+    /// GCD 分组（0 = 默认组；双形态门派另一套技能用 1，两组 GCD 互相独立）
+    #[serde(default)]
+    pub gcd_group: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -345,6 +442,9 @@ pub struct VersionInfoDTO {
 pub struct SkillEditorDataDTO {
     pub xinfa: XinfaConfigDTO,
     pub version: Option<VersionInfoDTO>,
+    /// None/旧请求不删除已有规则；规则由各心法 TOML 维护。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<AttributeRules>,
     pub skills: Vec<SkillEditorItemDTO>,
 }
 
@@ -364,3 +464,428 @@ pub struct HostEventsTable {
 }
 
 use serde::{Deserialize, Serialize};
+
+// ============ #92 时序引擎 / 战斗数据 DTO ============
+// 与 `data/combat/{门派}.toml`、`jpcg_combo::timeline` 一一对应；
+// 前端（TS）与后端（Rust）共用这一份契约，避免两套类型。
+
+/// 技能唯一键（skill_id, sub_id）；JSON 中表现为 [id, sub] 数组
+pub type SkillKeyDTO = (u32, u32);
+
+/// 形态定义（`[[form]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FormDefDTO {
+    pub id: String,
+    pub name: String,
+    /// 该形态基础 GCD（秒；0 = 门派默认）
+    pub gcd_base: f32,
+    pub initial: bool,
+    /// 该形态可用技能（空 = 不限）
+    pub skills: Vec<SkillKeyDTO>,
+}
+
+/// 技能施放副作用
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OnCastDTO {
+    /// 施放后切换到的器形 id（如 "jian" / "qin"）
+    pub switch_instrument: Option<String>,
+    /// 施放后切换到的曲风 id（0 秒状态事件）
+    pub switch_qifeng: Option<String>,
+    pub gcd_lanes: Vec<String>,
+    pub lock_skills: Vec<SkillKeyDTO>,
+    /// 施放时让这些技能的 DOT 下一跳立刻生效（羽：商/角）
+    pub advance_dot_targets: Vec<SkillKeyDTO>,
+    /// 提前跳数
+    pub advance_dot_ticks: u8,
+}
+
+/// 单技能时序 overlay（`[[skill_combat]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SkillCombatDTO {
+    pub skill_id: u32,
+    pub sub_id: u32,
+    /// 要求当前器形（空 = 任意）
+    pub requires_instrument: Option<String>,
+    /// 要求当前曲风（空 = 任意；如 变宫/变徵 需要 gaoshan）
+    pub requires_qifeng: Option<String>,
+    pub gcd_lane: String,
+    pub on_cast: OnCastDTO,
+    // ---- 可选覆盖（None = 沿用技能数据） ----
+    pub cast_time: Option<f32>,
+    pub gcd_base: Option<f32>,
+    pub gcd_kind: Option<u8>,
+    pub cooldown: Option<f32>,
+    pub charges: Option<u8>,
+    pub recharge: Option<f32>,
+    pub cd_haste: Option<bool>,
+    pub channel: Option<bool>,
+    /// 引导/倒读条段数（None = 1 段）
+    pub channel_ticks: Option<u8>,
+    pub buff_id: Option<String>,
+    /// 激活所需奇穴 id（空 = 不限）
+    pub jihuoqixue: Option<String>,
+    /// 门控奇穴解析出的 qixue id（后端按 qixue 表解析，前端直接用 id 判断）
+    #[serde(default)]
+    pub jihuoqixue_id: Option<String>,
+    /// 施放获得曲风点数（空 = 0）
+    pub qifeng_gain: Option<u8>,
+    /// ---- DOT（独立于本体伤害） ----
+    pub dot_interval: Option<f32>,
+    pub dot_duration: Option<f32>,
+    pub dot_tick_base1: Option<u32>,
+    pub dot_tick_base2: Option<u32>,
+    pub dot_tick_xishu: Option<f32>,
+    /// 施放消耗全部曲风（空 = false）
+    pub spend_all_qifeng: Option<bool>,
+    /// 已配对的秘籍 id（后端组装，前端只按 id 查 MijiDefDTO）
+    #[serde(default)]
+    pub miji_ids: Vec<String>,
+}
+
+/// 定时 buff 效果条目（百分比）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuffEffectDTO {
+    BaseAtkPct(f32),
+    HuixinPct(f32),
+    HuixiaoPct(f32),
+    PofangPct(f32),
+    WushiFangyuPct(f32),
+    ShanghaiPct(f32),
+    /// 加速率加成（百分比，如 2.0 = +2% 加速率）
+    JiasuPct(f32),
+}
+
+/// 带持续时间的 buff 定义（`[[buff]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimedBuffDefDTO {
+    pub id: String,
+    pub name: String,
+    /// 持续时间（秒；0 = 常驻）
+    pub duration: f32,
+    pub max_stacks: u8,
+    pub refresh: bool,
+    /// 该 buff 的加速能否突破 25% 上限
+    pub ignore_cap: bool,
+    pub effects: Vec<BuffEffectDTO>,
+}
+
+/// 技能修正项（秘籍 / 奇穴共用）
+/// 奇穴运行时钩子（第 3 层）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QixueHookDTO {
+    FlatDamageOnCast {
+        damage: f32,
+        #[serde(default)]
+        per_qifeng_spent: bool,
+    },
+    DamagePctPerQifeng {
+        pct: f32,
+    },
+    /// 该技能每次 DOT 跳，使 targets 指定技能的下一跳立刻生效
+    AccelerateDot {
+        targets: Vec<SkillKeyDTO>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillModifierDTO {
+    BaseDamageAdd(u32),
+    BaseDamageMul(f32),
+    AtkXishuAdd(f32),
+    HitUpAdd(u32),
+    HuixinUpAdd(u32),
+    HuixiaoUpAdd(u32),
+    WushifangyuAdd(u32),
+    CastTimeMul(f32),
+    CastTimeAdd(f32),
+    CooldownMul(f32),
+    DotDurationMul(f32),
+    DotIntervalMul(f32),
+    CooldownAdd(f32),
+    DotTicksAdd(i32),
+    /// Dot 每跳递增比例 +v
+    #[serde(rename = "dot_up_add")]
+    DotUpAdd(f32),
+}
+
+/// 秘籍定义（`[[miji]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MijiDefDTO {
+    pub id: String,
+    pub name: String,
+    pub skill_id: u32,
+    pub sub_id: u32,
+    pub modifiers: Vec<SkillModifierDTO>,
+    /// 后端生成的效果文案（前端只渲染，不翻译 modifiers）
+    #[serde(default)]
+    pub effects: Vec<String>,
+}
+
+/// 奇穴定义（`[[qixue]]`）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QixueDefDTO {
+    pub id: String,
+    pub name: String,
+    pub slot: u8,
+    pub replaces_skill_id: u32,
+    pub replaces_sub_id: u32,
+    /// 作用技能列表（(skill_id, sub_id)；空 = 用 replaces_skill_id/sub_id）
+    pub applies_to: Vec<(u32, u32)>,
+    /// 该奇穴解锁的技能（(skill_id, sub_id)）
+    pub grants_skills: Vec<(u32, u32)>,
+    /// 运行时钩子（第 3 层）
+    #[serde(default)]
+    pub hooks: Vec<QixueHookDTO>,
+    /// 暂不建模（PvE/待补数据）
+    #[serde(default)]
+    pub shelved: bool,
+    /// 替换后的独立技能条目（None = 只施加 modifiers）
+    pub replacement: Option<SkillPoolItemDTO>,
+    pub modifiers: Vec<SkillModifierDTO>,
+    /// 显示分组标签（第一重~第六重 / 混选），后端算好
+    #[serde(default)]
+    pub group_label: String,
+    /// 同组一起开关的多个 id（如冻泉 + 冻泉·宫）
+    #[serde(default)]
+    pub group_ids: Vec<String>,
+}
+
+/// 战斗数据元信息
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CombatMetaDTO {
+    pub profession: String,
+    pub version: String,
+    pub note: String,
+    /// 面板规则：每个技能最多装备的秘籍数
+    #[serde(default = "default_miji_cap")]
+    pub miji_per_skill_cap: u8,
+    /// 混选奇穴最多选几格
+    #[serde(default = "default_mixed_cap")]
+    pub mixed_qixue_cap: u8,
+    /// 从第几号槽位开始是混选池
+    #[serde(default = "default_mixed_slot_from")]
+    pub mixed_slot_from: u8,
+}
+
+pub fn default_miji_cap() -> u8 {
+    4
+}
+
+pub fn default_mixed_cap() -> u8 {
+    3
+}
+
+pub fn default_mixed_slot_from() -> u8 {
+    7
+}
+
+/// `data/combat/{门派}.toml` 的完整 DTO
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CombatDataDTO {
+    pub meta: CombatMetaDTO,
+    pub form: Vec<FormDefDTO>,
+    /// 曲风 id 列表（yangchun / gaoshan / pingsha）
+    pub qifeng: Vec<String>,
+    pub skill_combat: Vec<SkillCombatDTO>,
+    pub buff: Vec<TimedBuffDefDTO>,
+    pub miji: Vec<MijiDefDTO>,
+    pub qixue: Vec<QixueDefDTO>,
+}
+
+/// 时间轴动作
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TimelineActionDTO {
+    Cast {
+        skill_id: u32,
+        sub_id: u32,
+        /// 技能名：用于在 (skill_id, sub_id) 对应多个变体（如「入月·N 层」）时消歧
+        #[serde(default)]
+        skill_name: Option<String>,
+        #[serde(default)]
+        overrides: Option<StepOverrideDTO>,
+    },
+    SwitchForm {
+        form: String,
+    },
+    /// 计算开始/结束标记（只影响击杀率测量窗口；"start" | "end"）
+    Flag {
+        flag: String,
+    },
+}
+
+/// 时间轴计算请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineRequestDTO {
+    pub skills: Vec<SkillPoolItemDTO>,
+    #[serde(default)]
+    pub forms: Vec<FormDefDTO>,
+    #[serde(default)]
+    pub timed_buffs: Vec<TimedBuffDefDTO>,
+    #[serde(default)]
+    pub actions: Vec<TimelineActionDTO>,
+    /// 模拟窗口（秒；0 = 默认 300 秒）
+    #[serde(default)]
+    pub window: f32,
+    pub player: PlayerConfigDTO,
+    pub hostile: HostileConfigDTO,
+    pub xinfa: XinfaConfigDTO,
+    pub buff: BuffConfigDTO,
+    pub coeff: CoefficientConfigDTO,
+    /// 数值集 id（None = 默认值集）
+    #[serde(default)]
+    pub value_set: Option<String>,
+    /// 激活的奇穴 id 列表（可选；激活后按 [[qixue]] 的 modifiers 生效）
+    #[serde(default)]
+    pub qixue: Vec<String>,
+    /// 激活的秘籍 id 列表（可选；激活后按 [[miji]] 的 modifiers 生效）
+    #[serde(default)]
+    pub miji: Vec<String>,
+    /// 初始器形 id（空 = 取 combat.forms 里 initial 的）
+    #[serde(default)]
+    pub initial_instrument: Option<String>,
+    /// 初始曲风 id（空 = 不限）
+    #[serde(default)]
+    pub initial_qifeng: String,
+    /// 战斗时序 overlay（可选；提供时按 overlay 套形态 / GCD 通道 / on_cast）
+    #[serde(default)]
+    pub combat: Option<CombatDataDTO>,
+    /// 击杀率蒙特卡洛样本数（0 = 不跑 MC，纯确定性）
+    #[serde(default)]
+    pub samples: u32,
+    /// 击杀率随机种子（None = 每次随机）
+    #[serde(default)]
+    pub seed: Option<u64>,
+}
+
+/// 时间轴事件
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TimelineEventKindDTO {
+    Cast {
+        skill_name: String,
+        damage: u32,
+        hit_time: f32,
+        /// 起手时刻；外层 time 是实际结算时刻。
+        #[serde(default)]
+        start_time: f32,
+        /// 本次施放占用的 GCD 秒数（不占 GCD 为 0）
+        #[serde(default)]
+        gcd_secs: f32,
+        /// 该 GCD 通道就绪时刻
+        #[serde(default)]
+        gcd_ready_at: f32,
+    },
+    /// 引导/倒读条单段
+    ChannelTick {
+        skill_name: String,
+        index: u32,
+        damage: u32,
+    },
+    DotTick {
+        skill_name: String,
+        index: u32,
+        damage: u32,
+        /// 是否被洞天/羽提前生效
+        #[serde(default)]
+        advanced: bool,
+    },
+    FormSwitch {
+        from: String,
+        to: String,
+    },
+    /// 曲风切换（0 秒状态事件）
+    QifengSwitch {
+        from: String,
+        to: String,
+    },
+    BuffGain {
+        buff_id: String,
+        stacks: u8,
+    },
+}
+
+/// 窗口内时间轴日志，按实际结算时刻排序；Cast 起手单独保存在 start_time。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineEventDTO {
+    pub time: f32,
+    pub kind: TimelineEventKindDTO,
+    /// 该事件发生后的事件累计伤害（后端算好，前端只显示）
+    #[serde(default)]
+    pub cumulative: f64,
+}
+
+/// 时间轴计算结果
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimelineResultDTO {
+    pub events: Vec<TimelineEventDTO>,
+    /// 每个动作的结算结果（与请求 actions 一一对应；前端直接渲染，不再推导）
+    pub steps: Vec<TimelineStepDTO>,
+    pub total_damage: f64,
+    pub window_dps: f64,
+    pub skipped_actions: u32,
+    /// 序列执行完后的器形 / 曲风（后端算好，前端直接显示）
+    pub final_instrument: String,
+    pub final_qifeng: String,
+    /// 窗口内击杀概率 0..1（samples=0 或未提供血量时为 0）
+    #[serde(default)]
+    pub final_kill_prob: f64,
+    /// 累计击杀概率曲线：(动作序号 1..=n, 概率 0..1)
+    #[serde(default)]
+    pub kill_prob_curve: Vec<(usize, f64)>,
+    /// 击杀率测量窗口起止时刻（flag 解析后的结果；None = 未提供该 flag）
+    #[serde(default)]
+    pub kill_start: Option<f32>,
+    #[serde(default)]
+    pub kill_end: Option<f32>,
+}
+
+/// 单个动作的执行结果
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimelineStepDTO {
+    /// 实际施放/切换时刻；被跳过为 None
+    pub time: Option<f32>,
+    pub gcd_secs: f32,
+    pub gcd_ready_at: f32,
+    pub legal: bool,
+    pub instrument: String,
+    pub qifeng: String,
+    pub skipped_reason: String,
+    #[serde(default)]
+    pub required_instrument: Option<String>,
+    #[serde(default)]
+    pub required_qifeng: Option<String>,
+    pub switches: Vec<TimelineStepSwitchDTO>,
+}
+
+/// 动作执行前的器形/曲风切换
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimelineStepSwitchDTO {
+    /// "form" / "qifeng"
+    pub switch_kind: String,
+    pub from: String,
+    pub to: String,
+    pub time: f32,
+}
+
+/// 时间轴预览数据包：技能池（已套 combat overlay）+ combat 数据
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct CombatBundleDTO {
+    pub skills: Vec<SkillPoolItemDTO>,
+    pub combat: CombatDataDTO,
+}

@@ -18,15 +18,7 @@ pub fn save_config(
     coefficient: CoefficientConfigDTO,
     value_set: Option<String>,
 ) {
-    let player_core = crate::type_set::player::PlayerConfig::new(
-        player.jcsx,
-        player.jichu_shuxing,
-        player.jichu_gongji,
-        player.huixin_dengji,
-        player.huixin_xiaoguo,
-        player.pofang_dengji,
-        player.wuqi_shanghai,
-    );
+    let player_core = crate::type_set::player::PlayerConfig::from(player);
     let hostile_core = crate::type_set::hostilepile::HostilepileConfig {
         waigong_fangyu: hostilepile.waigong_fangyu,
         neigong_fangyu: hostilepile.neigong_fangyu,
@@ -37,7 +29,7 @@ pub fn save_config(
         max_hp: hostilepile.max_hp,
         current_hp: hostilepile.current_hp,
     };
-    let xinfa_core = crate::type_set::xinfa::XinfaConfig::new(
+    let mut xinfa_core = crate::type_set::xinfa::XinfaConfig::new(
         xinfa.profession,
         xinfa.xinfa_name,
         xinfa.xinfa_nom,
@@ -45,6 +37,7 @@ pub fn save_config(
         xinfa.pofang_up,
         xinfa.huixin_up,
     );
+    xinfa_core.gcd_base = xinfa.gcd_base;
     let buff_core = crate::type_set::buff::BuffConfig {
         base_atk_pct: buff.base_atk_pct,
         huixin_pct: buff.huixin_pct,
@@ -63,6 +56,7 @@ pub fn save_config(
         huajin_xishu: coefficient.huajin_xishu,
         fangyu_xishu: coefficient.fangyu_xishu,
         pvp_global_jianshang: coefficient.pvp_global_jianshang,
+        jiasu_xishu: coefficient.jiasu_xishu,
     };
     store::save_config(
         player_core,
@@ -78,15 +72,7 @@ pub fn save_config(
 pub fn load_config() -> jpcg_api::ConfigDataDTO {
     let saved = store::load_save_config();
     jpcg_api::ConfigDataDTO {
-        player: PlayerConfigDTO {
-            jcsx: saved.player.jcsx,
-            jichu_shuxing: saved.player.jichu_shuxing,
-            jichu_gongji: saved.player.jichu_gongji,
-            huixin_dengji: saved.player.huixin_dengji,
-            huixin_xiaoguo: saved.player.huixin_xiaoguo,
-            pofang_dengji: saved.player.pofang_dengji,
-            wuqi_shanghai: saved.player.wuqi_shanghai,
-        },
+        player: saved.player.into(),
         hostile: HostileConfigDTO {
             waigong_fangyu: saved.hostilepile.waigong_fangyu,
             neigong_fangyu: saved.hostilepile.neigong_fangyu,
@@ -104,6 +90,7 @@ pub fn load_config() -> jpcg_api::ConfigDataDTO {
             atk_up: saved.xinfa.atk_up,
             pofang_up: saved.xinfa.pofang_up,
             huixin_up: saved.xinfa.huixin_up,
+            gcd_base: saved.xinfa.gcd_base,
         },
         buff: BuffConfigDTO {
             base_atk_pct: saved.buff.base_atk_pct,
@@ -123,6 +110,7 @@ pub fn load_config() -> jpcg_api::ConfigDataDTO {
             huajin_xishu: saved.coefficient.huajin_xishu,
             fangyu_xishu: saved.coefficient.fangyu_xishu,
             pvp_global_jianshang: saved.coefficient.pvp_global_jianshang,
+            jiasu_xishu: saved.coefficient.jiasu_xishu,
         },
         value_set: saved.value_set,
     }

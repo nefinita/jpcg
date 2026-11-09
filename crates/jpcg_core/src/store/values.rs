@@ -56,6 +56,9 @@ struct Snapshot {
     huajin_xishu: f32,
     fangyu_xishu: f32,
     pvp_global_jianshang: f32,
+    /// 加速等级系数（0/缺失 = 该值集暂不启用加速换算；旧快照缺此 key 按 0 读）
+    #[serde(default)]
+    jiasu_xishu: f32,
 }
 
 impl Snapshot {
@@ -82,6 +85,12 @@ impl Snapshot {
                 self.pvp_global_jianshang
             ));
         }
+        if !(self.jiasu_xishu.is_finite() && self.jiasu_xishu >= 0.0) {
+            return Err(format!(
+                "jiasu_xishu 非法（须为有限非负数）: {}",
+                self.jiasu_xishu
+            ));
+        }
         if self.level == 0 {
             return Err("level 须为正整数".to_string());
         }
@@ -94,6 +103,7 @@ impl Snapshot {
             huajin_xishu: self.huajin_xishu,
             fangyu_xishu: self.fangyu_xishu,
             pvp_global_jianshang: self.pvp_global_jianshang,
+            jiasu_xishu: self.jiasu_xishu,
         })
     }
 }
@@ -131,6 +141,7 @@ fn coefficient_dto(c: &LevelConstant) -> jpcg_api::CoefficientConfigDTO {
         huajin_xishu: c.huajin_xishu,
         fangyu_xishu: c.fangyu_xishu,
         pvp_global_jianshang: c.pvp_global_jianshang,
+        jiasu_xishu: c.jiasu_xishu,
     }
 }
 
@@ -356,6 +367,8 @@ mod tests {
             std::fs::write(values.join("index.toml"), INDEX).expect("write index");
             std::fs::write(values.join("cszj-exp-260908.toml"), EXP).expect("write exp");
             std::fs::write(values.join("live-130.toml"), LIVE).expect("write live");
+            // live-50 与 cszj 同值（正式服 50 级先沿用 50 级观测快照）
+            std::fs::write(values.join("live-50.toml"), EXP).expect("write live-50");
             Self { root, values }
         }
         fn values(&self) -> &Path {
@@ -375,9 +388,11 @@ mod tests {
     fn lists_with_availability_and_default() {
         let t = TempData::new("list");
         let sets = list_from(t.values());
-        assert_eq!(sets.len(), 2);
+        assert_eq!(sets.len(), 3);
+        let live50 = sets.iter().find(|s| s.id == "live-50").unwrap();
+        assert!(live50.is_default && live50.available && live50.source == "data");
         let exp = sets.iter().find(|s| s.id == "cszj-exp-260908").unwrap();
-        assert!(exp.is_default && exp.available && exp.source == "data");
+        assert!(!exp.is_default && exp.available);
         let live = sets.iter().find(|s| s.id == "live-130").unwrap();
         assert!(!live.is_default && live.available);
     }

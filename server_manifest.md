@@ -4,31 +4,81 @@
 
 | 通道 | URL |
 |------|-----|
-| 稳定版 | `https://nefinita-ai.com/updates/JPCG/` |
-| Beta | `https://nefinita-ai.com/updates/JPCG_beta/` |
-| 数据文件 | `https://nefinita-ai.com/files/JPCG/` |
-| Beta 数据 | `https://nefinita-ai.com/files/JPCG_beta/` |
+| 稳定版（应用/清单） | `https://nefinita-ai.com/updates/JPCG/` |
+| Beta（应用/清单） | `https://nefinita-ai.com/updates/JPCG_beta/` |
+| 稳定版数据/模块 | `https://nefinita-ai.com/files/JPCG/` |
+| Beta 数据/模块 | `https://nefinita-ai.com/files/JPCG_beta/` |
 
-## 稳定版目录结构
+> `version` = 应用版本（含 `v` 前缀，如 `v2.1.0`）；`data_version` = `update.toml` 中声明的数据版本，
+> 当前由 `manifest-gen --version` 写入，等于发布 tag（如 `v2.1.0`）。
+
+## 客户端 URL 约定（与 `jpcg_update` 实现一致）
+
+| 用途 | 稳定版 | Beta |
+|------|--------|------|
+| 最新版本信息 | `/updates/JPCG/update.toml` | `/updates/JPCG_beta/update.toml` |
+| 版本清单 | `/updates/JPCG/{version}/manifest.toml` | `/updates/JPCG_beta/manifest.toml` |
+| app 二进制 | `/updates/JPCG/{version}/{binary}` | `/updates/JPCG_beta/{binary}` |
+| 数据清单 | `/files/JPCG/{data_version}/data/data_manifest.toml` | `/files/JPCG_beta/data/data_manifest.toml` |
+| 模块清单 | `/files/JPCG/{version}/modules/modules_manifest.toml` | `/files/JPCG_beta/modules/modules_manifest.toml` |
+
+## 部署 stage 目录结构（`deploy-gen` 输出）
+
+`release.yml` 的 package job 以 GitHub Release 资产为输入调 `deploy-gen` 生成可直接落位的 stage：
+
+### 稳定版（版本目录式）
 
 ```
 JPCG/
-├── update.toml                    # 版本信息（必需）
-├── v2.1.0/                        # 版本目录（命名规则 v{major}.{minor}.{patch}）
-│   ├── manifest.toml              # 该版本的完整清单
-│   ├── jpcg-app-macos-aarch64     # macOS aarch64（Apple Silicon）二进制
-│   ├── jpcg-app-linux-x86_64      # Linux x86_64 二进制
-│   ├── jpcg-app-windows-x86_64.exe # Windows x86_64 二进制
-└── v2.0.0/
-    └── ...
+├── update.toml                      # 最新版本信息（必需，指向最新版）
+└── v2.1.0/                          # 版本目录（v{major}.{minor}.{patch}）
+    ├── manifest.toml                # 该版本的 app 清单（三平台二进制）
+    ├── jpcg-app-macos-aarch64       # macOS aarch64（Apple Silicon，单架构）
+    ├── jpcg-app-linux-x86_64        # Linux x86_64
+    ├── jpcg-app-windows-x86_64.exe  # Windows x86_64
+    ├── modules/                     # 模块 dll（三平台合并，9 个）
+    │   ├── modules_manifest.toml
+    │   ├── libjpcg_{core,update,const}.dylib
+    │   ├── libjpcg_{core,update,const}.so
+    │   └── jpcg_{core,update,const}.dll
+    └── data/                        # 数据文件（目录名 = data_version）
+        ├── data_manifest.toml
+        ├── readme.md
+        ├── shuxing/*.toml
+        └── values/*.toml
 ```
+
+> 目录名说明：`data/` 位于 `{data_version}/data/`；`data_version` 与 app 版本相同时即落在同一
+> `v2.1.0/` 目录下（如上图）。服务端把 `update.toml` + 版本清单/二进制以 `/updates/JPCG/` 暴露，
+> 把 `modules/`、`data/` 以 `/files/JPCG/` 暴露（见上方 URL 约定）。
+
+### Beta（根式）
+
+```
+JPCG_beta/
+├── update.toml                      # 最新版本信息
+├── manifest.toml                    # 直接在根（无版本子目录）
+├── jpcg-app-macos-aarch64
+├── jpcg-app-linux-x86_64
+├── jpcg-app-windows-x86_64.exe
+├── modules/
+│   ├── modules_manifest.toml
+│   └── ...（三平台 dll ×9）
+└── data/
+    ├── data_manifest.toml
+    └── ...（shuxing/、values/ 等清单列出的文件）
+```
+
+> 文件名/清单 `os`+`arch` 与客户端 `std::env::consts::{OS, ARCH}` 严格一致
+> （mac=macos/aarch64、linux=linux/x86_64、windows=windows/x86_64）。
+> 早期 Beta 产物曾以 `darwin`/`x86_64` 错标 macOS，客户端无法命中（见 CHANGELOG 2026-09-08 记录）。
 
 ### update.toml
 
 ```toml
-version = "v2.1.0"
+version = "v2.1.0"        # 最新 app 版本（带 v 前缀，客户端比较时会归一化）
 major_version = 2
-data_version = "v2.0.2026050201"
+data_version = "v2.1.0"   # 数据版本（= data_manifest.toml 的 data_version，目录名用它）
 ```
 
 ### manifest.toml
@@ -58,76 +108,84 @@ arch = "x86_64"
 hash = "sha256hex值"
 hash_type = "SHA256"
 
-# 可选：附带文件
-[compressed_package]
-path = "JPCG-v2.1.0.tar.gz"
-hash = "sha256hex值"
-hash_type = "SHA256"
+# 可选：附带文件（当前发布流程未使用）
+# [compressed_package]
+# path = "JPCG-v2.1.0.tar.gz"
+# hash = "sha256hex值"
+# hash_type = "SHA256"
 ```
-
-## Beta 版目录结构
-
-```
-JPCG_beta/
-├── manifest.toml                  # 直接放根目录（无版本子目录）
-├── jpcg-app-macos-aarch64
-├── jpcg-app-linux-x86_64
-├── jpcg-app-windows-x86_64.exe
-└── ...
-```
-
-> 说明：文件名/清单 `os`+`arch` 与客户端 `std::env::consts::{OS, ARCH}` 严格一致
-> （mac=macos/aarch64、linux=linux/x86_64、windows=windows/x86_64）。
-> 早期 beta.1 曾以 `darwin`/`x86_64` 错标 macOS 产物，客户端无法命中。
-
-Beta 的 `manifest.toml` 格式同稳定版。
 
 ## 更新器二进制
 
-`jpcg_updater`（无平台后缀）需放置在可执行文件同级目录下。在 Tauri bundle 中通过 `externalBin` 包含：
+`jpcg_updater` 在 Tauri bundle 中通过 `externalBin` 包含，构建前需按 **host-triple 后缀**
+复制到 `examples/jpcg_app/src-tauri/binaries/`（`make updater` 一步完成）：
 
 ```json
 "externalBin": ["binaries/jpcg_updater"]
 ```
 
-构建前需将编译好的更新器复制到 `examples/jpcg_app/src-tauri/binaries/`：
-
 ```sh
+make updater
+# 等价手工命令：
 cargo build -p jpcg_updater
-cp target/debug/jpcg_updater examples/jpcg_app/src-tauri/binaries/
+cp target/debug/jpcg_updater \
+  examples/jpcg_app/src-tauri/binaries/jpcg_updater-$(rustc -vV | grep host | cut -d' ' -f2)
 ```
+
+> Release 也会单独上传 updater 二进制资产；服务端通道 stage（`deploy-gen` 输出）只编排
+> app 二进制 + 模块 dll + 数据，不包含 updater。
 
 ## 数据文件
 
-数据文件独立管理，见 `data_manifest.toml`，由 `manifest-gen` 工具生成。
+数据文件独立管理，由 `manifest-gen` 生成 `data_manifest.toml`：
+
+```toml
+data_version = "v2.1.0"
+
+[[files]]
+path = "shuxing/mowen.toml"
+hash = "sha256hex值"
+hash_type = "SHA256"
+
+[[files]]
+path = "values/index.toml"
+hash = "sha256hex值"
+hash_type = "SHA256"
+```
+
+- 清单当前覆盖 `readme.md`、`data/shuxing/*.toml`、`data/values/*.toml`
+- 客户端按 hash 差量下载；stable 存 `{data_version}/data/`，beta 存 `data/`
+- 数据版本（`data_version`）用于数据更新判断；shuxing 文件内另有 `[version]={level,season,modified}`
 
 ## 模块库（dll）增量更新（B 模式 / 动态模式）
 
-模块库与 app 版本同目录部署，由 `manifest-gen` 的 `--modules-dir` 生成
-`modules_manifest.toml`（含每个 dll 的 SHA256 与 size）：
+`manifest-gen --modules-dir` 生成单平台 `modules_manifest.toml`（逐 dll 含 version/sha256/size）；
+`deploy-gen` 合并三平台 dll 后写成 `platform = "multi"` 的合并清单（客户端按扩展名过滤）：
+
+```toml
+modules_version = "v2.1.0"
+platform = "multi"
+
+[[files]]
+name = "jpcg_const.dll"
+version = "130.3.20260602"   # jpcg_const 独立版本
+hash = "sha256hex值"
+hash_type = "SHA256"
+size = 120320
+```
 
 ```sh
+# 单平台清单（CI 构建时）
 cargo run -p manifest-gen -- --version v2.1.0 \
   --data-dir ./data \
-  --modules-dir ./dist/modules/v2.1.0 \
-  --modules-output ./dist/modules/v2.1.0/modules_manifest.toml
-```
+  --modules-dir ./dist/modules \
+  --modules-output ./dist/modules/modules_manifest.toml \
+  --platform macos
 
-### 目录结构（与数据文件布局对齐）
-
+# 通道 stage（stable/beta 布局 + 三平台合并 modules_manifest）
+cargo run -p deploy-gen -- --channel stable --version v2.1.0 \
+  --assets-dir ./release-assets --data-dir ./data --output ./stage
 ```
-files/JPCG/
-└── v2.1.0/
-    ├── data/
-    │   └── data_manifest.toml
-    └── modules/
-        ├── modules_manifest.toml
-        ├── libjpcg_core.dylib
-        ├── libjpcg_update.dylib
-        └── libjpcg_const.dylib
-```
-
-Beta 通道模块清单不带版本目录：`files/JPCG_beta/modules/`。
 
 ### 客户端行为（动态模式）
 
