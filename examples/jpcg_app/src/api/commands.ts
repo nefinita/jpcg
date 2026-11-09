@@ -624,8 +624,8 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
     }
     case "check_update":
       return {
-        current_app_version: "v2.2.0-alpha.1",
-        latest_app_version: "v2.2.0-alpha.1",
+        current_app_version: "v2.2.0-beta.1",
+        latest_app_version: "v2.2.0-beta.1",
         has_app_update: false,
         current_data_version: null,
         latest_data_version: null,
@@ -637,11 +637,11 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       };
     case "get_module_versions":
       return {
-        core: "2.2.0-alpha.1",
-        update: "2.2.0-alpha.1",
+        core: "2.2.0-beta.1",
+        update: "2.2.0-beta.1",
         const: "130.3.20260602",
-        combo: "2.2.0-alpha.1",
-        app: "2.2.0-alpha.1",
+        combo: "2.2.0-beta.1",
+        app: "2.2.0-beta.1",
       };
     case "perform_app_update":
       return "重启中...（模拟）";

@@ -6516,6 +6516,2377 @@ PR #28 自检发现的问题（先经临时探针**实测复现**再修，避免
 - 前端 `tsc --noEmit` + `npm run build` 通过
 - `cargo fmt --check` 通过；clippy 仅余既有告警（combo 8 参 / app unused_unsafe）
 
+## [2.2.0-beta.1] - 2026-11-10
+
+### 来自 changes/2026-10-16-064650.md
+
+# fix(app): 加载配置时保留目标最大与当前血量
+
+## 问题与触发
+
+保存或导入含 `hostile.max_hp` / `hostile.current_hp` 的配置后点击「加载」，
+`ConfigPanel.handleLoad` 手工重建目标属性时漏掉了这两个字段，导致输入框变空。
+实际前端回归已复现：原 20 项测试通过，新加 4 项全部失败；补齐字段后 24 项通过。
+
+调用链分析表明，计算请求归一化会把缺失值变成 0，连招引擎因此改走
+`target_hp` 满血回退（若也为 0，则为未指定血量模式）。再次保存时，Rust DTO
+同样会将缺失字段默认为 0，覆盖原存档的两项血量。此后端影响为源码核查，
+本机没有运行 Rust 或真实 Tauri IPC，不将其描述为本机实测。
+
+## 修复与范围
+
+- `handleLoad` 恢复 `max_hp` 和 `current_hp`；旧响应缺字段时使用 `?? 0`，与既有 DTO 默认值一致。
+- 回归覆盖受伤目标、显式 0、旧响应缺字段，以及 UI、计算 DTO 和再次保存的参数。
+- 不修改伤害、血量或击杀率算法，不改依赖、数值数据、版本和更新流程。
+
+## 验证
+
+- 本机 `npm ci --ignore-scripts --no-audit --no-fund --cache /tmp/jpcg-npm-cache-20261016` 成功，锁文件未修改。
+- 本机 `NODE_OPTIONS=--max-old-space-size=256 npm test -- --maxWorkers=1 --minWorkers=1`：修复前 4 失败 / 20 通过，修复后 24 通过。
+- 本机 `NODE_OPTIONS=--max-old-space-size=256 npm run build`：TypeScript 与 Vite 通过；保留大于 500 kB 的 bundle 提示。
+- `git diff --check` 通过。
+- 未在本机运行 Rust workspace、金标准、clippy、双模式构建或桌面交互测试：该云环境没有 cargo/rustc。
+- 前端组件测试 mock 了 API；使用真实 `toCalculateRequest` 校验 DTO。真实文件持久化、IPC 和 Rust 计算不在本机验证范围。
+- 远端 CI 结果以本 PR 对应 head 的 GitHub Actions 为准。
+
+### 来自 changes/2026-10-19-062940.md
+
+# 修复迟到心法配置覆盖当前表单
+
+## 什么与为什么
+
+`ConfigPanel.handleXinfaChange` 异步读取心法配置时未判断请求是否过期。快速选择 A 再选择 B，若 A 较晚返回，界面仍显示 B，但 `xinfa_config` 被改回 A，计算 DTO 和保存参数随之使用 A。请求尚未返回时加载存档或清空也会被同一旧响应覆盖。
+
+## 最小修复与关键决策
+
+- 增加独立心法请求版本号，仅应用当前版本的响应。
+- 心法切换、成功加载替换表单、清空及组件清理时使旧请求失效；不能只比较心法 ID，否则 A→B→A 的第一次响应仍会覆盖最新配置。
+- 不改变正常配置内容、游戏数值算法、数值集规则、依赖、版本或 IPC 协议。
+- 6 个确定性 deferred 回归覆盖乱序切换、切回同一 ID、加载及清空，以及加载期间切换和空加载保留有效请求；同时核对下拉、表单、真实 `toCalculateRequest` 转换及保存调用参数。
+
+## 实际验证
+
+- 基于 dev `b05680c3a230caf5a0b7761f503916229724a6dd`，本轮触发后取得隔离源码。
+- `npm ci --ignore-scripts --no-audit --no-fund`：通过，锁文件未变。
+- 实现未改时原 24 项及新增空加载对照通过、新增 5 项缺陷回归失败；修复后 30/30 通过。
+- `NODE_OPTIONS=--max-old-space-size=256 npm run build`：TypeScript + Vite 通过，保留大于 500 kB 的构建 chunk 提示。
+- `git diff --check`：通过。
+- 测试命令：`NODE_OPTIONS=--max-old-space-size=256 npm test -- --maxWorkers=1 --minWorkers=1`。
+- 组件测试 mock API，计算 DTO 转换是真实实现。Rust 按 `xinfa_config.profession` 选择技能的影响为源码调用链核查，不声称已实跑伤害计算或真实文件写入。
+- 当前云环境没有 cargo/rustc，本机 Rust workspace、金标准、rustfmt、clippy、make check-all、双动态库及真实桌面/Tauri IPC 未运行。远端 CI 应按本次 head 单独核验。
+
+### 来自 changes/2026-10-20-013600.md
+
+# 计算结果增加技能搜索和排序（#75）
+
+- 为计算结果增加技能名称子串搜索（忽略大小写和首尾空白），支持原始顺序、技能名称和技能期望 Q 的升降序，以及一键重置。
+- 只在展示层对筛选后的新数组排序，不修改计算响应、DTO、引擎或数值。相同排序值保留原顺序。
+- 先排序技能，再展开 DOT，每个技能的各跳保持原有连续顺序；明确说明使用技能 Q 值而非单跳 Q 排序。
+- 显示筛选技能数/全部技能数、独立的无匹配提示；底部统计和最高期望标记仍基于全部技能，界面明确标注此范围。
+- 重新计算和清空过程中保留筛选偏好，新响应使用当前筛选；可随时重置。不引入持久化或依赖。
+- 补充组件测试覆盖搜索、组合/重置、数值/名称稳定排序、DOT、特殊伤害、空结果以及重算切换。
+
+## 复审后小修（2026-10-20）
+
+按 code review 与无头 Chromium 截图复核，做以下纯展示层调整，不改筛选/排序逻辑与数据契约：
+
+- 排序语义文案改为「技能期望 Q（合计）」，hint 明确 DOT 行 Q 为单跳值、各跳连续、统计仍为全部技能；避免 q-desc 时首组 DOT 单跳值看起来「排序错」。
+- 搜索框/排序下拉/重置按钮补 `:focus-visible`（teal 描边 + 2px 光晕，对齐既有 `.input:focus`）；按钮补 `cursor: pointer`、disabled 用 `not-allowed`；控件设最小宽度防「从高到低」被截断。
+- 无匹配提示行使用 `emptyRow`（居中 + muted + 允许换行），不再沿用表体左对齐正文色。
+- 行 key 由下标改为「技能名 + 跳序 + 下标」，降低行复用错位风险。
+- 验证：`npm test` 32/32、`npm run build`（tsc + vite）通过；截图复跑见 `.scratch/pr77-shots/`。
+
+### 来自 changes/2026-10-20-220000.md
+
+# Makefile 一键流水线：npm 安装 → 前端构建 → Rust 双模式 + 4 模块库 + updater
+
+- 日期：2026-10-20 22:00
+- 分支：`dev`（工作区改动，未提交）
+- 范围：`Makefile`、`.gitignore`、`.cargo/config.toml`（+ 本变更日志）
+
+## 做什么
+
+把原先只能逐个手工执行的构建矩阵，整理成「干净检出后一条命令」的 Makefile 流水线。
+
+### 新增/重命名目标
+
+| 目标 | 作用 |
+|------|------|
+| `setup` | 前端依赖安装：`npm ci`，缓存写入工作区 `$(CURDIR)/.cache/npm` |
+| `frontend` | 前端构建：`npm run build`（tsc + vite → `examples/jpcg_app/dist/`） |
+| `frontend-test` | 前端测试：`npm test`（vitest + jsdom） |
+| `updater` | 编译 `jpcg_updater` 并复制到 `examples/jpcg_app/src-tauri/binaries/jpcg_updater-<host-triple>[.exe]` |
+| `all` | 一键：`setup → frontend → modules-dir → updater → build-static`（结束：`jpcg_app`=static、`jpcg_app-dynamic`=dynamic 变体） |
+| `fmt-check` / `clippy` | 分别对应 `cargo fmt --all -- --check` / `cargo clippy --workspace --all-targets` |
+| `help` | 列出目标与可用变量 |
+
+### 保留并增强的既有目标
+
+- `build-static` / `build-dynamic` / `build-modules` / `modules-dir` / `test` 全部保留；
+- `build-static` / `build-dynamic` 现在依赖 `frontend`（Tauri 的 `frontendDist` 在编译期嵌入，必须先有 `dist/`）；
+- `frontend` / `frontend-test` 依赖 `setup`，干净检出可直接 `make build-static`；
+- `modules-dir` 修复了原来 `cp` 源/目标同为 `target/$(BUILD)` 的无效复制：改为把 4 个模块库复制到
+  `target/$(BUILD)/modules/`（`ffi_bridge` 动态加载顺序首选项 `exe同目录/modules/`），缺失任一库则报错退出；
+  同时把构建出的 dynamic app 另存为 `target/$(BUILD)/jpcg_app-dynamic[.exe]`；
+- `check-all` 扩展为超集：`fmt-check + clippy + build-modules + test（workspace 测试 + dynamic 库测试）
+  + frontend-test + frontend + build-dynamic + build-static`，失败即停（make 默认语义），static 放最后。
+
+### 环境适配
+
+- `NPM_CACHE ?= $(CURDIR)/.cache/npm`，所有 npm 命令经 `npm_config_cache` 使用该缓存（本机 `$HOME` 只读，
+  默认缓存目录不可写）；可用 `make NPM_CACHE=/path` 覆盖；
+- `setup` 带增量跳过：`node_modules/.jpcg-setup-stamp` 新于 `package.json`/`package-lock.json` 时跳过
+  `npm ci`（`FORCE_SETUP=1` 强制重装），干净检出时自动安装；
+- `BUILD ?= debug` 语义保留，`BUILD=release` 时所有 cargo 目标带 `--release`、产物落 `target/release/`；
+- 跨平台：按 `uname`/`OS` 识别 `.dylib`/`.so`/`.dll` 与 `.exe`，`<host-triple>` 由 `rustc -vV` 取；
+- 新增 `CARGO_JOBS ?=`（透传 `-jN`），便于内存紧张时限制并行度；
+- `.NOTPARALLEL: all check-all`：一键/全绿目标内部有产物顺序要求，即使外部传 `-j` 也强制其前置目标
+  串行执行（避免 dynamic/static 同名产物交错覆盖）；
+- Makefile 顶部改为完整的「一键流程 + 目标一览 + 依赖顺序 + 产物布局」说明；
+- `.DEFAULT_GOAL := build-static`，保持原有裸 `make` 行为不变。
+
+### 同步配置
+
+- `.gitignore` 增加 `.cache/`、`.scratch/`（工作区本地 npm 缓存与临时目录，HOME 只读环境必需）；
+- `.cargo/config.toml` 的 `build-modules` 别名补上 `jpcg_combo`，与 Makefile/README 的「四个模块库」一致。
+
+## 为什么
+
+1. **干净检出无法一条命令构建**：缺 `node_modules` 时前端无法构建，`tauri-build` 因 `frontendDist`
+   不存在直接报错；缺 `jpcg_updater-<host-triple>` 时 `tauri` 打包因 `externalBin` 失败。原先这些前置步骤
+   只散落在 README/CI 的手工命令里，容易漏。
+2. **本机 `$HOME` 只读**：npm 默认把缓存/日志写到 `~/.npm`，会直接失败。必须显式把缓存放到工作区。
+3. **模块库数量不一致**：Makefile 已含 `jpcg_combo`，但 `.cargo/config.toml` 别名仍缺它；dynamic 模式下
+   combo 方法由独立 dll 提供，漏构建会表现为运行期功能缺失而非编译错误。
+4. **对齐 CI**：`.github/workflows/ci.yml` 的顺序就是「npm ci/build → updater → fmt → clippy → build/test →
+   前端 test/build」，Makefile 目标化后本地可一条命令复现同一条链路。
+
+## 关键决策
+
+- **前置依赖显式化**：`frontend: setup`、`build-static`/`build-dynamic`: `frontend`。这样
+  `make build-static` 单独执行也能在干净检出跑通；代价是每次 app 构建会重跑前端构建（vite ≈3s）与
+  按需 `npm ci`（stamp 命中时跳过）。
+- **`setup` 增量跳过而非无条件 `npm ci`**：既保证干净检出自动安装，又避免每次构建都把
+  `node_modules` 删掉重装（166MB / 10s 级）。`FORCE_SETUP=1` 保留「永远 npm ci」语义。
+- **`modules-dir` 产出到 `target/$(BUILD)/modules/`**：原实现把 `target/$(BUILD)/libjpcg_*.so`
+  复制到同一目录（实际是 `cp` 同文件，空操作）。改放 `modules/` 子目录既真实完成复制，又匹配
+  `ffi_bridge` 的首选加载路径；4 个 dll 本身也仍在 `target/$(BUILD)/`（cargo 产物）。
+- **static/dynamic 同名产物的「一键体验」**：两者都写 `target/$(BUILD)/jpcg_app`，后构建者覆盖前者。
+  验收反馈指出 `make all` 结束在 dynamic 变体与「默认 static」直觉不符，故调整为：
+  `modules-dir` 构建 dynamic 后先另存为 `jpcg_app-dynamic[.exe]`，`all` 把 `build-static` 放到最后，
+  一键结束后 `jpcg_app`=默认 static、`jpcg_app-dynamic`=dynamic 变体，两种产物同时可用；
+  单独 `make build-dynamic` 仍是「构建这一种模式」的语义（会覆盖 `jpcg_app`）。
+- **`check-all` 保留构建语义**：旧 `check-all` 包含 static/dynamic/modules 构建，新目标列表是扩展而非替换，
+  因此作超集保留；`build-modules` 放在 `test` 之前，让 dynamic 冒烟测试能真实加载 dll（而不是静默跳过）；
+  `build-static` 放最后，结束时 `jpcg_app` 为默认 static。
+- **不纳入 `npx tauri build`**：Makefile 继续只做 `cargo build`（与既有语义/CI 一致）；安装包打包仍由
+  `release.yml` 的 Tauri CLI 负责，避免把前端嵌入语义在 Makefile 里再造一份。
+- **static/dynamic 输出同名**：两者都写 `target/$(BUILD)/jpcg_app`，后构建者覆盖前者。`make all` 按任务
+  约定顺序（先 static 后 modules-dir 内的 dynamic）结束，因此最终二进制是 **dynamic 变体**；需要 static
+  产物时再跑 `make build-static`，或为两种模式使用不同的 `CARGO_TARGET_DIR`（已在 Makefile 顶部注明）。
+
+## 实际验证与耗时
+
+环境：Linux x86_64，cargo 1.99 / rustc 1.99 / node 22.22 / npm 10.9.4，`$HOME` 只读，64 核；
+为控制内存并行度使用 `CARGO_JOBS=16`。日志在 `.scratch/logs/`。
+
+### 1) `make setup frontend build-static`（从无 node_modules 状态起）
+
+```
+make setup frontend build-static     # EXIT=0，总耗时 79s
+```
+
+- `npm ci`（首次，缓存目录新建）：`added 188 packages in 10s`，工作区缓存 `.cache/npm` 41MB；
+- `npm run build`：`tsc -b && vite build` 成功，dist ≈ 778KB（js 740.52KB / css 36.09KB），2.77s；
+- `cargo build -p jpcg_app`（static，debug）：`Finished dev in 1m04s`。
+
+### 2) `make all`（一键，增量复跑）
+
+```
+make all                             # EXIT=0，总耗时 30s（验收调整后的新顺序）
+```
+
+各步：`setup` 因 `package-lock.json` 刚被其他任务更新（stamp 过期）自动重跑 `npm ci`（1s，命中缓存）；
+`frontend` 2.48s；`build-dynamic` 8.87s；`build-modules` 2.58s；`modules-dir` 复制 4 库 + 另存
+`jpcg_app-dynamic`；`updater` 0.06s；`build-static` 最后 11.54s。首次按旧顺序运行时为 44s
+（含 static 13.23s / dynamic 20.28s）。
+
+产物核对（`BUILD=debug`）：
+
+| 产物 | 路径 | 大小/说明 |
+|------|------|-----------|
+| app 本体（默认 **static**，最后落地） | `target/debug/jpcg_app` | 331,324,088 B；含 2408 个 `jpcg_core::` 符号 |
+| dynamic 变体（modules-dir 另存） | `target/debug/jpcg_app-dynamic` | 315,315,128 B；0 个 `jpcg_core::` 符号，含 `libjpcg_core.so` 字符串 |
+| 四个模块库 | `target/debug/libjpcg_{core,combo,update,const}.so` | core 121MB / combo 123MB / update 111MB / const 4.6MB |
+| 模块目录副本 | `target/debug/modules/` 下同名 4 个 `.so` | 动态模式加载首选路径 |
+| updater | `examples/jpcg_app/src-tauri/binaries/jpcg_updater-x86_64-unknown-linux-gnu` | 5.0MB（`externalBin` 命名） |
+| 前端资源 | `examples/jpcg_app/dist/{index.html,assets/}` | 编译期嵌入 app |
+
+static/dynamic 身份检查方法（比大小更硬）：
+
+```sh
+nm -C target/debug/jpcg_app         | grep -c 'jpcg_core::'   # 2408（静态链接了 core）
+nm -C target/debug/jpcg_app-dynamic | grep -c 'jpcg_core::'   # 0（运行时 dlopen）
+grep -c 'libjpcg_core.so' target/debug/jpcg_app-dynamic        # 1（dll 名）
+```
+
+### 3) `make check-all`（fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端）
+
+```
+make check-all                       # EXIT=0，总耗时 43s
+```
+
+- `cargo fmt --all -- --check`：通过（无输出）；
+- `cargo clippy --workspace --all-targets`：通过，仅 2 处既有 warning（`jpcg_combo/src/host.rs`
+  参数过多、`jpcg_app` dynamic 分支冗余 unsafe），与 CI 的「不 -D warnings」策略一致；
+- `cargo build -p jpcg_core -p jpcg_combo -p jpcg_update -p jpcg_const`：0.17s；
+- `cargo test --workspace`：全部通过（12 + 5 + 36 + 6 个用例，其余 crate 0 用例；无失败/忽略）；
+- `cargo test -p jpcg_app --lib --no-default-features --features dynamic`：1 passed
+  （真实加载到 `target/debug/libjpcg_core.so`，未跳过）；
+- `npm test`（vitest）：`Test Files 1 passed / Tests 24 passed`；
+- `npm run build`：`✓ built in 2.18s`；
+- `cargo build -p jpcg_app`（static）8.91s、dynamic 6.53s；末尾输出 `==> 全部通过`。
+- 调整 `all` / `check-all` 顺序后复跑（`build-dynamic` 在前、`build-static` 最后）：EXIT=0，34s，
+  结果同上；结束时 `jpcg_app` 仍为默认 static（2408 个 `jpcg_core::` 符号），`jpcg_app-dynamic` 保留。
+
+### 4) 干净检出补充模拟（缺 dist / 缺 node_modules）
+
+- node_modules：步骤 1 的 `npm ci` 是从「无 `node_modules`」状态安装（npm ci 本身先删除再安装），
+  188 个包 10s，证明 lockfile 完整且工作区缓存可用；
+- dist：把 `examples/jpcg_app/dist/` 整个移走，模拟干净检出缺前端产物后执行 `make build-static`：
+
+```
+mv examples/jpcg_app/dist .scratch/dist-backup
+make build-static                    # EXIT=0，总耗时 11s
+```
+
+  `frontend` 依赖先自动执行 `npm run build` 重建 `dist/`（index.html + assets，js 740KB / css 36KB），
+  随后 static app 编译 6.50s——证明「app 必须在 frontend 之后」的顺序依赖生效，未出现 tauri
+  `frontendDist` 缺失错误。
+- cargo 侧从零编译由 CI 干净 runner 覆盖（`cargo build --workspace`），本地为既有 target 增量验证。
+
+### 5) `BUILD=release` 支持
+
+`make -n BUILD=release all` 检查：所有 cargo 命令带 `--release`（`cargo build -p jpcg_app --release`、
+`--no-default-features --features dynamic --release` 等），产物路径切换为 `target/release/`。
+
+实跑（后台，`CARGO_JOBS=8`）：
+
+```
+make BUILD=release build-static modules-dir updater   # EXIT=0，总耗时 106s
+```
+
+- static app release：1m05s（release 依赖从旧缓存重建）；dynamic app release：27.44s；
+- 四个模块 release：7.75s，已复制到 `target/release/modules/`；
+- updater release：0.30s，已复制到
+  `examples/jpcg_app/src-tauri/binaries/jpcg_updater-x86_64-unknown-linux-gnu`（522KB）；
+- 产物：`target/release/jpcg_app` 22.7MB、`libjpcg_{core,combo,update,const}.so` 13.9/13.8/11.7/0.4MB。
+
+### 6) `-j` 并行下的顺序保护
+
+```
+CARGO_JOBS=16 make -j8 all           # EXIT=0，总耗时 26s
+```
+
+输出顺序仍为 `frontend → build-dynamic → build-modules → modules-dir（另存 dynamic）→ updater →
+build-static`，未出现 static/dynamic 交错；结束后 `jpcg_app` 331,324,088 B / 2408 个 `jpcg_core::`
+符号（static），`jpcg_app-dynamic` 315,315,128 B / 0 个符号（dynamic）。`.NOTPARALLEL` 生效。
+
+## 遗留/已知事项
+
+- `make all` / `make check-all` 都会把同一 crate 以 static、dynamic 两种 feature 各编译一次（约多花
+  ~20s），换来 `jpcg_app`（static）与 `jpcg_app-dynamic`（dynamic）两种产物并存。
+- 单独 `make build-dynamic` 的语义仍是「只构建 dynamic 模式」，会覆盖 `target/$(BUILD)/jpcg_app`；
+  要同时保留两种产物请用 `make all`，或先 `build-dynamic` 再 `build-static`。
+- `all` / `check-all` 已加 `.NOTPARALLEL`，外部传 `-j` 时其前置目标仍按序串行，不会出现
+  dynamic/static 同名产物交错覆盖。
+- 首次 `npm ci` 需要网络；之后复用 `.cache/npm`。缓存目录已加入 `.gitignore`。
+- 安装包（AppImage/deb 等）与 `modules_manifest.toml` 生成不在本次 Makefile 范围：前者由
+  `release.yml` 的 `npx tauri build` + `deploy-gen` 负责，后者由 `manifest-gen` 负责。
+- 其他文档（README/AGENTS/CONTRIBUTING 等）中的 make 目标说明由文档任务同步更新，本变更未触碰。
+
+### 来自 changes/2026-10-20-220100.md
+
+# docs: 全量文档更新到 v2.1.0 / 2026-10-20 真实状态
+
+## 背景与范围
+
+仓库文档长期停留在 v2.1.0-beta.1 / 私有仓库基线：README 版本与「本次更新」过时、
+PLAN 的 M1 仍写「待执行」、AGENTS workspace/命令缺 `deploy-gen` / `json-to-toml` /
+make 一键目标、CONTRIBUTING 与 PR 模板仍按旧 CI/分支保护描述、`server_manifest.md`
+的服务器布局与 `data_version`/模块清单示例过期。本次把 7 个文档 + `.github/CODEOWNERS` 过时注释对齐到 2026-10-20 的实际状态。
+
+事实来源（均为本轮重新核实，不依赖任务描述转述）：
+
+- `gh release view v2.1.0`：publishedAt `2026-10-13`，assets 含三平台 app、
+  `jpcg-stable-v2.1.0.tgz` + `.sha256`、9 个 dll、`data_manifest.toml`、`modules_manifest.toml`；
+- `gh repo view`：`visibility=PUBLIC`、`isPrivate=false`、defaultBranch `dev`；
+- `gh api repos/.../branches/{dev,beta,release}/protection`：必需检查 3 个
+  （`Rust 构建 + 测试 + lint` / `金标准回归（计算数值）` / `前端构建 (tsc + vite)`）、
+  1 review + code owner reviews、linear history、conversation resolution、禁强推/禁删除；
+  `beta`/`release` strict，`release` require last push approval；
+- `git log`：dev 头 `b05680c`（2026-10-18）；本地仅有 `v2.1.0-beta.1` tag（稳定 tag 由 Release API 核实）；
+- `Cargo.toml`：workspace `2.1.0`、`jpcg_const=130.3.20260602`、`jpcg_updater=2.1.0`；
+- 最新 `Makefile`（另一任务在本次执行期间更新）：目标 `setup/frontend/frontend-test/updater/all/check-all`、
+  `NPM_CACHE ?= $(CURDIR)/.cache/npm`；`.cargo/config.toml` 的 `build-modules` 已含 `jpcg_combo`；
+- `server_tools/` 实际目录：`manifest-gen`、`forum`、`deploy-gen`、`json-to-toml`；
+- `crates/jpcg_update` URL 常量与 `server_tools/deploy-gen` 编排逻辑；
+- GitHub Release 资产 `data_manifest.toml` / `modules_manifest.toml` 实际格式；
+- CHANGELOG 第 5869 行起 `[2.1.0] - 2026-10-13` 段（18 条 changes 记录）。
+
+## 各文件改动
+
+- **README.md**：版本/日期改 `v2.1.0 / 2026年10月`；删除无依据的「Android 适配中」；
+  「本次更新」按 CHANGELOG `[2.1.0]` 提炼为 5 条真实亮点（值集外置、更新链路自动化、
+  macOS aarch64、数据读写一致性、发布工程质量）；原 alpha.2 内容降级为「往期版本记录」；
+  未来计划标注稳定版已完成；补「make 一键构建」流程并与 Makefile 实际目标/依赖顺序对齐；
+  核心功能补值集切换/热更新说明；Workspace 速览补 `data/shuxing`、`data/values`、server_tools 四工具；
+  往期版本记录标题由开发线版本 `v2.1.0-alpha.2` 改为 CHANGELOG 实际发布段
+  `v2.1.0-beta.1`（2026-09-04，日期取自 CHANGELOG），并移除 diff 块中不可核实的「alpha.1 起已包含」表述；
+  `make all` 顺序/产物与 Makefile 最终版对齐（setup → frontend → modules-dir → updater → build-static；
+  结束 `jpcg_app`=static、`jpcg_app-dynamic`=dynamic），`modules-dir` 产物路径由「应用同目录」更正为
+  `target/<build>/modules/`，并补 dynamic app 另存说明。
+- **PLAN.md**：M1 标记完成并写入实际保护配置（1 review+CODEOWNERS、3 checks、linear、
+  conversation resolution、beta/release strict、release last-push-approval）；
+  状态表改为 Public + v2.1.0 + 保护已配置；M2 注明「暂无新授权进展」（不虚构）；
+  M3 改为「已转公有，进行中」；收尾文案标注部分完成（README 徽章/SECURITY.md 未补）；
+  决策记录追加 2026-10-20 核实条目；M0 引用的已聚合 `changes/2026-08-11-231500.md` 改为指向 CHANGELOG 条目。
+- **AGENTS.md**：workspace 表补 `server_tools/deploy-gen/`、`server_tools/json-to-toml/`；
+  修正 `jpcg_const` 描述（它是 `jpcg_core` 等级常数真源，被 core/app 依赖，并非 unused；
+  依据：`crates/jpcg_core/Cargo.toml:20-21`（注释 + `jpcg_const.workspace = true` 依赖）、
+  `examples/jpcg_app/src-tauri/Cargo.toml:28`（app 直接依赖）、
+  代码使用 `crates/jpcg_core/src/type_set/coefficient.rs:31/39/54/71` 的 `jpcg_const::level_constant::LIVE_130`）；
+  Commands 段补 make 一键目标、frontend-test、check-all 实际组成，补 deploy-gen/json-to-toml 用法；
+  修正 `.cargo/config.toml` 别名说明（`build-modules` 含 combo，与 Makefile 一致）；
+  版本 bump 改为 `release.sh` / 手改根版本 + sync-version，并注明 `cargo set-version` 会因
+  `jpcg_const` 独立版本降级失败；开源状态改为 Public + 三分支保护；新增 `data/values/` 值集 Key fact；
+  版本模型补 `data_manifest.data_version` 语义；模块更新补 deploy-gen 合并 `platform="multi"`；
+  移除已过时的「更新服务器清单手工 3 步」（现由 release.yml 的 package job 自动调用 deploy-gen）；
+  `make all` 顺序/产物与 `make modules-dir` 产物（`target/<build>/modules/` + `jpcg_app-dynamic`）
+  按 make-dev 更新后的最终 Makefile 对齐。
+- **CONTRIBUTING.md**：新增「分支保护现状」小节（检查名/CODEOWNERS/strict/last push approval）；
+  验证命令对齐 CI（clippy 不 `-D warnings`；前端 `npm test` + build）；版本表修正
+  `data_version` 语义（= `vX.Y.Z` 发布 tag，由 manifest-gen 写入，shuxing 内 `[version]` 另为
+  `{level,season,modified}`）；bump 改为 release.sh/手改根版本，明确不要用 `cargo set-version`；
+  发布流程补 prep 分支 + PR + tag + deploy-gen tgz 链路。
+- **server_manifest.md**：新增「客户端 URL 约定」表（对照 `jpcg_update` 实现）；
+  部署 stage 改为 `deploy-gen` 实际输出（stable 版本目录含 `modules/`、`data/`；beta 根式含
+  update.toml/manifest/modules/data）；`update.toml` 的 `data_version` 由 `v2.0.2026050201`
+  更正为实际 `v2.1.0`；模块清单补真实字段示例（`modules_version`/`platform="multi"`/version/sha256/size）
+  与三平台 9 个 dll；更新器改为 host-triple 后缀 + `make updater`；数据清单补实际覆盖
+  （readme.md、shuxing/*、values/*）；macOS 错标历史说明由具体 `beta.1` 改为「早期 Beta 产物」（保留事实、去掉过期版本串）。
+- **scripts/README.md**：受保护分支处理补实际保护规则；sync-version 补 `package-lock.json`
+  同步与 `NPM_CACHE`；修正 release.sh 文件表与 alpha 阶段「push dev」表述（实为推 prep 分支 + PR）；
+  阶段示例版本号由 `2.1.0-alpha.n`/`2.1.0-beta.n` 泛化为 `X.Y.Z-alpha.n`/`X.Y.Z-beta.n`（X.Y.Z 以根 Cargo.toml 为准）。
+- **.github/PULL_REQUEST_TEMPLATE.md**：目标分支 `develop` → `dev`（受保护/squash）；
+  组件版本项补 `jpcg_updater` 与 `data_manifest.data_version`；验证项对齐 `make check-all` 新语义、
+  clippy 不 `-D warnings`、前端 `npm test` + build。
+- **.github/CODEOWNERS**（按 lead 补充要求）：过时注释「master/develop 分支保护」→「dev/beta/release 分支保护」；
+  owner 规则 `* @QinThirteen` 未改动。
+- **changes/2026-10-20-220100.md**：本文件。
+
+## 决策与取舍
+
+- 只改 7 个文档 + `.github/CODEOWNERS` 注释 + 本 changes 文件；未动 Makefile / `.cargo` / `.gitignore` /
+  `package-lock` / `sync-version.sh` / CHANGELOG / 源码（这些由 task-1、task-3 负责），未提交 git。
+- 不重排 CHANGELOG 历史；README 「本次更新」只从 `[2.1.0]` 段提炼，不引入未记录功能。
+- make 命令段在读取**最新** Makefile 后写成实际目标（`setup/frontend/frontend-test/updater/all/check-all`），
+  未使用任务描述中的占位命名。
+- M2 数据授权未取得进展，PLAN 中不虚构授权状态。
+- `data_version` 语义以 `manifest-gen` 实现为准更正，避免继续传播「等级.赛季.日期」的旧说法。
+- 版本串处理原则：已发布/CHANGELOG 可查的版本按 CHANGELOG 段落引用（含日期）；
+  未单独发布、只在开发线存在的 `2.1.0-alpha.2` 不再作为 README 历史标题；
+  仅表达阶段约定处保留 `alpha.n` / `X.Y.Z-alpha.n` 这类通用写法。
+- 构建命令/产物描述以 make-dev **最终** Makefile 为准复核（`all:`/`modules-dir:` 实际依赖与命令），
+  不沿用调整前的旧顺序/路径。
+
+## 验证
+
+- `git diff --stat`：本轮 8 个文件（7 文档 + `.github/CODEOWNERS` 注释）+ 新增 changes 文件；
+  `git diff --check` 通过（无空白错误）。
+- `make -n all` / `make -n check-all` 已逐项对照 make-dev **task-1 完成后**的最终 Makefile
+  （make-dev 已 inactive，md5 `e932c64da37955cb7b7db47020d2251e`；`all:` / `modules-dir:` / `check-all:` 依赖行），
+  `make -n all` 实测顺序为：npm run build → dynamic app → 4 模块库 → 复制 `target/debug/modules/` 并另存
+  `jpcg_app-dynamic` → updater → static app（最终 `jpcg_app`）：
+  `all` = setup → frontend → modules-dir（build-dynamic + build-modules，dll 复制到 `target/<build>/modules/`，
+  并把 dynamic app 另存 `jpcg_app-dynamic`）→ updater → build-static（最终 `jpcg_app` 为 static）；
+  `check-all` 展开 fmt-check → clippy → build-modules → test → frontend-test → frontend → build-dynamic → build-static；
+  与 README/AGENTS/CONTRIBUTING/PR 模板描述一致（CONTRIBUTING 无 `make all` 产物描述，check-all 描述为顺序无关表述，无需改）；
+  未运行真实构建/测试。
+- grep 版本串（范围：README / PLAN / AGENTS / CONTRIBUTING / server_manifest / scripts/README / PR 模板；
+  模式 `alpha.`、`beta.1`、`v2.0.`、`v2.1.0-beta`、`[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)`）逐一核实：
+  过期具体版本串已全部清除；剩余匹配仅为阶段约定写法（AGENTS 分支说明、CONTRIBUTING 分支图/版本阶段、
+  scripts/README `X.Y.Z-alpha.n` 示意）与 README 中带 CHANGELOG 日期的历史段 `v2.1.0-beta.1`，均非过期声明；
+  无 `Android`、无「私有仓库/待执行」旧表述、无 `cargo set-version` 正向用法（仅「不要用」警示）、
+  无 `-D warnings` 正向命令、无 `v2.0.2026050201` / `v2.0.X` 旧示例。
+- 未在本机跑完整构建/测试（本轮为纯文档改动；Makefile 行为由 task-1 实跑验证）。
+
+## 不确定 / 待确认
+
+- `server_manifest.md` 中「服务端把 `modules/`、`data/` 以 `/files/` 暴露」的落位映射，
+  依据是 `jpcg_update` 客户端 URL 常量与 `deploy-gen` 输出结构；服务器端 nginx/部署脚本
+  不在本仓库，未直接验证。
+- PLAN M1 收尾项（README 徽章、`SECURITY.md`）仍缺失，本次只记录状态、未新增文件。
+- 本地 git 未 fetch 稳定 tag `v2.1.0`（仅 `v2.1.0-beta.1`）；发布事实以 GitHub Release API 为准。
+
+### 来自 changes/2026-10-20-220200.md
+
+# chore(meta): 元数据对齐 —— package-lock 版本回同步 + commands.ts mock 修复 + sync-version.sh 扩展
+
+日期：2026-10-20
+
+`examples/jpcg_app/package-lock.json` 的根 `version` 仍停留在 `2.1.0-alpha.2`，
+与 `package.json`/根 `Cargo.toml`/`tauri.conf.json` 的 `2.1.0` 不一致；且
+`scripts/sync-version.sh` 不处理 package-lock，版本 bump 后 lock 会持续漂移。本次只做元数据对齐，
+**不改任何构建文件，不升级任何依赖**。
+
+lead 复核后追加二轮补充：`commands.ts` 的 `get_module_versions` mock 陈旧且形状缺字段，
+一并修复并纳入 `sync-version.sh` 同步范围（详见 §2.1 与 §3）。
+
+## 1. package-lock.json 版本同步（A1）
+
+- 现象：lock 顶层 `"version": "2.1.0-alpha.2"` 与 `packages[""].version` 同为旧值，而 `package.json` 已是 `2.1.0`。
+- 修复：优先用 npm 官方方式重新生成 lock：
+  ```sh
+  cd examples/jpcg_app
+  npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
+    --cache /compile/workspace/jpcg/.scratch/npm-cache
+  ```
+- 结果：`git diff` **只有 2 行**（顶层 version + `packages[""].version`），
+  无任何依赖版本/resolved/integrity 变化；`package.json` 的 `dependencies`/`devDependencies`
+  版本范围与 lock `packages[""]` 完全一致（校验脚本确认无 pkg-only / lock-only / range-diff）。
+- 决策：`--package-lock-only` 不安装依赖、不动 `node_modules`、不跑生命周期脚本，是同步 lock 根版本的最小侵入方式；
+  缓存指到工作区 `.scratch/npm-cache`，适配 `$HOME` 只读环境。
+
+## 2. 版本一致性审计（A2）
+
+版本源与实测值（截至本次修改）：
+
+| 来源 | 值 | 结论 |
+|------|----|------|
+| 根 `Cargo.toml` `[workspace.package].version` | `2.1.0` | 版本源（release tag / 安装包命名） |
+| `crates/jpcg_api` / `jpcg_core` / `jpcg_combo` / `jpcg_update` / app / forum / manifest-gen / deploy-gen / json-to-toml | `version.workspace = true` → `2.1.0` | 继承，一致 |
+| `crates/jpcg_const` | `130.3.20260602` | **设计上独立**（等级.赛季.日期），不改 |
+| `crates/jpcg_updater` | `2.1.0` | **设计上独立**，本次恰好等于 workspace 版本，不改 |
+| `Cargo.lock`（11 个 workspace 成员） | 与 Cargo.toml 全部一致 | `cargo metadata --locked --no-deps` 退出码 0，**未手改** |
+| `examples/jpcg_app/package.json` | `2.1.0` | 一致 |
+| `examples/jpcg_app/src-tauri/tauri.conf.json` | `2.1.0` | 一致 |
+| `examples/jpcg_app/src/api/commands.ts` `current_app_version` / `latest_app_version` | `v2.1.0` | 一致（sync-version.sh 维护） |
+| `examples/jpcg_app/src/api/commands.ts` `get_module_versions` mock | `core/update/combo/app = 2.1.0`、`const = 130.3.20260602` | **本次修复**（原 core/update/app 为 `2.1.0-alpha.1`，且缺 `combo`） |
+| `examples/jpcg_app/package-lock.json`（顶层 / `packages[""]`） | `2.1.0` | **本次修复**（原 `2.1.0-alpha.2`） |
+
+### 2.1 commands.ts `get_module_versions` mock 修复（lead 复核追加）
+
+- 问题：mock 返回 `core/update/app = "2.1.0-alpha.1"`（陈旧）；且 Rust
+  `commands/version.rs::ModuleVersions` 与 TS `src/types/index.ts::ModuleVersions` 都是 **5 个字段**
+  （`core/update/const/combo/app`），mock 只有 4 个、**缺 `combo`** —— 形状与真实命令不一致
+  （mock 返回类型是 `Promise<unknown>`，TypeScript 不会报错，属静默漂移）。
+- 修复：
+  - `core/update/app` → `2.1.0`；补 `combo: "2.1.0"`；`const` 保持独立版本 `130.3.20260602`；
+  - 字段顺序与 Rust struct 一致（core、update、const、combo、app），便于对照。
+- 依据：`jpcg_core::CORE_VERSION`/`jpcg_update::UPDATE_VERSION`/`jpcg_combo::COMBO_VERSION` 与
+  app 的 `CARGO_PKG_VERSION` 都继承 workspace 版本（2.1.0）；`jpcg_const::CONST_VERSION` 独立。
+- 该修复为一次性源码修正；后续版本 bump 由 `sync-version.sh` 维护（见 §3）。
+
+未修 / 仅报告项（均超出本次写作用域，或属产品元数据决策，未改动）：
+
+1. **`README.md:123` 标题仍为「📦 版本记录 (v2.1.0-alpha.2)」**，与 `2.1.0` 不符；属 README 写作用域，未改。
+2. `tauri.conf.json` 的 `identifier=com.qinthirteen.jpcg` 正常；`bundle` 未配置 `publisher`/`copyright`/`license`
+   等发布元数据（仅影响安装包属性，不影响构建），本次不建议改。
+3. `examples/jpcg_app/src-tauri/Cargo.toml` 仍保留模板值 `description = "A Tauri App"`、`authors = ["you"]`；
+   建议后续统一（属 app 源码写作用域）。
+4. `license = "GPL-3.0"` 不是严格 SPDX 标识（规范写法 `GPL-3.0-only` / `GPL-3.0-or-later`）；
+   改它会影响 `cargo set-version`/crates.io 语义，需单独评估，本次不动。
+5. 全仓无 `rust-version`、无 `rust-toolchain.toml`（AGENTS 明确依赖 rustup default）；edition 2024 要求
+   rustc ≥ 1.85，建议将来在根 `[workspace.package]` 加 `rust-version = "1.85"`，属根 Cargo.toml 写作用域。
+6. `.github/dependabot.yml` 三个生态（cargo/npm/github-actions）`target-branch: dev` 与
+   CONTRIBUTING 的「dev 为最上游集成分支」模型一致，**仍合理**，不改。
+
+## 3. scripts/sync-version.sh 扩展（A3）
+
+- 新增第 4 步：同步 package-lock.json。
+  - 优先 `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`（`cd examples/jpcg_app` 执行）；
+    若设置了 `NPM_CACHE` 则追加 `--cache "$NPM_CACHE"` 并 `mkdir -p`（适配只读 `$HOME`）。
+  - npm 不存在/执行失败时回退到 **python 最小编辑**：只改 `version` 与 `packages[""].version` 两个字段，
+    不重排 lock，不触碰依赖；回退方案实测输出与 npm 路径**字节一致**。
+  - npm 跑完后用 python 校验两个 version 字段确实等于目标版本；不满足则走最小编辑兜底，最后不会静默留下旧版本。
+- 扩展第 3 步（commands.ts）：
+  - 除已有的 `current_app_version` / `latest_app_version`（`v<ver>`）外，**限定在
+    `case "get_module_versions": return { ... };` mock 段内**同步 `core`/`update`/`combo`/`app`
+    为 `<ver>`（无 v 前缀）；`const` **显式不动**（独立版本）。
+  - 只匹配该 mock 段，避免误改文件其他位置同名键；mock 段形状被重构（正则不匹配）时
+    **只向 stderr 告警、不中断脚本**（其余版本同步仍有效），作为结构漂移的 fallback。
+- 幂等：脚本在已同步状态下重复执行，四个输出文件（package.json、tauri.conf.json、commands.ts、
+  package-lock.json）sha256 完全不变；模拟「陈旧 mock」后执行可逐字节恢复期望内容。
+- 头部注释同步更新（新增 package-lock 行、`NPM_CACHE` 用法、commands.ts 模块版本）。
+  `scripts/release.sh` 已以 `scripts/sync-version.sh "$VERSION"` 调用，发布流程自动获得 lock 同步，
+  无需改 release.sh。
+
+## 4. 验证
+
+1. 先把 lock 还原为 `2.1.0-alpha.2`，运行 `NPM_CACHE=.scratch/npm-cache scripts/sync-version.sh`
+   （不带参数，从根 Cargo.toml 读 `2.1.0`）：
+   - `package.json` / `tauri.conf.json` / `commands.ts` **无 diff**（JSON 重序列化字节稳定）；
+   - `package-lock.json` 仅 2 行变化（顶层 + `packages[""]`）。
+2. 幂等：紧接着再跑一次，上述四个文件 sha256 全部一致。
+3. 回退路径：构造不含 npm 的 `PATH`（仅 python3/bash/dirname/mkdir）运行脚本：
+   输出「(最小编辑)」，diff 与 npm 路径字节一致；再跑一次同样幂等。
+4. `bash -n scripts/sync-version.sh` 语法检查通过。
+5. `cargo metadata --locked --no-deps` 退出码 0 → `Cargo.lock` 与 `Cargo.toml` 一致（未手改）。
+6. commands.ts mock 同步（二轮补充）：
+   - 一次性修复后 `git diff` 为预期 4 行（core/update/app 三个版本串 + 新增 combo）；
+   - 人为把 mock 四段改回 `2.1.0-alpha.1` 后运行脚本 → 与修复后文件**逐字节一致**（const 未变）；
+   - 再跑一次 → 四文件 sha256 不变（幂等）；
+   - 用改名 mock 段模拟重构 → 脚本 stderr 告警、exit 0、其余同步继续执行；
+   - 隔离副本（symlink 主工作区 node_modules，未写主工作区）`tsc -b` + `vite build` 均 exit 0。
+
+## 5. 最终改动范围
+
+- `examples/jpcg_app/package-lock.json`：2 行（version 字段）
+- `examples/jpcg_app/src/api/commands.ts`：`get_module_versions` mock 4 行（3 个版本串 + 补 `combo`）
+- `scripts/sync-version.sh`：新增 package-lock 同步步骤与 `NPM_CACHE` 支持 + 扩展 commands.ts mock 同步
+
+未提交 git、未切换分支；未触碰构建脚本 / README / tauri.conf / 其他 tracked 文件；
+tauri.conf 发布元数据、Cargo.toml 模板值、SPDX 许可、rust-version 等仅报告、不修改（属产品元数据决策）。
+
+### 来自 changes/2026-10-20-220300.md
+
+# docs(meta): 新增 npm vs bun 对比与迁移评估报告
+
+日期：2026-10-20
+
+在 A 段元数据对齐完成后，对「是否应从 npm 迁移到 bun」做了一次有真实实测数据的调研，
+产物为 `docs/npm-vs-bun.md`（新建 `docs/`）。本变更**只新增文档，不改默认工具链**。
+
+## 背景
+
+- 本机已安装 bun（`/home/qin13/.bun/bin/bun`，1.4.2），具备做真实对比实验的条件；
+- JPCG 前端（Tauri v2 + React 19 + Vite + Vitest）目前用 npm（CI `npm ci`，本地 `make setup`）；
+- 需要回答：bun 是否值得迁移，收益/风险如何，若试点需要改哪些地方。
+
+## 实验设计（隔离、可复现）
+
+- 复制 `examples/jpcg_app` 到工作区 `.scratch/meta-dev/bench/{npm-app,bun-app}`，**不触碰主工作区
+  `node_modules`**；`$HOME` 只读，npm 用 `--cache`、bun 用 `BUN_INSTALL_CACHE_DIR` 指向工作区，
+  每个样本独立空缓存。
+- npm 侧用 CI 实际命令 `npm ci`；bun 侧先验证从 `package-lock.json` 自动迁移的行为，
+  再用 `bun install --frozen-lockfile` / `bun ci` 计时。
+- 依赖一致性：安装后逐一读取两侧 `node_modules/**/package.json` 的 `name→version` 全量对比。
+- 兼容性：两侧分别执行 build 与 vitest，并验证 `npx tauri` / `bun x tauri`。
+
+## 关键实测结论（详见 docs/npm-vs-bun.md）
+
+| 指标 | npm | bun |
+|------|-----|-----|
+| 冷装（空缓存，2 次） | 8.8 s / 13.5 s | 12.3 s / 9.1 s |
+| 暖装（删 node_modules，缓存命中） | 2.64 s | 0.14 s / 0.08 s（`bun ci` 0.15 s） |
+| 构建 / 测试 | 5.84 s / 2.79 s（24 passed） | 5.45 s / 2.89 s（24 passed） |
+| node_modules | 165 MB / 9,723 文件（137.4 MiB 表观） | 165 MB / 9,722 文件（137.3 MiB 表观） |
+| 缓存 | 41 MB（压缩 tarball） | 165 MB（解包副本；同盘硬链接，额外占用 ~1 MB） |
+| lockfile | `package-lock.json` 119,763 B | `bun.lock` 69,872 B |
+| 安装结果 | 188 包 | 188 包，**版本完全一致（无升级）** |
+| Tauri CLI | 2.11.2 | 2.11.2（`bun x tauri` 可用） |
+| audit | 8 漏洞（2C/4H/2M），exit 1 | 12 漏洞（2C/6H/4M），**exit 0** |
+| 生命周期脚本 | 默认执行（esbuild postinstall 跑） | 默认阻止（blocked 1: esbuild），build/test 仍通过 |
+
+值得记录的发现：
+
+1. 冷装两者**同量级**，小项目上未复现 bun 官方「快 ~7×」；暖装 bun 快一个数量级（缓存硬链接复用），
+   但 CI 总时长由 Rust 构建主导，前端安装节省 2–3 s 无实质影响。
+2. bun 1.4.2 在「只有 `package-lock.json`、无 `bun.lock`」时，`bun install --frozen-lockfile`
+   **仍写入了 `bun.lock`**（与当前文档描述不一致），CI 若用它需加 `git diff --exit-code` 守卫。
+3. `bun.lock` **不记录根 package version**，若迁移则 `scripts/sync-version.sh` 的 package-lock 同步步骤可移除。
+4. `bun audit` 有漏洞时退出码仍为 0，不能直接替代现有 `.github/workflows/deps.yml` 的 `npm audit` 门禁。
+5. Dependabot 的 bun **version updates 已 GA，但 security updates 尚未支持**（GitHub 2025-02-13 changelog），
+   这是维持 npm 的关键理由之一。
+
+## 建议（写入文档 §9）
+
+- **短期维持 npm**：收益（本地暖装）小于成本（CI/发布/Makefile/Tauri 配置/文档/Dependabot 全链路改动 + 安全更新缺口）。
+- **可选试点 bun**：独立分支/非必需 CI job，三平台跑 `bun ci + build + test` 收集数据，不阻塞主线。
+- **不推荐**当前全量迁移。
+- 文档给出 14 项「试点/迁移检查清单」（锁单一化、trustedDependencies、缓存 key 含 OS、tauri before 命令、
+  Makefile/只读 HOME 缓存、Dependabot/Audit 门禁、三平台矩阵、回滚方案等）。
+
+## 变更文件
+
+- `docs/npm-vs-bun.md`（新增，唯一代码库变更；`docs/` 目录为新建）
+- `changes/2026-10-20-220300.md`（本文件）
+
+未改依赖、未改 CI/Makefile/tauri 配置、未提交 git。
+
+### 来自 changes/2026-10-22-064900.md
+
+# 技能编辑器隔离心法加载，防止跨心法保存
+
+- 切换心法时同步清空旧数据和选中技能；加载期间禁止保存。
+- 加载请求使用递增版本；切换与卸载失效旧请求，旧成功、失败和 finally 均不得覆盖当前状态。
+- 根因：旧数据仍可编辑/保存，且迟到响应没有所属检查；保存使用新 profession 路径却携带旧数据，可能覆盖另一心法文件。
+- 新增六个确定性组件回归：加载期间保存、失败后保存、乱序成功、旧失败、A→B→A、卸载迟到失败。原实现 6 fail / 38 pass；修复后 44/44 通过。
+- npm 锁定安装、TypeScript 与 Vite 构建通过；无依赖、版本、计算数值或安全权限修改。
+- 测试 mock API；未实跑 Tauri/文件写入。本机无 cargo/rustc，Rust/金标准/完整双模式测试未本机运行。新建配置既有行为不在本修复范围。
+
+### 来自 changes/2026-10-23-130902.md
+
+# make 一键流程在编译 app 前准备 updater sidecar
+
+- 根因（review P2）：Tauri 的 build script（tauri-build 2.6.3 `src/lib.rs`）在**每次 cargo 编译 app 时**都会校验
+  `frontendDist` 并复制 `bundle.externalBin` 指向的 sidecar（`copy_binaries` → `copy_file(&src, &dest)?`），
+  缺任一项即在普通 `cargo build` 阶段失败，而非只在 `tauri build`/打包阶段。原 Makefile
+  `all: setup frontend modules-dir updater build-static` 把 `updater` 排在 `modules-dir`（内部 `build-dynamic`
+  会编译 app）之后；`check-all` 更是以 `clippy` 打头（clippy 同样编译 app build script）。干净检出后
+  `make all` / `make check-all` / `make build-static` 都会因缺少 `binaries/jpcg_updater-<host-triple>` 失败。
+- 修复：Makefile 新增变量 `APP_BUILD_DEPS := frontend updater`，并作为 **所有会编译 app 的目标** 的前置：
+  `build-static`、`build-dynamic`、`clippy`、`test`。`all` 顺序改为
+  `setup → frontend → updater → modules-dir → build-static`（updater 先于任何 app 编译）。
+  `test` 另前置 `build-modules`，让 dynamic 冒烟用例在单跑 `make test` 时也能真正执行（原注释即要求先构建 dll）。
+- 回归守卫：新增 `scripts/check-make-order.sh`，对 `make -n`（dry-run）计划做顺序断言——
+  `npm run build` 与 `cargo build -p jpcg_updater` 必须出现在首条 app 编译命令
+  （`cargo build -p jpcg_app` / `cargo clippy --workspace` / `cargo test --workspace`）之前；
+  覆盖 `all` / `check-all` / `build-static` / `build-dynamic` / `test` / 默认 goal 六个入口。
+  `.github/workflows/ci.yml` 的 rust-checks 中新增一步执行该守卫（dry-run，不产生构建产物、不依赖网络与 GUI 依赖）。
+  验证：对修复前的 Makefile 运行该脚本，6/6 目标全部报错；修复后 6/6 通过。
+- 同步更新文档中的顺序描述：Makefile 头注释与 `make help`、`README.md` 一键构建段、`AGENTS.md` Commands。
+- 兼容性：默认 goal `build-static` 现在也会先 `npm ci`/`npm run build` 与编译 updater——干净检出即可成功；
+  已有产物时 setup 走 stamp 跳过、cargo 走增量缓存，额外开销为秒级。`make all` 的最终产物布局不变
+  （`jpcg_app`=static、`jpcg_app-dynamic`=dynamic、`modules/` 4 库）。
+- 未修改 Rust 代码、计算数值、依赖版本、FFI/ABI、数据/manifest 与 CI 必需检查名。
+
+### 来自 changes/2026-10-28-072329.md
+
+# fix(core): 保留连招预设技能快照的伤害属性
+
+## 问题与修复
+
+- 连招预设保存通过 `ComboStep::from` 调用 core 的 `skill_dto_to_skilltype`，
+  但该转换漏拷贝 `dot_interval`、`dot_duration`、`dot_up`、`wushijianshang`、
+  `zhenshishanghai`，使这些字段在技能快照中变成默认零值。
+- 加载预设时会还原快照中的零值。例如莫问「商（dot）」的间隔 2 秒、持续 18 秒、
+  每跳递增 0.12 丢失后，连招引擎无法按原来的 9 跳计算，走单跳回退。
+- 补齐五个字段的直接拷贝，与即时连招计算的转换保持一致；不调整公式、游戏数据、
+  DTO 或存档格式，也不改变 overrides 的语义。
+- 新增 DTO → ComboStep → TOML → DTO 回归，使用非零伤害属性并比较全部技能池字段，
+  避免默认值掩盖丢失。测试不读写文件、不修改全局状态，不涉及蒙特卡洛。
+
+## 兼容性与边界
+
+- 旧版已保存为零的字段无法从快照自动恢复；需要重新从技能池添加相应技能并保存。
+  本次不加入推断式迁移。
+- `wushijianshang`、`zhenshishanghai` 的验证范围是属性保真，不宣称其当前公式数值效果。
+- 回归覆盖保存/加载使用的类型转换与 TOML 序列化，不是完整 Tauri/FFI/磁盘端到端测试。
+
+## 验证
+
+- 先仅添加回归，执行 `cargo test -p jpcg_core --lib --locked -j1 preset_roundtrip_keeps_damage_fields`：
+  断言失败，输出显示上述五字段全部被归零；补齐五行后同命令通过。
+- `cargo test --workspace --exclude jpcg_app --locked -j1`：60 个单元测试全部通过
+  （core 37、combo 12、const 5、update 6）。
+- `cargo test -p jpcg_core --locked -j1 -- golden`：9/9 通过。
+- `cargo fmt --all -- --check`、`bash scripts/check-make-order.sh` 通过。
+- `cargo clippy --workspace --exclude jpcg_app --all-targets --locked -j1` 通过；
+  仅报告既有的 combo `calculate_combo` 参数数量警告。
+- `cargo build --workspace --exclude jpcg_app --locked -j1` 通过，包含四个模块库；
+  `python3 scripts/test-values-dynamic.py` 的 missing/malformed/invalid 三种双 cdylib 回归均通过。
+- 前端重新 `npm ci` 后，`npm test` 通过（3 个文件、44 个用例），`npm run build`
+  的 TypeScript 与 Vite 构建通过；保留既有的大 chunk 提示。
+- 本地完整 `make check-all`、含 app 的 workspace 构建/测试/clippy 与 app dynamic 测试未运行：
+  环境缺少 GTK/WebKit 系统依赖；完整桌面验证由 PR CI 承担，结果以对应 head 的 CI 为准。
+
+### 来自 changes/2026-10-28-121201.md
+
+# chore(app): 升级 Vite 8 与 @vitejs/plugin-react 5
+
+## 背景
+
+- dependabot #84 单独把 `vite` 从 6.4.3 升到 8.3.5，CI 在 `npm ci` 阶段
+  `ERESOLVE`：`@vitejs/plugin-react@4.7.0` 的 peer 仅支持 `vite ^4.2 || ^5 || ^6 || ^7`。
+  该 PR 已关闭，改由本 PR 做协同升级。
+- Vite 8 用 Rolldown / Oxc 替换 esbuild / Rollup，并改用 Lightning CSS 压缩样式，
+  属工具链大版本迁移，不能当作普通 patch 依赖升级处理。
+
+## 改动
+
+- `vite` `^6.3.5` → `^8.3.5`
+- `@vitejs/plugin-react` `^4.4.1` → `^5.2.0`
+- `package.json` 增加 `engines.node: "^20.19.0 || >=22.12.0"`（Vite 8 与 plugin-react 5 的下限）
+- 重新生成 `package-lock.json`：
+  - 移除 `esbuild`、`rollup` 及全部平台二进制包
+  - 新增 `rolldown`、`lightningcss`、`@oxc-project/types` 及平台二进制包
+  - 传递依赖随 plugin-react 5 更新：`react-refresh 0.17→0.18`、`postcss`、`nanoid`、`source-map-js` 小版本
+  - 新解析均走 `registry.npmmirror.com`，与 lockfile 现有主流来源一致
+- 不修改 `vite.config.ts`：当前只使用 `plugins`、`server`、`clearScreen`，未涉及被移除/改名的
+  `build.rollupOptions`、`esbuild`、`optimizeDeps.esbuildOptions` 等配置
+- 不修改业务代码、计算逻辑、数值数据、版本号或更新流程
+
+## 关键决策
+
+- 选 `@vitejs/plugin-react@5.2` 而不是 6.x：5.2 的 peer 已声明支持 `vite ^8.0.0`，
+  无需引入 `oxc-transform-react`、`@rolldown/plugin-babel` 等额外依赖，迁移面最小。
+- 不额外安装 `esbuild`：项目没有使用 `transformWithEsbuild`，也没有配置
+  `build.minify: 'esbuild'` / `build.cssMinify: 'esbuild'`，不需要兼容回退。
+- 接受 >500 kB 的单 chunk 警告：升级前产物体积同级（主要来自 recharts 等），
+  本次不改变分包策略；如需优化，后续单独引入 `build.rolldownOptions.output.codeSplitting`。
+- Node 下限通过 `engines` 声明而非 CI 改动：CI 的 `node-version: 20` 会解析到 20.20.x，满足要求。
+
+## 验证
+
+- `rm -rf node_modules && npm ci` 成功（与 CI 相同的安装路径，锁文件一致）。
+- `npm run build`：`tsc -b` + `vite 8.3.5` 通过（609 modules，748.86 kB / gzip 224.41 kB）。
+- `npm test`：3 个测试文件、44 个用例全部通过。
+- `git diff --check` 通过。
+- 未在本机运行 `tauri dev` / `tauri build` 的桌面交互烟测；前端构建产物与 CI 路径一致，
+  桌面端行为以 PR 的 CI 结果和后续手工验证为准。
+
+### 来自 changes/2026-10-28-150416.md
+
+# chore(release): 启动 2.2 开发，版本 bump 至 2.2.0-alpha.1
+
+## 改动
+
+- 根 `[workspace.package].version`：`2.1.0` → `2.2.0-alpha.1`；
+  `version.workspace = true` 的成员（api/core/combo/update/app/forum/manifest-gen/
+  deploy-gen/json-to-toml）随继承生效，`Cargo.lock` 已刷新
+- `scripts/sync-version.sh` 同步 `package.json`、`src-tauri/tauri.conf.json`、
+  `src/api/commands.ts`（`check_update` 与 `get_module_versions` 模拟串）以及 `package-lock.json`
+- `jpcg_const`（`130.3.20260602`）与 `jpcg_updater` 为独立版本，本次不变
+- 不改动业务代码、计算逻辑、数值数据与更新流程
+
+## 关键决策
+
+- 按三分支模型，`dev` 即 alpha 集成分支；本分支 `prep/2.2.0-alpha.1` 仅用于版本落地 PR，
+  alpha 阶段不打 tag（与 `scripts/release.sh alpha` 一致）
+- 本次不在 alpha.1 聚合 CHANGELOG：`changes/` 中仍保留 2.1.0 系列已发布条目，
+  `release.sh` 的全量聚合会产生重复章节；留待 beta 阶段按 `v2.1.0` 之后的文件过滤后处理
+- 不新增 `CHANGELOG.md` 章节，避免把 2.2 开发起点误标为一次内容发布
+
+## 验证
+
+- `cargo metadata --locked --format-version 1` 通过（锁文件与清单一致）
+- `cargo fmt --all -- --check` 通过
+- `cargo test -p jpcg_core -- golden`：9/9 通过
+- 前端 `npm ci`、`npm run build`、`npm test`：3 个文件 / 44 个用例全部通过
+- 未在本机运行 `make check-all` 与桌面 `tauri dev/build` 烟测，交由 PR CI 覆盖
+
+### 来自 changes/2026-10-30-073241.md
+
+# chore(ci): 升级 Node 22 与 jsdom 30（#79）
+
+## 背景
+
+- CI 仍使用 Node 20，不能满足已锁定的 Vitest 5 与待升级 jsdom 30 的运行要求。
+- jsdom 30.1.3 声明 Node `^22.22.2 || ^24.15.0 || >=26.0.0`；不能把 Node 22.22.0 视为支持的最低版本。
+
+## 改动与决策
+
+- `ci.yml` 两处 Node 20 → 22；`release.yml` 与 `deps.yml` 同步为 22，统一依赖安装环境。
+- jsdom `^26.1.0` → `^30.1.3`，更新其传递依赖与锁文件；其余直接依赖的锁定条目保持原样。
+- `engines.node` 与 README 同步为 jsdom 的支持范围，CI 保留 Node 22 主版本选择，自动接收该分支补丁。
+- 锁文件使用 npm 更新，并保留未升级平台包的既有 `libc` 元数据，避免 npm 10 重写产生无关变动。
+- 基于 dev `3a410a19d5e610d93c61b8045562e533ebabc62d`；已核对 #90、#91、#92 与 PR #89，未修改业务组件、核心算法、时序模拟、数据或组件版本。
+- 当前检出中不存在 `.agents/skills`；遵循根 `AGENTS.md` 与 `CONTRIBUTING.md`。
+
+## 验证
+
+- 升级前 Node 24.19.0：前端 3 文件 / 44 测试与 `tsc -b && vite build` 通过。
+- 升级后 Node 22.23.4：`npm ci --engine-strict --no-audit --no-fund`、44 测试、生产构建、`npm ls --depth=0` 通过。
+- 最低支持版本 Node 22.22.2：相同严格全新安装、44 测试与生产构建通过；`npm ci` 未改变锁文件（SHA-256 校验）。
+- Node 22 两版本均使用 nodejs.org 官方 tarball，并核验官方 SHA-256。
+- `cargo test --workspace --exclude jpcg_app --locked -j4`：59 单元测试通过（core 36 / combo 12 / const 5 / update 6）。
+- `cargo test -p jpcg_core --locked -j4 -- golden`：9/9 通过。
+- `cargo fmt --all -- --check`、`bash scripts/check-make-order.sh` 通过。
+- `cargo clippy --workspace --exclude jpcg_app --all-targets --locked -j4` 通过，仅既有 combo 参数数量告警。
+- `cargo build --workspace --exclude jpcg_app --locked -j4` 与 `python3 scripts/test-values-dynamic.py` 三种双 cdylib 回归通过。
+- 所有 workflow YAML 可解析，4 个 setup-node 入口均使用 Node 22；`git diff --check` 通过。
+
+## 验证限制
+
+- 已实际运行 `make check-all CARGO_JOBS=4`；完整 workspace clippy 因环境缺少 GLib/GObject（另缺 GTK/WebKit）开发库失败，未覆盖完整桌面 static/dynamic 构建与 app 测试。完整 Linux 检查由 PR 的 CI 安装系统依赖后验证。
+- 前端构建仍有既有 >500 kB chunk 提示，产物与升级前一致；本次不改变分包策略。
+- 未触发发布或部署；release workflow 只核对配置与其前端安装/构建路径，未执行三平台打包。
+
+### 来自 changes/2026-10-30-074207.md
+
+# feat(gear): #90 配装模板、合成 API 与有界优化入口
+
+- 新增独立 `jpcg_gear` crate（workspace 通配自动纳入）和 `gear-opt` CLI，提供四文件严格 TOML schema、12 槽位合成、JSON API、纯 player DTO 转换、约束优化、基线差值和属性生存 Pareto。
+- 规则涵盖三来源、两档、固定绿字与饰品两套混搭、唯一性、御劲攻击显式录入、裤子不参与防具套、跨来源2+2、2/4与饰品2/3奖励同时生效。覆盖文件做完整属性替换，升级不做公式推导。
+- 所有装备/套装数值为明确标记的合成样例（synthetic-v1），不宣称正式游戏数据；目录版本与值集必须匹配。已有 manifest-gen 递归收集数据，不改数据发布逻辑。
+- 期望目标复用 core 的同一 q_cal，击杀目标复用 combo host 并固定种子；不改时序、加速、共享 DTO、UI、workflow 或 PR #89 的预设修复。
+- 明确范围：有界穷举仅在 complete=true 时证明全局最优；大空间预算截断不得宣称全局最优或满足1秒验收。支持组合间进度与取消；加速不参与重排，未应用4件CD时击杀目标默认拒绝，显式允许才做属性侧计算并警告。
+- 混档采用“每阈值按升级件数选择升级/基础奖励，单阈值不重复叠档”的可测试策略，待维护者确认；不是已核实的游戏规则。
+- 正式数据、真实人工基准、全规模高效算法、CD时序、UI/动态桥接仍为后续依赖；该提交不关闭 #90。契约与运行方式见 `crates/jpcg_gear/README.md`。
+- 新增回归验证模板/套装/约束/溢出/错误信封、TOML往返、CLI退出码、Pareto，以及与现有core/combo数值一致、固定种子确定性。
+
+## 验证证据
+
+- `cargo test --workspace --exclude jpcg_app --locked -j2`：77项（core36/combo12/const5/update6/gear18）通过；`cargo test -p jpcg_core --locked -- golden`：9/9。
+- `cargo fmt --all -- --check`、`cargo clippy --workspace --exclude jpcg_app --all-targets --locked`、`bash scripts/check-make-order.sh` 通过；clippy仅既有combo参数数量告警。
+- 前端 `npm test -- --run` 44/44、`npm run build`通过，无前端源码修改。
+- release构建和可复现 `scripts/bench-gear.py`通过：16组合，期望40506→40544，中位2.283ms；50k采样/1合成步击杀率0.09724→0.09724，中位3.862ms。此为样例微基准，不是全规模性能或真实场景验收。
+- 本机 `pkg-config --modversion gtk+-3.0 webkit2gtk-4.1` 确认缺GTK/WebKit开发包，未执行完整make check-all与app静态/动态构建，交由同head的远端CI验证。
+
+### 来自 changes/2026-10-30-074722.md
+
+# #91 第一阶段：手动驾驶台与全局持久化
+
+## 改动与原因
+
+- 将手动表单、心法/敌人/Buff/系数/数值集、最近计算及其输入上下文、钉住基准集中到 App 的本地状态。计算结果与当前编辑稿分开，编辑后提示重算，避免把旧结果钉到新属性上。
+- 新增 `usePersistentState`，沿用 `STORAGE_KEYS` + localStorage，使用 schema 版本封套、v0 无封套迁移、结构校验与异常回退；存储不可用时保持内存编辑，换 key 时防止不同心法串写。
+- 复用 ConfigPanel 手动表单并支持受控输入；重启/恢复时保留保存的自定义系数与心法修正，避免初始化异步请求覆盖。归一化表单时保留 `mode_is_point` 布尔类型，提交 core 的现有归一化语义不变。
+- 对缺失的心法名称/主属性元数据使用现有有效值回退，避免基准栏展示字面 `undefined`；收紧窄屏结果区宽度，表格保持内部横向滚动。
+- 连招草稿按心法持久化：完整序列与每步 overrides、名称、所选预设、搜索与折叠状态。只有用户明确点保存时才写已保存预设；切页、重算与切心法不会自动覆盖预设。
+- 页面首次访问后保持挂载；切心法时重建连招视图并读取对应草稿。加载/清空配置的心法直接来自全局表单，避免原独立 `currentXinfa` 状态不同步。
+- 新增钉住/取消/恢复操作，基准记录实际计算输入与结果；恢复同时撤销后续属性编辑，丢弃在途计算的迟到响应。结果表增量增加每技能 Q（DOT 为逐跳 Q）的绝对/百分比差值，绿加红减；零分母显示破折号。
+
+## 边界与决策
+
+- 本次为 #91 的独立基础阶段，**不关闭 #91**。当前仅手动模式；12 部位配装卡片、双模式切换、配装合成/自动重算、数值过渡/占比动画、配装 TOML 导入导出与性能预算，等待 #90 稳定契约再接入。
+- 不新增共享 DTO，不修改 `src/types/index.ts`、API 命令、Rust core/combo、数据、workflow 或依赖锁文件；不重做 PR #89 与 #79（现 PR #93）。
+- 开工与提交前均检查远端开放 PR、分支及 #92 评论，尚无可识别的 #92 提交/分支供逐文件对比，不能证明其未推送工作无冲突。本次潜在前端交叠是 `App.tsx`、`ComboPage.tsx`、`ConfigPanel.tsx`；未触碰其时序核心/共享 DTO，后续需按 #92 的实际 patch 对齐。
+- 旧结果 DTO 无技能 id，基准按「技能名 + 原始出现次数」匹配，排序不影响对应；基准缺项显示破折号。上游若调整同名技能顺序，应重新钉住，待稳定契约提供标识后再强化匹配。
+- 前端本地状态类型放在 `state/cockpit.ts`，不是 Rust/Tauri/FFI 契约。旧收藏 key 保持不变。
+
+## 验证
+
+- Node 24.19.0：前端 Vitest **57/57**（原 44 + 新增 13），`npm run build`（tsc + Vite）通过；保留既有 >500 kB chunk 提示。
+- 安装最初受锁文件 npmmirror 地址限制；临时缓存副本仅将下载主机换到官方 registry，版本/integrity 不变，随后仓库原锁文件的 `make setup` / `npm ci` 成功；仓库 lockfile 无改动。
+- Playwright + 系统 Chromium：计算→钉住→差值→刷新恢复→恢复基准、连招步调整/草稿名刷新恢复、跨心法草稿隔离；1440px/390px 截图。使用现有浏览器 mock，未验证 Tauri 原生桥接。控制台保留既有 mock 重复技能 key 警告与 favicon.ico 404。
+- `cargo test --workspace --exclude jpcg_app --locked -j2`：59 项通过；`cargo test -p jpcg_core --locked -- golden`：9/9。
+- 非 app workspace clippy/build（locked）通过，仅既有 combo 参数数量告警；`python3 scripts/test-values-dynamic.py` 三种双动态库回归通过。
+- `cargo fmt --all -- --check`、`bash scripts/check-make-order.sh`、`git diff --check` 通过。
+- 完整 `make check-all CARGO_JOBS=2` 已运行，在 workspace clippy 因缺 `glib-2.0` 开发库失败，环境亦缺 GTK/WebKit；完整桌面构建/测试及 app dynamic 测试需 CI 验证。#79 的 Node/jsdom 工作由 PR #93 提供，本分支不混入。
+
+### 来自 changes/2026-10-30-075408.md
+
+# fix(gear): 拒绝缺失套装奖励数据
+
+- 复核 #90 规则发现：原schema允许防具省略4件CD或把2件奖励填0，饰品也允许零奖励。这会把未录入的数值当成完整套装数据，击杀目标可能漏报未应用CD。
+- 收紧为：防具必须有非零2件属性与显式4件CD；饰品2件化劲、3件御劲均必须为正。缺数据时报错，继续保留所有样例的synthetic标记，不填造正式游戏数值。
+- 在既有非法目录测试中添加四种缺奖励用例；先运行该测试红，再修复为绿。优化公开入口在读取运行期数据前先校验Catalog。
+- 不改引擎/共享DTO/UI/工作流。更新契约说明；配装18项、workspace非app测试、fmt/clippy与release微基准重跑验证。
+
+- 修复后样例目标值不变；16组合的5次CLI测量中位数：期望2.430ms，50k采样击杀率4.948ms。
+
+### 来自 changes/2026-10-30-083247.md
+
+# #91 第二阶段：配装目录、桌面双模式桥接与驾驶台集成
+
+## 基线与合入前置
+
+- 上游 #94 固定为 `84afe7a9e4476a05fe6e9009786838fc520067d5`，#95 为 `d409fa91b102924754b914bc3bd540696123e7c5`。
+- `integration/91-gear-base` 仅组合上述原提交，`feature/91-gear-cockpit` 在此之上开发。后续草稿 PR 指向集成基线，差异只包含第二阶段，不重复评审上游更改；没有合入 dev/beta/release。
+- **不可直接合入该集成基线或 dev**：#94/#95 必须先完成评审合入 dev，再将本分支自集成基线之后的提交 rebase 到最新 dev，核对差异、移除 CI 的临时集成 PR 基线与配装分支 push 过滤并重跑检查，再改 PR 目标。
+- #92 仍未发现可识别的远端 patch，无法证明其未推送工作无冲突。潜在交叠在 App/ComboPage/ConfigPanel/API 命令；没有改 combo 时序核心、共享 jpcg_api 或数据规则。#79 的 Node/jsdom 改动和 PR #89 均不混入。
+
+## 实现与决策
+
+- `jpcg_gear` 在 #94 实际 Loadout/Catalog/Composed 契约上增加宿主入口，前端模板目录返回应用 overrides 后的完整目录；只接受配装值或 TOML 内容，不接受文件路径。数据根复用 core 的读取规则，支持根/shuxing 环境路径，损坏或版本不匹配明确报错。
+- 合成响应 `Composition {composed,player}` 的伤害属性转换复用 #94 `player()`，不在 JS 重写公式，不把手动总属性当裸装点数。导入导出均经 Rust 校验，可往返。
+- 新增 stateless gear cdylib ABI 1、panic 防护和配对字符串释放。gear 的 `engine` feature 默认开启；关闭时只编译模型，dynamic 桌面壳经 libloading 调用，引擎不被静态链接。静态/动态 Tauri 命令调用同一宿主逻辑，阻塞文件操作移到后台任务。
+- 第五个模块加入 Makefile/cargo aliases、发布资产与 deploy-gen 白名单；CI 增加真实 ABI 冒烟及临时叠放基线与 feature 分支 push 触发入口（PR 创建审核超时时仍可验证同一提交），没有触发发布。Tauri bundle 资源显式列入 gear 四个模板文件，确保首次安装不依赖先下载更新。
+- 前端 12 卡片平铺：来源/档位/饰品属性套只取实际模板，可展开全属性与参考装分。新安装默认配装并采用匹配值集，旧 v1 数据迁移仍保持手动模式。手动属性与按心法的配装选择分开保存，切换/刷新保留。
+- 125ms 防抖 → Rust 合成 → 既有伤害计算；版本/值集不匹配不提交，迟到响应不覆盖新输入，重复点击当前模式不会取消在途请求。结果表更新期间保留旧数据，增加技能池占比、变化行提示、摘要数字过渡与 reduced-motion 支持。
+- 连招草稿在全局共享；排轴器配置草稿，驾驶台调用原 calculateCombo 计算伤害/击杀率。钉住基准包含配装、上下文、手动输入、连招草稿/结果；恢复会撤销后续改变并防止自动重算覆盖快照。
+- 修复实际技能池同 id/sub_id 多条展示时的 React key 重复警告，仅使用列表出现序区分渲染，不改变收藏身份或技能/时序语义。
+- 样例、加速与套装 CD 的限制明确展示：synthetic-v1 不是游戏数值；加速/CD 不宣称已接入 #92。
+
+## 验证与限制
+
+- 前端 Node 24.19.0：63/63 测试、tsc + Vite 构建通过。新增覆盖 12 卡片、模式保留、防抖、迟到合成、基准/刷新恢复、错误保留、TOML 宿主调用、驾驶台连招与草稿/击杀率恢复。fixture 由真实 gear cdylib 读取 #94 合成样例生成，仅测试使用。
+- 非 app workspace：80 项（原 59 + gear 18 + host 1 + 实际 desktop bridge 2）通过；金标准包含在其中。clippy 仅既有 combo 参数数量告警。
+- `cargo test -p jpcg_gear --no-default-features --test dynamic_bridge` 通过，编译的是桌面实际 bridge 文件，调用真实 gear DLL；`cargo tree` 证明 dynamic 壳不含 jpcg_core/jpcg_combo 引擎依赖。
+- C ABI 脚本验证根/shuxing 路径、缺目录、空指针、未知路径字段、版本不匹配与 TOML 往返；既有双动态库回归保持不变。
+- Playwright：生产前端 + 本机 HTTP 验证适配器 + **真实 core/gear/combo cdylib**，通过新安装默认模式、12 槽、自动计算、基准、双模式/刷新、真实 TOML 往返、连招配置与计算位置、1600px/390px 截图。非原生 WebView；桌面 Rust bridge 另有直接测试。控制台仅 favicon.ico 404。
+- 样例计时：12 次饰品切换，从页面 click handler 到新计算快照持久化，P95 约 200.1ms（125ms 防抖在内，生产前端/debug Rust/HTTP 适配器）。Playwright 控制端的完整 click/wait 墙钟 P95 约 356ms；调试 React + 串行适配器初测约720ms。此处不声称已完成原生 Tauri、多心法大目录或 release 性能/60fps 验收。
+- 本地完整桌面检查仍受 GLib/GTK/WebKit 开发库缺失限制；需本 PR head 的完整 CI 补齐。保留既有 Vite 大 chunk 提示。正式数据、混档规则确认、CD/加速时序与真实场景性能仍依赖上游/维护者。
+
+### 来自 changes/2026-10-30-195338.md
+
+# 时序引擎（timeline）首版：形态 / GCD 通道 / 充能 / 读条 / dot / 定时 buff
+
+## 做什么
+
+`jpcg_combo` 新增 `src/timeline.rs`（#92 引擎切片），在不动旧 `engine.rs`（按步累加，兼容层）的前提下，
+提供「带时间轴的连招模拟」：
+
+- 公共类型：`FormDef`（形态：id / 名字 / 基础 GCD / 初始形态 / 可用技能）、
+  `OnCast`（施放副作用：切形态、额外占用的 GCD 通道、锁技能）、
+  `TimingSkill`（技能 + 所属形态 + GCD 通道 + 副作用）、
+  `TimelineAction::{Cast, SwitchForm}`、`TimelineInput` / `TimelineEvent` / `TimelineResult`。
+- `simulate(&TimelineInput)`：按动作序列贪心排时间轴，输出事件流（施放 / dot 跳 / 形态切换 / buff 生效）、
+  总伤害、窗口 DPS、被跳过的动作数。
+
+## 关键实现
+
+- **加速**：`jiasu_at(t)` 汇总玩家加速等级 + 当时活跃 buff；受上限来源与可突破上限来源分开，
+  按 `final = min(capped, 25%) + uncapped` 合并（`timing::combine_jiasu`）。
+  GCD 用 `timing::quantize_secs`（**不再二次夹 25%**，否则突破上限的加速会被截断两次）。
+- **GCD 通道**：`lane_ready: HashMap<String, f32>`；技能默认落在 `default` 通道，
+  `FormDef.gcd_base` 让不同形态走不同通道（双持 1.0s / 单持 1.5s 互不阻塞）。
+- **读条 / 引导**：起手时刻为施放开始，`hit_time = start + cast_time_with_haste(rate)`（16 帧量化）。
+- **CD / 充能**：单层走 `skill_ready`；多层走 `charges{剩余层, 下次恢复, 间隔}`。
+  受加速影响（`cd_haste`）时按 `cooldown/(1+rate)` 连续缩短（是否帧量化待游戏数据确认）。
+- **dot**：施加时快照进攻侧（玩家 / 心法 / buff / 系数 / 技能），并按当时加速率把总时长量化后均匀排成逐跳时间点；
+  每跳结算用**当前**目标减伤重算（`DotInstance::per_tick_damage` → `JpcgConfig::q_cal()` 的对应跳）。
+- **定时 buff**：技能 `buff_id` 引用 `TimedBuffDef`，施放后进入 `active_buffs`；
+  刷新 / 叠层按定义；提供 `BuffEffect`（攻击 / 会心 / 会效 / 破防 / 无视防御 / 伤害 / 加速率）。
+- **形态切换**：`OnCast.switch_form` 或手动 `TimelineAction::SwitchForm`；引擎不写任何门派分支。
+
+## 单测（8 个，全部通过）
+
+单 GCD 链 0/1.5s、双形态独立通道、断云额外占用双持通道 + 锁孤锋破浪到 1.5s、
+读条 20.02% 加速 → 19 帧 = 1.1875s、dot 9 跳 2..18s 且总伤 = `q_cal` 的 dot 之和、
+充能 0/1.5/8s、25% 封顶 + 突破上限 buff → 1.125s、手动 SwitchForm。
+
+## 验证
+
+- `cargo test -p jpcg_core`：45 passed
+- `cargo test -p jpcg_combo`：20 passed（含新增 8 个 timeline 用例）
+- 旧 `engine.rs` 与金标准未改动，兼容层保持原行为。
+
+### 来自 changes/2026-10-30-202145.md
+
+# 时序引擎 (B)：数据层 combat overlay + DTO/FFI/Tauri 打通 + 前端时间轴预览
+
+## 做什么
+
+在 #92 引擎切片 A（`timeline.rs` 纯时序模拟）之上，把「手工填写的战斗数据」接成可分发、可前后端调用的一条链路：
+
+- **数据层**（`data/combat/{门派}.toml`，json-to-toml 不覆盖）：
+  - `crates/jpcg_core/src/type_set/combat.rs`：`CombatData`（`meta` / `[[form]]` / `[[skill_combat]]` / `[[buff]]` / `[[miji]]` / `[[qixue]]`）、
+    `FormDef`、`OnCast`、`SkillCombatDef`（可选覆盖 `cast_time` / `gcd_base` / `gcd_kind` / `cooldown` / `charges` / `recharge` / `cd_haste` / `channel` / `buff_id`）、
+    `validate()` / `validate_against_skills()` / `apply_overlay()`。
+  - `crates/jpcg_core/src/store/combat.rs`：`load_combat` / `load_combat_from`（首个存在文件生效）/ `load_skills_with_combat`（套 overlay + 交叉校验）。
+  - `store/paths.rs::combat_dirs()`：`JPCG_DATA_DIR`（数据根或 `shuxing/`）→ `<root>/combat`，否则 `read_root_candidates()` 各目录 + `/combat`。
+- **DTO 单源**（`crates/jpcg_api`）：`FormDefDTO` / `OnCastDTO` / `SkillCombatDTO` / `BuffEffectDTO` / `TimedBuffDefDTO` /
+  `SkillModifierDTO` / `MijiDefDTO` / `QixueDefDTO` / `CombatMetaDTO` / `CombatDataDTO` / `CombatBundleDTO` /
+  `TimelineActionDTO` / `TimelineRequestDTO` / `TimelineEventDTO` / `TimelineResultDTO`。
+- **host 层**：`crates/jpcg_core/src/host/combat.rs`（core↔DTO 双向转换、`load_combat_data` / `load_combat_with_skills`）；
+  `crates/jpcg_combo/src/timeline_host.rs`（`load_combat` / `load_combat_bundle` / `calculate_timeline`）。
+- **FFI**（`jpcg_combo` dispatch）：新增 `load_combat` / `load_combat_with_skills` / `calculate_timeline`，动态模式 dll 可调。
+- **Tauri 命令**：`load_combat_bundle`、`calculate_timeline_cmd`（static 直调 / dynamic 经 `ffi_bridge::call_combo`）。
+- **前端预览**：排轴器新增「时间轴预览」按钮：读取门派 combat overlay → 组装 `TimelineRequestDTO` → 展示窗口伤害 / DPS / 未执行动作 / 事件流（施放、dot 跳、形态切换、buff）。
+
+## 为什么
+
+#92 要求「技能 CD / 秘籍 / 奇穴 / 加速 / 形态 / dot 快照 / 窗口 DPS」这些内容**不进编译期**，改由数据文件驱动，
+否则每次补一个门派的时序数据都要发版。数据层 + DTO + FFI + Tauri 一条链路打通后，前端可预览、独立 dll 可分发。
+
+## 关键决策
+
+- overlay 采用「可选覆盖」：`skill_combat` 只写与默认不同的字段，其余回退技能表；`apply_overlay` 返回新技能列表，不改原数据。
+- 数据文件解析失败 / 校验失败**不 panic**：`load_combat` 记日志并返回空数据（前端退化为「仅 GCD」预览），
+  `load_skills_with_combat` 返回带文件路径的错误，方便定位手填错误。
+- `TimelineRequestDTO` 的配置字段名沿用 combo 的 `coeff`（不是 `coefficient`），`buff` / `coeff` / `player` / `hostile` / `xinfa` 必填；
+  `combat` 可选（为空时仅用技能池自身时序字段）。
+- 旧 `engine.rs` 按步累加路径完全不动，`into_core` 只透传新增字段，旧连招结果与金标准不变。
+
+## 验证
+
+- `cargo test -p jpcg_core`：57 passed（新增 combat 解析/校验/loader 用例）
+- `cargo test -p jpcg_combo`：25 passed（timeline 9 + timeline_host 2 + FFI 2）
+- `cargo build -p jpcg_app`：通过（static 模式）
+- 前端：`npm test` 44 passed；`npx tsc --noEmit` 无错误；`npm run build` 通过
+
+## 已知限制（后续）
+
+- `data/combat/*.toml` 尚无真实门派数据（示例/填表文档见 #92 C 阶段）。
+- 加速等级暂由请求显式传入（`PlayerConfigDTO.jiasu_dengji`），前端暂无输入控件。
+- CD 是否帧量化、dot 逐跳量化待游戏实测确认（当前：CD 连续缩放、dot 总时长量化后均匀分布）。
+
+### 来自 changes/2026-10-30-202350.md
+
+# 时序引擎 (C)：data/combat 填表文档 + 模板
+
+## 做什么
+
+- 新增 `data/combat/README.md`：`data/shuxing`（生成物）与 `data/combat`（手工 overlay）的分工、
+  加载顺序（`JPCG_DATA_DIR` → 可执行文件候选根目录）、全部字段表
+  （`[meta]` / `[[form]]` / `[[skill_combat]]` + `on_cast` / `[[buff]]` / `[[miji]]` / `[[qixue]]` / `modifiers`）、
+  合并与校验规则、加速合并公式、预览与排错方式、已知待定项。
+- 新增 `data/combat/_template.toml`：可解析、可通过 `validate()` 的模板（以 `_` 开头不会被加载），
+  含莫问真实技能 id、双形态 / CD / 充能 / on_cast / 定时 buff / 秘籍 / 奇穴的注释示例。
+- `crates/jpcg_core/src/type_set/combat.rs` 新增测试 `template_file_parses`：
+  `include_str!` 模板 → 解析 + `validate()`，防止文档与代码漂移。
+
+## 为什么
+
+#92 的时序数据要「常改的东西放 toml、不重新编译」，维护者需要一份能照抄的字段说明；
+模板做成可解析可校验，能保证文档里写的字段名与 `deny_unknown_fields` 的现实一致。
+
+## 验证
+
+- `cargo test -p jpcg_core`：58 passed（新增模板解析用例）
+- 模板校验：`[[form]]` 初始形态唯一、`skill_combat` 引用真实技能 id、`validate()` 通过
+
+### 来自 changes/2026-10-30-204500.md
+
+# 2026-10-30-204500 时序引擎复审修复（#97）
+
+## 做了什么
+
+修复 #97（#92 切片 1）复审中的 7 条行内问题：
+
+1. **DOT 双重计入**：`TimelineEventKind::Cast.damage` 对 DOT 技能记 0（DOT 的 `q_cal` 已返回全部跳数之和），
+   窗口伤害只按实际 `DotTick` 事件计入；聚合时 `Cast` 也改为只有 `hit_time <= window` 才累加。
+2. **同名 id 变体消歧**：`TimelineAction::Cast` 增加可选 `skill_name`；
+   `(skill_id, sub_id)` 命中多个变体且未给名称时该动作直接跳过（计入 `skipped_actions`），不再静默取首项。
+   `ComboPage` 构造动作时带上选中技能名，DTO 字段 `skill_name` 可选以兼容旧调用。
+3. **充能恢复**：状态改为 `ChargeState{left,max,interval,next}`，每次施放/判断前按当前时刻结算已恢复层数并推进
+   `next`（满层置 +∞）；2 层/8 秒的连续 5 次施放为 `0 / 1.5 / 8 / 16 / 24`。
+4. **技能自身 GCD**：新增 `skill_gcd()`，技能 `gcd_base` 覆盖形态/心法基础，`gcd_kind=2`（固定 GCD）不受加速影响；
+   额外通道（`on_cast.gcd_lanes`）仍按通道默认值。
+5. **窗口命中过滤**：读条/引导技能只在 `hit_time` 落入窗口时才计入伤害，保留起手事件。
+6. **常驻 buff**：`TimedBuffDef.duration = 0` 视为永久有效（`expires = +∞`），重施加/刷新逻辑一致处理。
+7. **前端事件形状**：`TimelineEventKindDTO` 是 `#[serde(tag = "kind", rename_all = "snake_case")]` 的内部标签形状，
+   TS 类型、mock、渲染统一为 `{ kind: "cast", ... }`；新增 `formatTimelineEvent()` 与基于真实 Rust 响应形状的渲染测试。
+
+8. **`refresh=false` 的 buff 独立计时**：改为每个实例单独保存到期时间；`refresh=true` 才叠加层数并刷新持续时间，
+   `refresh=false` 受 `max_stacks` 上限约束但各自到期（duration=3、两层在 t=0/1.5 施加 → t=3 只剩第二层）。
+9. **`gcd_group` 参与 GCD 通道**：没有显式 `combat.gcd_lane` 时从技能 `gcd_group` 派生稳定通道
+   （`0` → `default`，`1` → `group_1`），两组互不阻塞；`data/combat/README.md` 补充说明。
+
+## 关键决定
+
+- 状态表（CD/充能）改以「技能下标」为键，避免同名 id 的多个变体（如莫问「入月·N 层」）共享 GCD/CD/充能状态。
+- 歧义动作语义选择「跳过 + 计数」而非猜测：宁可让玩家看见 `未执行动作`，也不静默算错层数。
+- `Cast` 事件对 DOT 技能显示 0 直接伤害，伤害体现在逐跳事件上；不影响总伤口径。
+
+## 验证
+
+- `cargo test -p jpcg_core`：58 passed
+- `cargo test -p jpcg_combo`：34 passed（timeline 新增 9 个回归用例：DOT 不重复、短窗口、歧义键、充能恢复、技能 GCD、跨窗口读条、常驻 buff、refresh=false 独立实例、gcd_group 通道）
+- `cargo build -p jpcg_app`：通过
+- 前端：`npx tsc --noEmit` 无错、`npm test` 45 passed（新增 `timelineFormat.test.ts`）
+
+### 来自 changes/2026-10-31-051000.md
+
+# 装备原始属性到玩家面板的可验证换算（#98）
+
+- 新增显式选择的历史130级莫问换算规则，独立整数实现体质→气血、根骨→会心/心法额外攻击、元气→基础攻击/破防；固定来源提交与取整阶段，未知心法/版本及溢出报错。
+- 扩展原始五维属性，保留旧主属性增量别名与旧存档语义。原始合计与派生面板分离；启用规则时配装约束使用派生点数，Pareto使用派生气血。
+- 玩家DTO新增可选心法额外攻击标记；单技能、连招、时间轴、配置往返共享映射，避免重复转换并修复加速丢失。旧手填金标准不变；已转换输入的旧求导明确报错。玩家破防中间乘法扩大到u64防止溢出。
+- 驾驶台提供规则选择、体质及非主属性输入、派生面板与来源限制说明；修复前端请求归一化丢弃加速和转换标记，保留手动状态与旧配装。
+- 增加手算样例、边界、宿主/优化/时间轴/动态桥接与前端回归，记录上游差分验证。
+- 当前只声明固定上游来源的规则一致性，尚无真实游戏面板基准；synthetic-v1仍为合成样例。其他心法、真实装备、强化/镶嵌/附魔、完整战斗增益仍待确认，#98不关闭。详见 docs/attribute-engine.md。
+
+### 来自 changes/2026-10-31-052000.md
+
+# 扩大可验证规则并防止新旧动态模块静默混算（#98）
+
+- 固定同一130级来源快照，增加傲血10026、分山10390、花间10021，覆盖四类主属性；按实际外功/阴性/混元通道转换，主属性别名在通用及心法转换前相加。不新增虚构的真实装备数据。
+- 区分基础气血与额外气血上限，后者在心法基础气血增益及截断后相加；新增字段默认0兼容旧配装，扩展阶段边界、TOML和宿主调用测试。
+- core/combo新增只读属性能力查询，动态桥接对转换请求及配置导入/加载/导出执行能力门禁，拒绝旧模块静默丢失标记；旧请求不要求新能力。
+- 直接Rust偏导明确固定面板语义，避免主属性正向不变、偏导却非零；host仍要求重新合成配装。
+- 记录许可证核查及独立来源差异，继续区分上游差分与真实游戏面板验证；后者仍无完整基准。
+- 将GLib/GTK/WebKit开发依赖解包到工作区，完成 make check-all：149项workspace测试、4项桌面动态测试、83项前端测试及双模式构建通过；四心法共40,000组上游差分零差异。具体边界见 docs/attribute-engine.md，本轮不执行任何远端发布。
+
+### 来自 changes/2026-10-31-061200.md
+
+# 修复迟到配装导入覆盖较新操作
+
+## 问题
+
+配装 TOML 导入在文件读取与宿主解析结束后才建立操作版本。期间用户选择其他装备、切换手动模式、恢复基准或再导入另一个文件，旧响应仍可能覆盖较新的状态并持久化，旧失败也会弹出误导性提示。
+
+## 修改
+
+- 在选择文件时由 App 建立共享 action revision，贯穿文件读取、宿主导入、值集和心法解析；不在后续阶段重新争取操作优先级。
+- 只允许当前操作应用配装或显示错误，后续编辑、切模式、恢复基准和新导入继续复用现有失效机制。
+- 文件输入立即清空，允许再次选择同一文件；读取异常统一进入当前导入的错误提示。
+- 不改变 Rust 计算、数据、DTO、依赖、存储格式或组件版本。
+
+## 验证
+
+- 初始 6 项新增回归在原 dev 上 5 项失败、1 项通过，既有驾驶台 6 项通过；修复后新增值集等待、基准恢复和读取错误边界，共新增 9 项。
+- 前端完整 76/76 通过；TypeScript + Vite 构建、Makefile 顺序守卫和 git diff --check 通过。
+- make check-all 已执行，但本机没有 cargo，停在 fmt-check；Rust、金标准和桌面双模式等待 PR CI，不记为本机通过。
+- 前端回归使用 jsdom 与宿主 API mock，不代表 Tauri 原生文件选择/IPC 已实测。
+
+## PR 复审补修
+
+- 独立复审发现首提交会把旧值集/心法的异步回填当成新操作，从而取消后选导入。保留问题记录，不把首提交 CI 全绿作为行为正确的证明。
+- ConfigPanel 明确区分用户编辑/选择与元数据回填；只有前者使旧导入失效，元数据仍遵循自身已有请求版本检查。
+- 补充 3 项回归，在首提交上全部失败，修复后通过；另补“导入后的真实值集选择仍取消旧导入”反向控制。最终前端 83/83、TypeScript + Vite、Makefile 顺序守卫与 diff 检查通过。未新增本机 Rust/原生桌面验证。
+- 全新启动的自动值集匹配固定使用启动版本，不创建或借用较新用户操作的版本；新增此前失败的启动交错回归，以及正常自动匹配、自动响应晚于导入的反序控制。最终相对 dev 新增 16 项前端回归。
+
+### 来自 changes/2026-10-31-070000.md
+
+# 改为逐职业TOML驱动属性引擎（#98）
+
+- 根据Qin确认的当前50级及各职业快照不同要求，移除生产代码中的四心法130级常数；从职业TOML的attributes读取全部转换系数，旧历史ID不自动迁移。
+- 新共享契约显式表达等级、来源、数值集、主属性、伤害通道、逐项有理数转换及气血阶段。无缺省游戏常数，缺表/混级/非法分母/溢出报错。
+- 职业技能编辑器与Rust保存路径保留换算表，防止旧编辑请求擦除；优化在一次搜索中固定规则快照。
+- 前端统一提供职业TOML模式，支持任意职业；禁用旧历史规则的缓存结果，职业TOML模式重新打开／显式重读时须验证新结果，失败前不能沿用旧面板；保留旧手填口径。
+- 提供非游戏数值的50级录入示例与端到端测试，历史差分仅作为回归。现有130级技能和synthetic-v1装备没有伪装迁移成真实50级数据。
+- 发布已暂停：之前仅创建首个旧提交对应的tree对象，未创建远端提交/分支/PR。本轮变更须重新获得发布授权。
+
+验证：make check-all通过；151项workspace、4项桌面动态、91项前端及9项既有golden通过。实际动态库50级合成管线和4,000组历史模型差分通过，仍无真实50级游戏面板基准。
+
+### 来自 changes/2026-10-31-131500.md
+
+# 配装驾驶台并入 dev：去掉叠放分支的 CI 触发
+
+## 做什么
+
+- 把 #96 从叠放草稿 `integration/91-gear-base` 基底改为基于最新 `dev`（已含 #97 时序引擎、#94 配装基础、#95 持久化驾驶台）。
+- `.github/workflows/ci.yml` 移除叠放期临时触发：`pull_request.branches` 去掉 `integration/91-gear-base`，`push.branches` 去掉 `feature/91-gear-cockpit`，恢复为 `[dev, beta, release]` / `[dev]`。
+- 合并冲突处理：`App.tsx`/`ConfigPanel.tsx` 保留 #96 的配装驾驶台与只读合成属性，并叠加 #95 复审的 `manualReady` 初始化时序修复（`onFormChange(update, { ready })`）；`ComboPage.tsx` 保留 #97 的时间轴预览并叠加 #96 的受控草稿 / 配置页只编辑不计算；`crates/jpcg_gear/src/optimize.rs` 补 `PlayerConfigDTO.jiasu_dengji`；配装目录/合成/导入导出相关前端与 Tauri 命令照旧。
+
+## 为什么
+
+#96 是为叠放审阅临时以 `integration/91-gear-base` 为目标分支的草稿；#94/#95/#97 已合入 dev 后，需要回到常规流程（base=dev、CI 只在 dev/beta/release 触发），避免临时分支长期留在工作流配置里。
+
+## 验证
+
+- 前端：`tsc --noEmit` 无错、`npm test` 67 passed（含 GearCockpit 6 项）。
+- Rust：`cargo test -p jpcg_core -p jpcg_combo -p jpcg_gear` 全绿、`cargo fmt --all -- --check` 通过、`cargo build -p jpcg_app` 通过。
+
+### 来自 changes/2026-11-03-061230.md
+
+# fix(app): 分开持久化心法与系数初始化状态
+
+- 原 `manualReady` 同时代表心法和系数，导致 A 心法就绪后切 B 失败/挂起，重启仍保留 B 标识与 A 属性；首次心法成功但值集失败时，重启会把占位系数当作自定义。反方向还会在重试心法时丢掉已经编辑的系数。
+- 增加可选的 `manualHydration` 两项就绪标记，每次选择只使对应项失效；成功后分别写回。重启只补未就绪部分，保留已成功的心法属性及系数。保留 `manualReady` 与旧 v1/v2 快照兼容，不升级存储版本；历史已误标完成的旧快照无法可靠区分真实自定义，不猜测迁移。
+- 存档加载、清空、基准恢复与配装导入同步标记；配装导入等待期间读取最新就绪状态，通过同步就绪 ref 覆盖同批微任务完成的交错，避免旧闭包覆盖初始化回填。心法未就绪时阻止计算/保存，当前加载错误给出重试提示。
+- 22 项 App 级确定性回归在独立原 dev 副本上 18 失败 / 4 通过，修复后 22/22；另加 2 项旧快照兼容/损坏字段校验。完整前端 131/131、TypeScript/Vite 构建、Makefile 顺序守卫及 diff 检查通过。
+- dot 自有云 Node 24.22.1、锁文件 `npm ci`。`make check-all CARGO_JOBS=2` 实跑在首个 fmt-check 因缺 cargo 停止（cargo 127 / make 2）；本机未跑 Rust/桌面/金标准，交由本 PR CI 核验。组件测试使用 jsdom 与 API mock，不是原生 Tauri/IPC/磁盘端到端实测。
+- 仅前端状态与测试改动；无 Rust、正式游戏数据、数值公式、依赖、版本、工作流变更。保留既有 Vite 大 chunk 提示。
+
+### 来自 changes/2026-11-05-011500.md
+
+# 莫问战斗时序 overlay（data/combat/mowen.toml）
+
+## 做什么
+
+- 新增 `data/combat/mowen.toml`：把游戏内 tooltip 截图整理出的时序数据落成 #92 overlay。
+  - 4 个形态：`qu-yangchun` / `qu-gaoshan` / `qu-pingsha` / `jian`，各带 `gcd_base = 1.5` 与可用技能列表。
+  - 16 条 `[[skill_combat]]`：音 5（宫/商/徵/羽/角）+ 变体 2（变宫/变徵）+ 剑 5 + 奇穴主动 4（冲秋冥/不愧君/断水流/斩长鲸）。
+  - 读条、调息、充能、是否吃加速、蓄力通道等字段按 tooltip 填写。
+- `data/skill-shots/out/mowen-final.json`：26 条技能的原始整理结果（含伤害区间、攻击加成、倍率、四形态、35 个奇穴）。
+- `server_tools/skill-shots`：小图（宽 <900px）先放大到 900px 再 OCR，提升截图识别率。
+
+## 为什么
+
+- 现有 `data/shuxing/mowen.toml` 只有 130 级伤害数据，没有读条/调息/充能，#92 时序引擎需要 overlay 才能排轴。
+- 游戏 Lua 已把公式搬进引擎侧，tooltip 是当前唯一能直接读到「基础伤害 + 攻击加成」的来源。
+
+## 待补
+
+- 曲/气/影 的主动技能（高山流水曲、阳春白雪曲、平沙落雁曲、青霄飞羽、云生结海、江逐月天、迴梦逐光、笑傲光阴、疏影横斜、清绝影歌、孤影化双）在 `data/shuxing/mowen.toml` 里没有对应 skill_id，先留空。
+- 清绝影歌 / 清绝影歌·回 的 `on_cast.switch_form` 待 id 补齐后接入。
+- `宫 +2723`、`阳春白雪曲 +1145/+1308/+57780` 为带 buff 截图，已按 0.99694 系数校正，待替换为无 buff 截图。
+
+### 来自 changes/2026-11-05-012500.md
+
+# 莫问时序补全：曲/气/影 id、形态切换与默认 forms
+
+## 做什么
+
+- `data/shuxing/mowen.toml` 手工补充 17 个技能条目（伤害为 0，仅供时序引用）：
+  高山流水 14069、平沙落雁 14072、三曲主动 14229/14230/14232、笑傲光阴 14073、江逐月天 14074、
+  云生结海 14075、青霄飞羽 14076、迴梦逐光 14154、孤影化双 14081、清绝影歌 14083、清绝影歌·回 14522、
+  剑·徵 14451、斩长鲸 36489、九衢闻曲 45730、太常律 30564。
+  （id 以游戏内「调试用信息」显示的 ID 为准；此前 shuxing 里 40314=剑·徵群攻、34344=五音正律，均非单目标技能。）
+- `data/combat/mowen.toml`：
+  - 三曲形态的 skills 列表补齐三曲主动 + 气/影 + 清绝影歌；剑形态补清绝影歌·回。
+  - 新增 `[[skill_combat]]`：三曲主动的 `on_cast.switch_form`、青霄飞羽 1s/40s、云生结海/江逐月天/迴梦逐光/笑傲光阴 70s、疏影横斜 28s 充能、孤影化双 150s、清绝影歌 60s → jian、清绝影歌·回 → qu-yangchun、太常律。
+  - 修正 剑·徵 14451、斩长鲸 36489 的 id。
+- `crates/jpcg_combo/src/timeline_host.rs`：请求未显式给 `forms` 时，从 `combat` overlay 的 `form` 列表兜底（此前空 forms 会导致形态切换事件不触发）。
+
+## 为什么
+
+- 截图里的「调试用信息 ID」就是技能真实 id，比按名字从 shuxing 猜准确；之前 剑·徵/斩长鲸 的 id 是错的。
+- 前端只传 combat overlay 时也应能跑形态切换，避免调用方必须重复传 forms。
+
+## 验证
+
+- 临时测试（已删）：`load_combat_with_skills("mowen")` 通过校验（4 forms / 24 skill_combat，form 引用技能全部在池中）。
+- 临时测试（已删）：`calculate_timeline` 跑「高山流水_主动 → 变宫 → 商 → 角 → 变徵 → 羽」，窗口 12s：
+  `FormSwitch qu-yangchun → qu-gaoshan`，6 次 Cast 全部命中，0 skipped，伤害 14109/13113/13113/9503/14056。
+- `cargo test -p jpcg_core -p jpcg_combo` 全绿（72 + 37）。
+
+### 来自 changes/2026-11-05-013000.md
+
+# 奇穴第 1 层（修饰类）落地 + 倍率基准改回 160
+
+## 做什么
+
+- `SkillModifier` 新增两个变体：`CooldownAdd(f32)`（调息 +N 秒，用于基础调息为 0 的奇穴）与 `DotTicksAdd(i32)`（Dot 跳数 +N，按 interval 折算到持续时间）；同步 `SkillModifierDTO` 与双向转换。
+- `QixueDef` 新增 `applies_to: Vec<(u32, u32)>`（一个奇穴作用于多个技能），`targets()` 优先按该列表匹配；`QixueDefDTO` 同步；`validate()` 改为「replaces_skill_id 为 0 时必须有 applies_to」，`validate_against_skills()` 逐个校验 applies_to 引用。
+- `data/combat/mowen.toml` 新增 7 条 `[[qixue]]`（第 1 层）：
+  殊曲（商/角 间隔 -33.3%、增伤 +12）、削竹（剑·徵 增伤 +16）、参连（无视 60% 内功防御 = 614/1024，覆盖音/剑全部伤害技能）、
+  冻泉（商/角 +4 跳）、冻泉·宫（宫/变宫 调息 +12s）、凌冬（徵/变徵 调息 +18s）、兼山（云生结海 调息 +20s）。
+- `TimelineRequestDTO` 新增 `qixue: Vec<String>`；`timeline_host::calculate_timeline` 先按 id 取奇穴定义、对每个技能 `resolve_skill` 套 modifiers，再交给时序引擎。
+- `server_tools/skill-shots` 倍率基准默认值 `--base` 由 192 改为 160（用户确认当前版本内外功统一为 160）；`data/skill-shots/out/mowen-final.json` 的 `ratio` 改为 `攻击加成 × 160 / 8438`，并保留 `ratio_raw`（= 攻击加成 / 8438）。
+
+## 为什么
+
+- 奇穴有大量「调息 +N 秒」「Dot +N 跳」这类非比例修正，原 `CooldownMul`/`DotDurationMul` 表达不了。
+- 一个奇穴常同时作用于多个技能（殊曲→商+角、参连→音/剑全部），单一 `replaces_skill_id` 不够用。
+
+## 验证
+
+- 临时测试（已删）：加载 mowen overlay 后取「殊曲」对 商 执行 `resolve_skill`，`dot_interval` 3.0→2.0、`hit_up` +12 通过。
+- `cargo test -p jpcg_core -p jpcg_combo` 全绿（72 + 37）；`cargo fmt --all -- --check` 通过。
+
+## 待做
+
+- 第 2 层：替换/新增技能（洞天、鹿鸣、鸾羽、超然、不愧君/断水流/斩长鲸/冲秋冥/太常律）→ replacement + `jihuoqixue` 门控。
+- 第 3 层：触发/资源类（音彻、净植、冻泉的「下一跳立即生效」、师襄曲风会心、忘弦/捣衣等）→ 需要引擎 on_cast/on_hit/on_dot_tick/on_qifeng 钩子。
+- 秘籍选择（4/4 页）需要「选中的秘籍集合」入口，目前 `[[miji]]` 结构可复用但无激活列表。
+
+## 补充（倍率口径）
+
+- 用户确认：倍率必须存整数 —— `倍率 = int(攻击加成 × 160 / 最终攻击力)`，结算时 `攻击加成 = 倍率 × 攻击力 / 160`（游戏内显示未取整，实际计算走整数）。`mowen-final.json` 的 `ratio/ratio_int` 已按此口径重算（宫 51、商 48、徵 35、羽 51、角 48、剑·宫 73、剑·商 160、剑·徵 62、剑·羽 101、剑·角 68）。
+
+### 来自 changes/2026-11-05-015000.md
+
+# 技能倍率接入：截图整数倍率写回 data/shuxing
+
+- 新增 `data/skill-shots/mowen-final.json`（从 `out/` 提升为受版本管理），给 10 个伤害技能补 `skill_id`/`sub_id`。
+- 新增 `scripts/apply-skill-coeff.py`：按 `(skill_id, sub_id)` 把 `ratio_int / 160` 写入 `data/shuxing/mowen.toml` 的 `atk_xishu`，`base_min/base_max` 写入 `base_damage1/2`；缺失字段自动插入；额外处理两条 DOT（商/角 每跳，整数倍率 14）。
+- 数据修正（以 `skills.tab` 的名称为准）：音行 id 对应关系是 宫 14064/14474、商 14065/14311、角 14066/14312、徵 14067/14227、羽 14068/14100（此前把徵/羽/角的 id 记错了，已修正 json 与 TOML）。
+- 新增回归测试 `crates/jpcg_core/tests/skill_coeff_data.rs`：断言 TOML 的 `atk_xishu` 与 json 的 `ratio_int/160` 一致、基础伤害一致；json-to-toml 重新生成数据若覆盖了系数，CI 会失败。
+- 结果：宫 0.31875(80-90)、商 0.3(95-100)、角 0.3(95-100)、徵 0.21875(84-92)、羽 0.31875(156-175)、剑·宫 0.45625、剑·商 1.0、剑·徵 0.3875、剑·羽 0.63125、剑·角 0.425（三段蓄力暂用同一档）。
+- 已知遗留：剑·角 3 段蓄力伤害（0/16/32 帧）工具只有首段与满蓄力两档数据，暂统一为 260-270；DOT 每跳只按整数倍率 14 估算。
+
+### 来自 changes/2026-11-05-020000.md
+
+# 战斗内曲风初始满点
+
+- 只建模战斗场景：非战斗每秒 +2 曲风（九衢闻曲）不实现，`Sim.qifeng` 初始化为 `MAX_QIFENG = 9`。
+- `crates/jpcg_combo/src/timeline.rs` 新增 `pub const MAX_QIFENG: u8 = 9`，获得/消耗后的上限判定统一引用它。
+- 回归测试同步：净植按「宫 一次消耗 9 点」断言 9×1330；师襄按 9 点 ≈ +18%。
+
+### 来自 changes/2026-11-05-021000.md
+
+# 补齐变宫/变徵倍率
+
+- `data/shuxing/mowen.toml` 里 变宫(14298/18860)、变徵(14299/18859) 仍是 130 级老系数（2.609375/1.7760416）；
+  按「变体伤害与 宫/徵 同源」补为 0.31875 / 0.21875，基础伤害 80-90 / 84-92。
+- `scripts/apply-skill-coeff.py` 增加这两条显式目标（json 里它们是 `gaoshan_variant`，不是独立技能条目）。
+
+### 来自 changes/2026-11-05-021500.md
+
+# 排轴器：秘籍 / 奇穴勾选接入时间轴
+
+- `examples/jpcg_app/src/types/index.ts`：`CombatDataDTO.miji/qixue` 改为 `MijiDefDTO[]`/`QixueDefDTO[]`；`TimelineRequestDTO` 增 `miji?: string[]`、`qixue?: string[]`。
+- `examples/jpcg_app/src/components/ComboPage.tsx`：面板属性同步后加载 `loadCombatBundle`，把门派 combat overlay 的秘籍与奇穴渲染成勾选项；「时间轴预览」请求带上勾选 id（`miji`/`qixue`）。
+- `ComboPage.module.css`：新增 `.optionsPanel/.optionsRow/.optionsLabel/.optionChip`。
+- 测试：`ComboPage.test.tsx` 新增「时间轴预览下发勾选的秘籍与奇穴」；前端 tsc / vitest（108 项）/ vite build 全过。
+
+### 来自 changes/2026-11-05-023000.md
+
+# 正式服 50 级数值集 live-50 + 配装模板值集切换
+
+- 新增 `data/values/live-50.toml`（level 50）：先沿用体验服一测的 50 级观测值，待正式服快照校准。
+- `data/values/index.toml`：注册 `live-50`（正式服·50级），默认值集切到 `live-50`。
+- `data/gear/*`：`templates/schools/sets/overrides/sample-loadout` 的 `value_set` 由 `live-130` 改为 `live-50`，让配装模板与 50 级数值集匹配。
+- 测试：`crates/jpcg_core/src/store/values.rs` 断言改为 3 个值集、`live-50` 为默认；`crates/jpcg_gear/tests/attributes.rs` 夹具拷贝 `live-50.toml` 并把夹具内值集统一替换为测试值集 `cszj-exp-260908`。
+- 仍未做：`data/shuxing/mowen.toml` 缺少 `[attributes]` 50 级换算规则（需要真实面板数据），因此配装合成在真实数据下仍会被拦。
+
+## 补充（50 级属性换算）
+
+- `crates/jpcg_api/src/attributes.rs` 新增 `AttributeConstant { to, value }`，`AttributeRules.constants`（`serde(default)`）用于心法固定点数加成。
+- `crates/jpcg_gear/src/attributes.rs` 的 `convert()` 先加 constants 再按 conversions 换算。
+- `data/shuxing/mowen.toml`：`[version].level` 改 50；新增 `[attributes]`（id `jx3-50-mowen-20261030`、value_set `live-50`、main_stat gengu、damage_kind lunar、qixue_multiplier 1/1）：
+  - 根骨 → 基础攻击 91/100（0.19 主属性 + 0.72 心法）
+  - 根骨 → 会心等级 28/100（0.25 + 0.03）
+  - 根骨 → 破防 6/100
+  - 体质 → 气血基础 0（显式零，气血不参与伤害计算）
+  - 常量：内功攻击 +2282、内功会心等级 +308
+  - 依据：jx3box bps/109685（数值体系）、bps/109665（莫问心法加成）
+
+## 补充（[xinfa] 老式收益清理）
+
+- `data/shuxing/mowen.toml` 的 `[xinfa]` 由 130 级口径改为 50 级新式口径：
+  - `atk_up` 1.96 → 0.91（根骨自身 0.19 + 莫问心法 0.72）
+  - `pofang_up` 2.0 → 0.06（根骨自身 0.06）
+  - `huixin_up` 0 → 0.28（根骨 0.25 + 心法 0.03）
+- 心法固定加成（内功攻击 +2282、内功会心等级 +308）仍由 `[attributes].constants` 提供，配装路径经 `zhuanhua_gongji` 传入、不走 `atk_up` 二次换算。
+
+## 补充（根骨不提供破防）
+
+- `data/shuxing/mowen.toml`：`[xinfa].pofang_up` 0.06 → 0；`[attributes]` 删除 `gengu → pofang` 换算（50 级根骨不提供破防，破防来自装备直给的破防属性）。
+
+## 补充（根骨自身不给攻击）
+
+- 更正：`bps/109685` 的「主属性 → 基础攻击 0.190」只适用于以攻击为主属性的门派（力道/元气），根骨主属性不提供基础攻击。
+- `[xinfa].atk_up` 0.91 → 0.72（仅莫问心法每点根骨 +0.72 内功攻击）；`[attributes]` 的 `gengu → gongji_base` 分子 91 → 72。
+- `[xinfa].huixin_up` 保持 0.28（根骨主属性会心 0.25 + 心法 0.03），`pofang_up = 0`。
+
+## 补充（心法根骨收益归入额外攻击）
+
+- 攻击力模型（用户口径）：`基础攻击力 = 装备攻击词条 + 基础属性自身换算`；`最终攻击力 = 基础攻击力 + 心法额外加成`。
+- 增益有两类：「基础攻击力提高 X%」只放大基础部分；「攻击力提高 X%」作用于最终攻击力（引擎目前只实现前者 `BuffConfig.base_atk_pct`）。
+- 因此根骨 0.72 属心法额外，`[attributes]` 换算目标由 `gongji_base` 改为 `gongji_extra`；与 `constants.gongji_extra = 2282` 合并进入 `zhuanhua_gongji`，不被「基础攻击力提高」放大。
+
+## 补充（旧存档版本迁移修复）
+
+- 症状：更新模板/数值集后，配装页同时卡在「需重新合成当前职业规则」与「配装需要匹配模板版本与数值集」，点两个按钮都无法消除。
+- 根因：`App.adoptValueSet` 用存档里的 `loadout.value_set`（旧 live-130）去解析数值集，又把旧值写回 loadout/form，与模板 `catalog.version`（live-50）永远不等；`compatible=false` → 不触发合成 → `rulesCurrent=false`，两条告警互锁。
+- 修复：`adoptValueSet` 统一迁移到模板版本口径（`revision`/`value_set` 取 `catalog.version`），按钮文案改显示模板目标值集；冒烟：前端 108 测试、tsc 通过。
+
+### 来自 changes/2026-11-05-032000.md
+
+# 奇穴第 3 层：曲风资源与运行时钩子
+
+## 做什么
+
+- 数据模型新增 `QixueHook`（`FlatDamageOnCast { damage, per_qifeng_spent }`、`DamagePctPerQifeng { pct }`），`QixueDef.hooks`/`QixueDefDTO.hooks` 双向转换；校验允许「只有钩子、不替换也不修饰」的奇穴。
+- `SkillCombatDef` 增加 `qifeng_gain` / `spend_all_qifeng`；时序条目携带这两个字段。
+- 时序引擎新增曲风资源：`Sim.qifeng`（0~9）。施放时先按施放前曲风结算钩子，再结清消耗、累加获得。
+- `TimelineInput.hooks` + `ActiveHook { targets, hook }`；`calculate_timeline` 把激活奇穴的 hooks（含 `applies_to` / `replaces_*` 作为作用范围，空 = 全部技能）传进引擎。
+
+## 数据
+
+`data/combat/mowen.toml`：
+
+- 宫（14064/14474）、变宫（14298/18860）：`spend_all_qifeng = true`。
+- 商、角、徵、羽（14065/14066/14067/14068）：`qifeng_gain = 1`。
+- 新增奇穴：音彻（剑·音 命中追加 2159）、净植（每消耗 1 点曲风追加 1330）、师襄（每点未消耗曲风 +2% 伤害）。
+
+## 验证
+
+`crates/jpcg_combo/tests/qixue_hooks.rs` 三个回归：
+
+- 净植：商（+1 曲风）→ 宫，宫伤害正好 +1330。
+- 师襄：连放两次商，第二次伤害约为 1.02 倍。
+- 音彻：剑·徵 直接伤害 +2159。
+
+`cargo test -p jpcg_core` 72、`cargo test -p jpcg_combo` 37 + 3 全绿，`cargo fmt --all` 通过。
+
+## 近似与未做
+
+- 曲风上限固定 9；尚未支持「非战斗每秒 +2」「九衢闻曲 羽 +1」等被动获取。
+- 音彻的理论触发条件（目标处于自身音域内）暂按「始终触发」近似，音域状态尚未进模型。
+- 净植的治疗吸收盾、师襄的无双/会心效果精确换算未做，按等效伤害近似。
+- 替换型奇穴（洞天/鹿鸣/鸾羽/超然）与秘籍选择入口仍未做。
+
+### 来自 changes/2026-11-05-034500.md
+
+# 秘籍选择入口
+
+## 做什么
+
+- `TimelineRequestDTO` 增加 `miji: Vec<String>`；`calculate_timeline` 按 id 取 `[[miji]]` 定义，先用 `resolve_skill` 套到技能上再进引擎。
+- 新增 `SkillModifier::CastTimeAdd(f32)`（定值减读条，秘籍「运功时间减少 0.125 秒」这类），DTO 同步。
+- 调整修正项顺序：先在 `TimingSkill::from_combat` 里套 overlay 时序字段（cast_time/cooldown 等），再套秘籍/奇穴修正项 —— 否则 overlay 的定值会覆盖秘籍的读条/调息修正。
+
+## 数据
+
+`data/combat/mowen.toml` 新增 26 条 `[[miji]]`，覆盖 6 个有数值效果的技能：宫、商、徵、羽、青霄飞羽、笑傲光阴。
+
+- 宫：读条 -0.125×2、伤害 +3%/+4%、会心 +2/3/4%。
+- 商、徵、羽：伤害 +3~5%、会心 +2~4%（按截图逐条）。
+- 青霄飞羽：调息 -3 秒。
+- 笑傲光阴：调息 -3/-3/-4 秒。
+- 角（仅移速）、杯水留影（仅复活减伤）没有可建模的数值，未列入。
+- 距离 +2/+3 尺、移速、禁轻功、音域互斥解除等非伤害效果暂不建模。
+
+## 验证
+
+`crates/jpcg_combo/tests/qixue_hooks.rs` 新增 2 个：
+
+- 宫 +4% 秘籍：伤害约为 1.04 倍。
+- 两条减读条秘籍：宫 之后的下一个技能提前 >0.2 秒。
+
+`cargo test -p jpcg_core` 72、`cargo test -p jpcg_combo` 37 + 5 全绿，`cargo fmt --all` 通过。
+
+### 来自 changes/2026-11-05-040500.md
+
+# 奇穴替换型：洞天、超然
+
+## 做什么
+
+- 数据层补 `[[qixue]].replacement`（替换为独立技能条目）的实战用例：
+  - **洞天**：替换「变徵」（14299/18859）为 1.5 秒 3 跳、每跳 4851 点固定伤害（`atk_xishu = 0`，dot）。激活后引擎解析出的技能名与伤害都取替换条目。
+  - **超然**：不替换，用 `cooldown_mul = -60` 把孤影化双 150 秒调息压到 60 秒（替换型 + 修饰型混用的写法示范）。
+- `resolve_skill` 现有替换逻辑已覆盖「replacement + modifiers 同时存在」；本次只补数据与回归。
+
+## 验证
+
+`crates/jpcg_combo/tests/qixue_hooks.rs::replacement_qixue_changes_skill`：先切到 `qu-gaoshan` 形态，未激活时是「变徵」原始伤害，激活 `dongtian` 后技能名变「洞天」且 dot 三段合计过万。
+
+`cargo test -p jpcg_core` 72、`cargo test -p jpcg_combo` 37 + 6 全绿，`cargo fmt --all` 通过。
+
+## 未做 / 待补
+
+- 鸾羽（青霄飞羽 → 飞鸾动羽，缺「飞鸾动羽」技能 id 与伤害值）、鹿鸣（宫 → 6 秒调息 + 每 0.5 秒消耗曲风的持续运功，缺跳数与结束条件）暂未落。
+- 洞天「消耗 3 点曲风」、超然「受加速率影响 + 琴影 +30% 加速突破」暂未建模。
+
+### 来自 changes/2026-11-05-041500.md
+
+# 奇穴：鸾羽替换 + 鹿鸣占位
+
+- **鸾羽**：`[[qixue]] id = "luanyu"` 把青霄飞羽（14076）替换为「飞鸾动羽」：999 点固定伤害、瞬发、40 秒调息（tooltip 原文就是 999 点，已与用户确认）。锁足/眩晕等控制效果暂未建模。
+- **鹿鸣**：PvE 奇穴（宫改为 6 秒调息 + 持续运功消耗曲风直到耗尽，GCD 后可用其他技能打断），本轮不建模。新增 `QixueDef.shelved` 标记（DTO/校验同步）：`shelved = true` 的奇穴只登记名称与槽位，允许没有替换/修正/钩子。
+- 回归：`crates/jpcg_combo/tests/qixue_hooks.rs::luanyu_replaces_qingxiao_with_dash_attack` 验证替换后技能名为「飞鸾动羽」且有伤害；`cargo test -p jpcg_core` 72、`-p jpcg_combo` 37 + 7 全绿，fmt 通过。
+
+### 来自 changes/2026-11-05-135500.md
+
+# 配装器接入 50 级真实装备数据（威望/名剑/跨门派/镶嵌/附魔）
+
+## 做什么
+
+- `data/gear/templates.toml` 换成游戏内实测数据：
+  - 恶人谷威望「妄戏浮屠·骋芳」12 部位 × 基础/升级两档；
+  - 名剑大会「一诺霜明·鸾律」8 件（无饰品）× 两档；
+  - 冰心「一诺霜明·星鼓」帽/护手作为跨门派装备（`cross_school = true`，穿别派装备不计套装）。
+- 新增 `data/gear/sockets.toml`（镶嵌孔，按 门派×来源×档位×部位×属性套 定位）与 `data/gear/enchants.toml`（附魔，按部位 + id 选择），`Loadout.enchants` 记录选择。
+- 套装语义按游戏修正：防具 [2] 属性、[4] CD（`笑傲光阴 -9s` / `孤影化双 -15s`），饰品 [2] 御劲 +120、[3] 化劲 +120 且两档同时生效；「·悟」条目仅作用于无界，不参与 PC 计算。
+- `Catalog` 加载新增 `sockets.toml`/`enchants.toml`，六个文件 version 必须一致。
+
+## 为什么
+
+直接把配装器从合成样例切到真实数据，才能验证「属性换算 + 合成 + 优化器」整条链路。
+
+## 关键实现
+
+- `Template.cross_school`、`Choice.school`：跨门派装备可用但不参与该门派套装计数与覆盖率校验。
+- `SocketDef`/`EnchantDef` 与人填 TOML 对接；`compose` 先加装备本体，再叠加镶嵌孔与附魔。
+- 饰品套装允许历史合成样例的「2 件化劲、3 件御劲」顺序（游戏顺序与旧样例相反）。
+- 测试拆出 `crates/jpcg_gear/tests/fixtures/synthetic/`（旧合成数据 + 值集），真实数据只服务应用与属性测试。
+
+## 验证
+
+- `cargo test --workspace` 全绿（core 72 / combo 37+7 / gear 18 + 属性 6 + host 1 + dynamic bridge 2 等）。
+- `JPCG_DATA_DIR=data cargo run -p jpcg_gear --bin gear-opt -- --catalog data/gear optimize --request data/gear/sample-request.toml` 在真实数据上跑通（16,777,216 组合空间，预算内评估 64 个候选）。
+
+## 备注
+
+- 基础档 1260 品按品级系数推算，等拿到实装数值再替换。
+- 属性换算系数来自游戏内截图反推，强化/附魔/镶嵌已计入，完整战斗增益与装备特效仍待补。
+
+### 来自 changes/2026-11-05-140500.md
+
+# 附魔候选按属性枚举
+
+## 做什么
+
+- `data/gear/enchants.toml` 从「每部位一条通用附魔」扩展为「同数值、不同属性」的候选集：
+  - 戒指（jie1/jie2）：全攻击 / 根骨 / 身法 / 元气 / 力道 / 内功攻击，均 126；
+  - 项链：御劲 126、体质 126；
+  - 腰坠：化劲 126、体质 126、全会心 126。
+- 材质名（铸世·归正 / 息烽 等）只影响外观、数值相同，数据层只保留一个 id。
+
+## 为什么
+
+游戏内附魔是「同数值、可选属性」，玩家会按门派主属性选；原数据只给通用一条，优化器无法权衡。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 全绿；`gear-opt optimize` 在真实数据上跑通。
+
+### 来自 changes/2026-11-05-141000.md
+
+# 前端配装页接入镶嵌与附魔
+
+## 做什么
+
+- `types/gear.ts`：`GearLoadout.enchants`、`GearChoice.school`、`GearTemplate.cross_school`、`GearSocketDef`、`GearEnchantDef`，`GearCatalog.sockets/enchants` 可选字段。
+- `state/gear.ts`：`initialLoadout` 按部位取第一条附魔作为默认选择；`isGearLoadout` 校验 `enchants` 形状。
+- `components/GearPanel.tsx`：每张装备卡新增「附魔」下拉（按部位过滤候选，含「无」），并在「属性详情」前展示该装备的镶嵌孔属性。
+
+## 为什么
+
+配装器数据已有镶嵌/附魔表，前端需要能选、能看到，否则这些数据只停留在引擎侧。
+
+## 验证
+
+- `npx tsc --noEmit` 通过；`npm test` 10 文件 108 项全绿；`npm run build` 通过。
+
+### 来自 changes/2026-11-05-141500.md
+
+# 时间轴 Cast 事件输出 GCD 信息
+
+## 做什么
+
+- `crates/jpcg_combo/src/timeline.rs`：`TimelineEventKind::Cast` 新增 `gcd_secs`（本次占用的 GCD，不占 GCD 为 0）与 `gcd_ready_at`（该通道就绪时刻），在施放时一并产出。
+- `crates/jpcg_api/src/lib.rs`：`TimelineEventKindDTO::Cast` 同步两个字段（`#[serde(default)]` 兼容旧数据）。
+- `crates/jpcg_combo/src/timeline_host.rs` 转换同步。
+- 前端：`TimelineEventKind` 类型补字段，`timelineFormat.ts` 在施放行追加「GCD 1.50s（就绪 1.50s）」，不占 GCD 的技能不显示。
+
+## 为什么
+
+排轴后看不到 GCD 何时就绪，无法判断技能为什么排在那一步；GCD 之前只在引擎内部计算，没有输出。
+
+## 验证
+
+- `cargo test -p jpcg_core -p jpcg_combo -p jpcg_gear` 全绿（含新增 GCD 字段断言）。
+- 前端 `tsc` 通过、`npm test` 108 项通过。
+
+### 来自 changes/2026-11-05-142000.md
+
+# 镶嵌宝石化 + 伤害记录模块
+
+## 做什么
+
+- 后端：镶嵌从「每件装备固定孔位属性」改为「模板声明孔位数量 + 默认宝石，玩家按孔位选宝石」。
+  - `jpcg_gear::model`：`SocketDef` 换成 `GemDef { id, name, stats }`；`Catalog.gems`；`Template.socket_count/default_gems`；`Loadout.sockets: BTreeMap<Slot, Vec<String>>`。
+  - `catalog::compose` 按 loadout 的宝石 id（缺省回退模板默认）累加属性，校验孔位数量与宝石存在性；`validate()` 校验宝石 id 唯一、模板孔位数与默认宝石数一致、孔位 ≤3。
+  - 新增 `data/gear/gems.toml`（八级宝石：主属性/根骨/体质/身法/元气/力道 38、斑质 57、全攻击/全会心/会心效果/全破防/化劲/御劲/加速 38、气血上限 577），删除 `sockets.toml`；`templates.toml` 补齐 `socket_count/default_gems`。
+- 前端：配装卡新增每孔宝石下拉（八级），`initialLoadout` 用模板默认宝石初始化，`isGearLoadout` 校验 sockets。
+- 前端：新增 `TimelineDamageLog` 时间轴伤害记录组件——`# / 时间(mm:ss) / 类型 / 技能 / 伤害 / 累计 / 备注`，备注里显示 GCD（或不占 GCD）、DOT 跳数、形态切换、增益层数；连招页时间轴预览改用它。
+
+## 为什么
+
+- 孔位宝石属于玩家可选项，固化成装备属性会让配装器无法表达「同装备不同宝石」；只录入八级符合当前版本实际。
+- 时间轴原来只有一行行原始事件，看不出「几分几秒、什么伤害、打了多少」；新表格按时间顺序列出并累计。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 全绿（含宝石校验与跨门派、饰品套装）。
+- 前端 `tsc --noEmit`、`npm test` 109 项、`npm run build` 通过。
+
+### 来自 changes/2026-11-05-143000.md
+
+# 连招序列按形态校验可用性
+
+## 做什么
+
+- 新增 `examples/jpcg_app/src/utils/formLegality.ts`：按序列顺序模拟形态切换（读取 combat overlay 的 `form` 与 `on_cast.switch_form`），逐步判断技能在当前形态下是否可用。
+- 连招页：不可用的步骤标红并显示「非法」+ 悬停说明（当前形态 / 所需形态）；顶部给出提示条；存在非法步骤时禁用「时间轴预览」。
+- 引擎侧本来就会跳过不匹配形态的技能（`skipped_actions`），前端不再让用户提交后才看到这个结果。
+
+## 为什么
+
+切形态技能穿插在序列里时，形态错了的技能会被引擎静默跳过，玩家只能从 `skipped` 数字察觉；提前标红可以避免白算一遍。
+
+## 验证
+
+- 前端 `tsc --noEmit`、`npm test` 112 项（新增 3 项形态校验用例）、`npm run build` 通过。
+
+### 来自 changes/2026-11-05-144500.md
+
+# 心法固定攻击计入基础攻击力
+
+## 做什么
+
+- `data/shuxing/mowen.toml`：心法固定内功攻击 2282 的 `AttributeConstant` 目标从 `gongji_extra` 改为 `gongji_base`。
+
+## 为什么
+
+游戏面板的「基础攻击力」包含心法固定攻击（例如基础 6604 = 装备攻击 + 2282），只有「每点根骨的 0.72 攻击」属于心法额外收益、计入最终攻击而不进基础。之前把 2282 放进 extra，导致配装器显示的基础攻击偏低约 2282。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 全绿（含 `panel.gongji == atk_with_buff 结果` 的一致性断言：基础 + 额外 = 最终，拆分变化不改变总攻击）。
+
+### 来自 changes/2026-11-05-145000.md
+
+# 前端可选跨门派装备
+
+## 做什么
+
+- `GearPanel` 的候选列表从 `t.school === loadout.school` 放宽为 `t.school === loadout.school || t.cross_school`；选择跨门派装备时把 `choice.school` 写成装备所属门派（同门派写 null）。
+- 跨门派按钮前缀显示门派名（冰心），悬停提示「可穿戴但不计套装」。
+- `initialLoadout` 优先选本门派模板，没有时回退跨门派模板。
+
+## 为什么
+
+冰心护手/帽已作为跨门派装备录入（`cross_school = true`），但前端只列本门派模板，导致用户看不到也选不了。
+
+## 验证
+
+- 前端 `tsc --noEmit`、`npm test` 112 项、`npm run build` 通过。
+
+### 来自 changes/2026-11-05-150000.md
+
+# 镶嵌孔恢复为装备固定属性
+
+## 做什么
+
+- `jpcg_gear`：删除宝石可选模型（`GemDef` / `Catalog.gems` / `Template.socket_count/default_gems` / `Loadout.sockets`），改为 `Template.sockets: Vec<Stats>`——每件装备的五行石孔位属性固定，直接计入装备属性。
+- 数据：`data/gear/gems.toml` 删除，孔位属性写回 `templates.toml` 的 `[[templates.sockets]]`。
+- 前端：配装卡去掉每孔宝石下拉，改为只读展示「镶嵌（固定）：根骨 +38、化劲 +38」。
+
+## 为什么
+
+五行石孔不是玩家可选项，每件装备固定这几个孔和属性；做成下拉会让人误以为能换宝石，也容易和实际装备对不上。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 13 个目标全绿。
+- 前端 `tsc --noEmit`、`npm test` 112 项、`npm run build` 通过。
+
+### 来自 changes/2026-11-05-150500.md
+
+# 武器五彩石计入属性
+
+## 做什么
+
+- `jpcg_gear::model::Template` 新增 `wucai: Option<Stats>`（武器五彩石，固定属性）；`catalog::compose` 把五彩石属性一并计入该件装备。
+- `data/gear/templates.toml`：四件武器（威望/名剑 × 基础/升级）补 `[templates.wucai]`：根骨 +52、内功会心效果 +104、内功攻击 +208（游戏内 1320 武器截图；基础档按同值暂用）。
+- 前端配装卡展示「五彩石：根骨 +52、会效 +104、内功攻击 +208」。
+
+## 为什么
+
+武器除了三个镶嵌孔还有一颗五彩石，之前的属性只加了孔位，漏掉五彩石，导致攻击与根骨都偏低。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 13 个目标全绿。
+- 前端 `tsc --noEmit`、`npm test` 112 项、`npm run build` 通过。
+
+### 来自 changes/2026-11-05-151000.md
+
+# 五彩石改为可选
+
+## 做什么
+
+- `jpcg_gear`：`Template.wucai`（固定）改为独立的五彩石候选 `Catalog.wucai: Vec<WucaiDef>` + `Loadout.wucai: Option<String>`；compose 仅在武器部位按所选 id 加成，未选则不加。
+- 新增 `data/gear/wucai.toml`（目前一条：根骨 +52 / 内功会效 +104 / 内功攻击 +208，来自 1320 武器截图）。
+- 前端：武器卡新增五彩石下拉（默认第一条，可选「不插五彩石」）。
+
+## 为什么
+
+五彩石是玩家可选择的镶嵌物，不是武器固有属性；之前烤进武器模板会导致换成别的五彩石时算错。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 13 个目标全绿。
+- 前端 `tsc --noEmit`、`npm test` 112 项、`npm run build` 通过。
+
+### 来自 changes/2026-11-05-151500.md
+
+# 修复旧存档 loadout 携带已删除字段导致 compose 失败
+
+## 做什么
+
+- 新增 `sanitizeGearLoadout`：发送给 Rust 前剔除历史遗留字段（如已删除的 `sockets`），保留当前结构字段。
+- `api.composeGear` / `api.exportGear` 调用前统一 sanitize。
+- 回归测试：带 `sockets` 的旧 loadout 清理后不含该字段，其余字段不变。
+
+## 为什么
+
+本地持久化的旧配装在版本升级后仍带 `sockets`，Rust 的 `Loadout` 用了 `deny_unknown_fields`，于是报 `unknown field sockets`，整页只能「重新读取模板」。
+
+## 验证
+
+- 前端 `tsc --noEmit`、`npm test` 113 项、`npm run build` 通过。
+
+### 来自 changes/2026-11-05-152000.md
+
+# 修正项链/腰坠附魔候选
+
+## 做什么
+
+- `data/gear/enchants.toml`：项链附魔 = 御劲 126 / 体质 126；腰坠附魔 = 化劲 126 / 体质 126；删除腰坠上错误的「全会心 126」。
+
+## 为什么
+
+游戏里项链与腰坠的附魔只有两种：一条御劲、一条化劲，且两件都可以选体质；之前多写了全会心。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 13 个目标全绿。
+
+### 来自 changes/2026-11-05-152500.md
+
+# 附魔名称改成属性文案
+
+## 做什么
+
+- `data/gear/enchants.toml`：把「附魔提高90/126」这类占位名称改成实际属性文案（化劲等级提高90、御劲等级提高126、化劲等级提高126、加速等级提高126）。
+
+## 为什么
+
+下拉里显示「附魔提高126」看不出加的是什么属性；游戏内文案本身就是「化劲等级提高126」这种写法。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 13 个目标全绿。
+
+### 来自 changes/2026-11-05-153000.md
+
+# 补上体质→气血换算，对齐魔盒面板
+
+## 做什么
+
+- `data/shuxing/mowen.toml` 的 `[[attributes.conversions]]`：`tizhi → qixue_base` 由 `0/1` 改为 `21/2`（每点体质 10.5 气血），与游戏面板「最大气血」一致。
+
+## 为什么
+
+之前把该换算显式写成 0，导致配装面板气血恒为「额外气血」部分。用魔盒配装器（根骨 3351 / 气血 73014）对照后确认需要 体质×10.5 这一项。
+
+## 验证
+
+- `cargo test -p jpcg_gear` 全绿；用魔盒配置 compose 后：气血 72206（目标 73014）、攻击 10352（10367）、破防 3585（3586）、会心 1571（1576）、御劲 246 / 化劲 4457 / 加速 974 完全一致。
+- 剩余差异见后续核对（五彩石/体质数值）。
+
+### 来自 changes/2026-11-05-154000.md
+
+# 气血公式与角色基础属性对齐游戏面板
+
+## 做什么
+
+- `data/shuxing/mowen.toml`：`tizhi → qixue_base` 改为 `10/1`，并新增常量 `qixue_base = 3956`（50 级基础气血）。
+- 前端 `initialLoadout` 的 `base` 补上角色自带基础属性：体质 18、根骨 18、身法 18、元气 17、力道 17。
+
+## 为什么
+
+游戏面板气血 tooltip：气血值提高 = 体质×10；基础气血最大值 = 体质×10 + 3956；最终 = 基础 + 额外气血上限。之前用 `体质×10.5` 且把角色基础属性当 0，导致气血与根骨各少一截。
+
+## 验证
+
+用魔盒配装（威望/名剑混穿，12 件全 1320）对照：
+- 根骨 3351 / 会心 1576 / 气血 73014 / 御劲 246 / 化劲 4457 / 加速 974 —— 与魔盒完全一致。
+- 基础攻击 7953（魔盒 7956）、攻击 10365（10367）、破防 3585（3586），差异 1~3 点，疑为单件攻击词条取整，待核。
+- `cargo test --workspace` 与前端 113 项测试全绿。
+
+### 来自 changes/2026-11-05-154500.md
+
+# 角色自带基础攻击 +3
+
+## 做什么
+
+- `data/shuxing/mowen.toml` 新增 `AttributeConstant { to = GongjiBase, value = 3 }`：50 级成女无装备面板基础攻击为 3。
+
+## 为什么
+
+与魔盒配装对照，基础攻击差 3 点；这 3 点来自角色本身（和自带的体质/根骨 18 点一样），不属于任何装备或心法。
+
+## 验证
+
+- 魔盒配装 compose：基础攻击 7956（与魔盒一致）、攻击力 10368（魔盒 10367）、破防 3585（3586），其余全部一致。
+
+### 来自 changes/2026-11-05-155000.md
+
+# 补角色自带破防 1 点
+
+## 做什么
+
+- `data/shuxing/mowen.toml` 新增 `AttributeConstant { to = Pofang, value = 1 }`。
+
+## 为什么
+
+游戏面板「基础阴性内功破防 3586」，我们装备+镶嵌+附魔合计 3585，差 1 点来自角色/心法自带（和基础攻击 3、体质/根骨 18 同类）。
+
+## 验证
+
+- 魔盒配装 compose：破防 3586 ✅；基础攻击 7956 ✅；根骨/会心/气血/御劲/化劲/加速全一致；攻击力 10368（魔盒 10367，差 1，待查取整口径）。
+- `cargo test -p jpcg_gear` 13 个目标全绿。
+
+### 来自 changes/2026-11-06-065600.md
+
+# 修复导数分析沿用旧计算环境的结果
+
+## 什么与为什么
+
+加点优化页面首次访问后保持挂载，但导数结果、错误和加载状态没有绑定输入版本。返回计算页修改属性、心法或值集，或配装结果暂不可用后恢复，旧推荐仍显示；在途旧请求也能回填并结束较新请求的加载状态。
+
+- 输入引用变化时在布局 effect 内清空结果、错误、展开及图表状态，并递增请求版本；卸载同样使请求失效。
+- 成功、失败、finally 均只接纳当前请求。当前请求失败与重试行为不变；不取消已经进入宿主的计算。
+- 新增组件和真实 App 导航回归，验证常驻页面、迟到成功/失败、A→B→A、null 恢复和普通重渲染。
+
+## 验证与范围
+
+在 dot 云电脑使用原锁文件和 Node 24.22.1。新增回归先在未修改的 dev 实跑失败，再验证修复版本；完整前端测试、TypeScript/Vite 构建及 Makefile 顺序守卫通过（精确计数见 PR）。没有改公式、Rust、DTO、游戏数据、依赖、存储格式或版本。
+
+本机 make check-all 在首步因 cargo 不存在退出；Rust、金标准与桌面双模式尚未本机执行，远端 CI 另列。组件测试使用 jsdom 和 API mock，未验证原生 Tauri IPC、macOS/Windows GUI。保留既有 Vite 大 chunk 提示。旧结果不再跨输入保留，需要用户重新点击计算导数。
+
+### 来自 changes/2026-11-06-162000.md
+
+# 武学页：按效果图重排三栏（技能目录 / 排轴 / 模拟伤害记录）+ 奇穴盘
+
+## 做了什么
+
+- `examples/jpcg_app/src/components/ComboPage.tsx`：标题改为「武学」；主体重排为三栏网格：
+  左「技能目录」、中「排轴」、右「模拟伤害记录」（底部奇穴盘整宽）。
+- 技能目录：由文字 chip 改为技能卡：按器形色调区分（琴绿 / 剑紫），展示基础伤害与
+  `攻击加成 = atk_xishu × 面板攻击力`、吟唱/调息/充能标签；每张卡按 `skill_id/sub_id`
+  列出该技能的秘籍 pill，点击即可勾选/取消（替代原来的全局秘籍列表）。
+- 排轴：每步显示模拟时间、序号、技能名、器形/曲风、已选秘籍与 GCD；
+  `form_switch` / `qifeng_switch` 事件渲染为步骤内的切换行；非法步骤保留红框。
+- 模拟伤害记录：右侧表格 + 三个总计卡片（窗口总伤 / DPS / 未执行动作）；
+  未计算时显示引导空态。
+- 顶部状态条补全：器形、曲风、目标血量、内防、减伤，以及「切至阳春/高山/平沙」曲目快捷按钮。
+- `src/App.tsx`：排轴器不再固定传 `configurationOnly`，武学页可直接运行「计算连招 / 时间轴预览」
+  （此前该页只做配置，时间轴入口不可达 —— 对应 PR #104 复审 P1）。
+- `src/types/index.ts`：`MijiDefDTO` 补 `skill_id/sub_id`；`TimelineDamageLog` 支持 `qifeng_switch`。
+- `src/api/commands.ts`：浏览器（非 Tauri）预览用 mock 补两轴 combat 数据（琴/剑、三种曲风、
+  秘籍、奇穴槽位），便于无桌面环境检查视觉；不参与真实计算。
+
+## 为什么
+
+- 用户要求按 `martial-mock5.png` 效果图「完全不缩水」实现；此前只有竖排结构，差距明显。
+- 秘籍/奇穴/形态信息需要落到技能与排轴这一步，才能体现「武学系统」而不是单纯的配置表单。
+
+## 验证
+
+- `npx tsc --noEmit` 通过；`npm test` 115 项通过；`npm run build` 通过。
+- 视觉：headless Chrome + CDP 注入草稿与浏览器 mock 数据，截图核对三栏布局与配色。
+
+### 来自 changes/2026-11-06-163500.md
+
+# 武学页：技能卡内置 4 个秘籍槽；奇穴盘分组重排
+
+## 做了什么
+
+- 秘籍从「底部全局勾选列表」改为**挂在技能卡左侧的 4 个槽位**（对应游戏内 4 个秘籍槽）：
+  - 空槽显示「＋」，点击弹出该技能的秘籍候选；已装备槽显示秘籍名，点击卸下。
+  - 同一技能最多装备 4 个秘籍（第 5 个点击被忽略），弹层标题显示「n/4」。
+  - 没有秘籍的技能不再渲染槽位列。
+- 删除底部重复的全局秘籍勾选面板（秘籍归属到技能后不需要重复入口）。
+- 奇穴盘重排：第七~九重合并为单个「混选（9 选 3）」组；布局由竖排行改为 4 列分组卡片网格，
+  选中项用金色描边/底色，标题栏显示「已选 n / 9」。
+- 整页改为固定高度布局（头部 + 三栏 + 底部奇穴盘），三栏各自内部滚动，
+  奇穴盘不再被挤出视口。
+
+## 为什么
+
+- 用户反馈：秘籍应放到技能左边、每个技能最多 4 个；奇穴盘视觉不好看。
+- 固定高度布局让「奇穴盘放下方」在 1440×900 下成立，避免需要整页滚动才能看到。
+
+## 验证
+
+- `npx tsc --noEmit`、`npm test`（115 项）、`npm run build` 全绿。
+- 视觉：无头 Chrome + CDP 截图核对（`.scratch/mockup/martial-implemented2.png`）。
+
+### 来自 changes/2026-11-06-170000.md
+
+# 武学页：独立 DOT 数据修复 + 左栏技能格重排
+
+## 做了什么
+
+### 1. 修复 DOT 在时间轴上丢失
+- `crates/jpcg_core/src/type_set/combat.rs` / `crates/jpcg_api/src/lib.rs`：`SkillCombatDef`
+  新增独立 DOT 字段 `dot_interval` / `dot_duration` / `dot_tick_base1` / `dot_tick_base2` / `dot_tick_xishu`；
+  `validate()` 校验间隔、时长与系数。
+- `crates/jpcg_combo/src/timeline.rs`：新增 `DotTickSpec`；`TimingSkill.dot_tick` 在
+  `from_combat` 里按 overlay 克隆一份「每跳技能」（dot_flag/interval/duration/每跳伤害系数），
+  施放本体后独立生成 DOT 实例并按跳结算；本体直接伤害不受影响。
+- `crates/jpcg_combo/src/timeline_host.rs`：独立 DOT 同样套秘籍/奇穴修正（殊曲缩短间隔、
+  冻泉加跳数），resolve 后回写 interval/duration。
+- `data/combat/mowen.toml`：商（14065/14311）、角（14066/14312）补
+  `dot_interval=3 / dot_duration=18 / 每跳 +750 或 +731`（`dot_tick_xishu = 750/8438`、`731/8438`）。
+- 回归：`dot_ticks_come_from_combat_overlay`（6 跳）、`dot_modifiers_apply_to_overlay_dot`
+  （殊曲 9 跳、冻泉 10 跳）。
+
+### 2. 左栏技能目录重排（方案 A）
+- 标题行右侧新增统一「秘籍配置」入口；弹窗左侧列技能（含 n/4），右侧 4 槽位 + 候选秘籍。
+- 搜索框下新增 `全部 / 曲 / 剑 / 已收藏` 过滤。
+- 技能格从 3 列 84px 改为 2 列（≥118px），技能名两行显示；去掉每格小齿轮，
+  只保留右下角 `n/4` 徽标（点击打开同一个秘籍弹窗并定位该技能）。
+
+### 3. 时间轴自动模拟（上一批改动）
+- 移除「时间轴预览」按钮；排轴/秘籍/奇穴/面板属性变化后 350ms 防抖自动重算，
+  revision 守卫旧请求不覆盖新结果。
+
+## 验证
+- `cargo test --workspace` 全绿、`cargo fmt --check` 通过。
+- 前端 `tsc`、116 项 vitest、`npm run build` 通过。
+- 视觉：headless Chrome + CDP 截图核对（`.scratch/mockup/martial-left-v2.png`、`martial-miji-v2.png`）。
+
+## 补充（同一批）
+
+- 殊曲 DOT 每跳递增修复：`SkillModifier::DotUpAdd`（+0.12），数据 `shuqu` 由误用的
+  `hit_up_add = 12` 改为 `dot_up_add = 0.12`；商 DOT 9 跳逐跳递增（回归测试）。
+- 洞天·变宫：新增 `QixueHook::AccelerateDot`，洞天 3 跳各触发一次「商/角下一跳立刻生效」
+  （提前，不补跳；总跳数不变），`data/combat/mowen.toml` 的 dongtian 挂 hooks；回归测试断言
+  商首跳提前且仍为 6 跳。
+- 奇穴门控：左侧技能目录隐藏 `jihuoqixue` 未激活的技能（激活对应奇穴后立即出现），
+  前端测试覆盖；奇穴盘中 18 个 `shelved` 描述性奇穴用斜体/虚线 + tooltip 标注「引擎暂未建模」。
+
+## 补充 2：徵 / 变徵 倒读条三段
+
+- `Skilltype.channel_ticks`（默认 1）与 overlay `channel_ticks`：引导技能按段结算。
+- 引擎新增 `TimelineEventKind::ChannelTick`；引导施放时 `Cast` 事件伤害记 0，
+  各段在其结算时刻（`start + 时长×k/段数`）输出，时长走 `cast_time_with_haste`（吃加速/帧量化）。
+- `data/combat/mowen.toml`：徵 14067:14227、变徵 14299:18859 设 `cast_time = 2.8125`、
+  `channel = true`、`channel_ticks = 3`；变徵保留 `requires_qifeng = "gaoshan"`。
+- 回归测试 `zheng_channel_has_three_ticks`：3 段、首段 0.9375s、末段 2.8125s、Cast 伤害为 0。
+- 前端 `TimelineEventKindDTO` 支持 `channel_tick`，日志显示「引导 · 第 N 段」。
+
+## 补充 3：羽「商/角 下两跳立刻生效」
+
+- 依据游戏内 tooltip：羽「对目标造成 156–175(+2717) 阴性内功伤害，使其下两跳自身『商』『角』持续伤害立刻生效」。
+- `OnCast` 新增 `advance_dot_targets` / `advance_dot_ticks`（DTO 同步）；引擎在施放时把目标 DOT 的最早 N 跳时间改到命中时刻
+  （只提前、不补跳，总跳数不变）。羽每次施放（3 层充能各一次）都会触发。
+- 数据：`data/combat/mowen.toml` 的 14068:14100 增加
+  `on_cast = { advance_dot_targets = [[14065,14311],[14066,14312]], advance_dot_ticks = 2 }`。
+- 回归测试 `yu_triggers_two_shang_dot_ticks`：商仍 6 跳，其中 2 跳被提前到羽的命中时刻（1.5s）。
+
+## 补充 4：秘籍只显示效果，不显示秘籍名
+
+- 新增 `src/utils/miji.ts`：把 `SkillModifierDTO` 翻译成效果文案
+  （如 `cast_time_add: -0.125` → 「运功时间减少0.125秒」、`hit_up_add: 4` → 「伤害提高4%」、
+  `huixin_up_add: 4` → 「会心提高4%」、`dot_up_add` → 「每跳伤害提高12%」等），多条用「，」连接。
+- 秘籍配置弹窗的技能槽位、候选列表、排轴步骤里的秘籍标签全部改为显示效果文案；
+  无修正项的秘籍显示「无数值效果」。
+- 前端类型补 `SkillModifierDTO` / `MijiDefDTO.modifiers`；浏览器 mock 与 UI 测试同步更新；
+  弹窗背景改用 `--bg-surface`，深浅色主题都正常。
+
+## 补充 5：武学面板改为后端组装（前端只渲染）
+
+- 数据/组装：
+  - `SkillCombatDTO.miji_ids`：后端按 `(skill_id, sub_id)` 精确配对秘籍；`sub_id=0` 仅在技能唯一时展开，
+    歧义（同一 skill_id 多个变体）或引用不存在直接报错。
+  - `MijiDefDTO.effects`：后端从 modifiers 生成简短文案（如「运功-0.125秒」「伤害+4%」）。
+  - `QixueDefDTO.group_label` / `group_ids`：后端按槽位输出分组标签，并把「冻泉 + 冻泉·宫」合并成一格
+    （group_ids 一起开关）；数组顺序即显示顺序。
+  - `CombatMetaDTO`：新增 `miji_per_skill_cap` / `mixed_qixue_cap` / `mixed_slot_from`。
+  - 组装入口 `host::combat::load_combat_with_skills` 统一做上述整理，FFI/Tauri 复用。
+- 数据修正（错位根因）：`data/combat/mowen.toml` 的秘籍 skill_id 有 off-by-one
+  （徵写成了 14066、羽写成了 14067），已改回 14067/14068；商/徵/羽补显式 sub_id
+  （14311/14227/14100），否则会被组装期歧义检查拒绝。
+- 前端：删除 `utils/miji.ts`、`mijiFor` 的匹配规则、奇穴分组/合并/上限逻辑；`ComboPage` 只按
+  `miji_ids` 查秘籍、渲染 `effects`、按 `group_label` 顺序渲染奇穴、用 `group_ids` 开关、上限读 meta。
+- 测试：Rust `panel_bundle_is_enriched_by_backend`（配对/文案/分组/合并/caps）；前端 117 项通过；build 通过。
+
+## 补充 6：DOT「下一跳立刻生效」后计时重新起算（级联前移）
+
+- 之前只把被点名的那一跳挪到触发时刻，后续跳仍按原时间生效（看起来「后面没挤过来」）。
+- 改为：该跳移到触发时刻后，后续所有跳整体前移相同 delta（总跳数不变，DOT 结束时间提前），
+  等同游戏里触发后跳间隔重新起算。
+- 回归测试更新：羽后商末跳 < 17s、洞天后商末跳 < 17s（原 18s）。
+
+## 补充 7：DOT 提前标记
+
+- `TimelineEventKind::DotTick` 增加 `advanced: bool`（DTO/前端同步）；被洞天/羽提前的跳在日志备注显示「（提前）」，
+  避免和正常跳混淆。回归测试断言羽提前的 2 跳带标记。
+
+## 补充 8：DOT 提前改为「按次消费下一跳」（修复第三跳洞天没炸）
+
+- 旧实现按时间搜「第一个大于触发时刻的跳」，级联前移后后面的触发可能找不到目标或跳过，导致少炸。
+- 改为每个 DOT 记录 `consumed` 游标：每来一次触发事件（洞天每跳 / 羽 2 跳）消费「下一条未炸的跳」，
+  该跳落到触发时刻，后续跳按 interval 重新排；因此洞天 3 跳必炸 3 次商 + 3 次角，雨露均沾。
+- 回归测试：洞天场景断言带 advanced 标记的商跳恰为 3 条；羽场景为 2 条。
+
+## 补充 9：DOT 重复施放改为刷新（覆盖旧实例）
+
+- 之前同一技能再施放会新建 DOT 实例，日志里会出现两段「洞天第 1/2/3 跳」交错，
+  看起来像跳数错位/多出第 4 跳。
+- 现在施放带 DOT 的技能（商/角/洞天等）会先移除同 (skill_id, sub_id) 的旧 DOT 实例再新建，
+  即刷新而不是叠加；DOT 跳序号始终从 1 开始。
+
+## 补充 10：秘籍/奇穴选择持久化
+
+- `ComboDraft` 增加 `miji` / `qixue` 字段（连招草稿已有持久化通道 `usePersistentState`，按心法分 key）；
+- 旧存档迁移：`comboDraftSchema` version 1→2，缺省补空数组；旧 cockpit 快照里的 comboDraft 校验改为容忍缺省；
+- `ComboPage` 的 `selMiji` / `selQixue` 不再用组件内 useState，改为读写草稿字段，切换页面/重挂载/重启后选择保持；
+- 奇穴 chip 增加 `aria-pressed`；新增回归测试验证秘籍、奇穴写入草稿且重挂载后恢复（118 项前端测试通过）。
+
+## 补充 11：伤害记录时间显示 0.1s 精度
+
+- 之前用 mm:ss，洞天施放与 0.5 秒后的首跳落在同一秒里，看起来像「施放瞬间就提前了」。
+- 现在时间列显示 `M:SS.s`（如 0:04.0 / 0:04.5），并新增回归断言：洞天施放时刻（1.5s）不触发提前，
+  只有 2.0 / 2.5 / 3.0 三个 DOT 跳才各炸一跳。
+
+## 补充 12：提前只作用于「尚未生效」的跳
+
+- 问题：洞天施放时若目标 DOT 的下一跳其实已经在施放时刻前/同时生效，旧逻辑仍把它「提前」到洞天跳的时刻
+  （实际被推后），却仍标「（提前）」。
+- 修复：消费游标先跳过 `tick_time <= 触发时刻` 的已生效跳，只把未来跳提前到触发时刻。
+- 验证：无加速场景洞天 3 跳仍炸 3 次商；有加速场景中施放时刻已过的第 1 跳不再被搬动/标记。
+
+## 补充 13：DOT 刷新保留已生效跳
+
+- 问题：连续两次洞天时，刷新逻辑直接删掉旧 DOT 实例，导致第一次已经打出的跳从日志里消失
+  （只剩商/角的提前行，看不到洞天自己的第 1/2 跳）。
+- 修复：`push_dot` 刷新时保留 `tick_time <= 施放时刻` 的已生效跳，再追加新的跳（序号连续）；
+  回归测试断言两次洞天后洞天跳序号为 1..6。
+
+## 补充 14：洞天刷新后跳序号重新从 1 开始
+
+- 刷新（重复施放）时保留已生效跳的原序号，新的一轮 3 跳重新编号 1/2/3；
+  「施放后第一跳」不会再显示成第 2 跳。回归测试：两次洞天序号为 [1,2,3,1,2,3]。
+
+## 补充 15：修复刷新分支漏重置跳序号
+
+- 上一版只在新实例创建时初始化 tick_labels，刷新分支没重置，导致洞天刷新后仍显示第 2/3 跳。
+- 现在刷新时：保留已生效跳的原序号，新一轮标签 1..n；带加速场景（GCD 1.31s）回归测试通过。
+
+## 补充 16：DOT 跳序号前端重复 +1（编号从 2 开始）
+
+- 后端 `DotTick.index` 已是 1-based（洞天/商/角都是 1,2,3…），前端 `TimelineDamageLog` 又做了 `index + 1`，
+  导致所有持续跳从「第 2 跳」开始显示。
+- 修复：前端直接使用后端 index；测试 fixture 改为 1-based。前端 118 项测试 + build 通过。
+
+## 补充 17：所有门派新增「停手」结构空位技能
+
+- 需求：排轴需要一个「不打伤害」的占位技能。设计为伤害 0、无属性、占普通 GCD 的技能，名为「停手」。
+- 实现：`Skilltype::idle()` + `IDLE_SKILL_ID = 999999`；
+  - `store::combat::load_skills_with_combat` 注入技能表（时序可用）；
+  - `host::skill::load_skill_pool` 注入技能池（所有门派目录可见）；
+  - 不在任何门派 TOML 里写死，避免逐门派维护。
+- 行为：瞬发、伤害 0、无系数/元素/DOT、无调息与充能；不占曲风、不要求器形/曲风，任何形态可用；占一个普通 GCD，
+  因此可当作「等待/停手」时间空位。
+- 测试：`idle_skill_exists_and_occupies_gcd` 断言技能池含停手且数值全 0、0s 施放伤害 0、下一个技能被顶到 1.5s。
+- 前端：mock 技能池同步加入停手，截图可见技能格；DOT 首跳编号也顺带修正为 1-based。
+
+## 补充 18：前端去计算化审计（步骤/累计/合法性全部后端）
+
+- 后端 `TimelineResultDTO` 新增：
+  - `steps[]`：每个动作的施放时刻、GCD、执行前器形/曲风、是否合法、跳过原因、缺失的器形/曲风要求、动作前的切换事件；
+  - 每个事件的 `cumulative`（累计伤害）；
+  - `final_instrument` / `final_qifeng`（序列执行完后的状态）。
+- 前端删除：
+  - `utils/formLegality.ts` + 测试（器形/曲风合法性模拟）；
+  - `stepMeta`（从事件反推每步时间/GCD/切换）；
+  - 伤害记录里的累计求和；技能卡上的秘籍匹配改为使用后端 `miji_ids`。
+- 顺带修复：徵/变徵引导伤害（ChannelTick）之前未计入总伤/DPS，已补上并有测试。
+- 新增 Rust 测试：`steps_are_computed_by_backend`、`channel_damage_is_included_in_total`。
+- 前端测试从 118 降到 113（删掉的 5 项 formLegality 测试），其余全绿。
+
+### 来自 changes/2026-11-07-015600.md
+
+# 检查：后端是否全门派通用 + 曲风通用化计划
+
+## 背景
+用户要求确认后端代码没有针对莫问的单独优化（门派差异应只存在于 TOML），并把「曲风 → 全门派通用能量机制」
+写入计划（暂不实现）。
+
+## 审计结果（详情见 PLAN.md M5）
+- 运行路径无门派分支：`mowen` / `莫问` / 技能名 / 技能 id 只出现在单测与测试默认请求中；
+  门派差异全部由 `data/shuxing/*.toml` + `data/combat/*.toml` 提供。
+- 3 类待泛化：
+  1. 曲风点数资源写死在引擎：`MAX_QIFENG=9`、`qifeng_points u8`、初始满点、先消耗再获得；
+     DTO/事件/钩子均有 qifeng 专用字段（`requires_qifeng`、`qifeng_gain`、`spend_all_qifeng`、`QifengSwitch`、
+     `per_qifeng_spent`、`DamagePctPerQifeng`）。
+  2. 面板规则默认值按莫问写死：miji 4、混选 3、混选从第 7 格起（`jpcg_api` 默认常量）。
+  3. 前端硬编码曲风显示名 `QIFENG_NAMES`。
+- 仓库目前只有莫问数据文件（+ 模板），跨门派回归需要虚构门派测试数据。
+
+## 计划
+`PLAN.md` 新增 M5：资源定义数据化 → DTO 双写兼容 → 引擎状态资源化 → 事件/钩子资源化 →
+前端去曲风名称硬编码 → 大版本删除兼容字段；验收要求「加门派只改 TOML」且莫问数值不变。
+本次只写计划，不改实现。
+
+## 继续：前端技能目录收口到后端 bundle + 门控 id 后端解析
+
+- `ComboPage` 不再单独调用 `loadSkillPool`，技能目录直接用 `load_combat_bundle` 返回的 `bundle.skills`
+  （已套 combat overlay，目录上的读条/充能等时序信息与时间轴一致）；时间轴请求也只用 `bundle.skills`。
+- `SkillCombatDTO` 新增 `jihuoqixue_id`：后端在组装 bundle 时把门控奇穴名称解析成 qixue id，
+  前端只做 `selQixue.includes(gateId)`，不再自己拼 id/名称集合。
+- 前端测试默认 fixture 改为 mock `loadCombatBundle`；新增后端断言门控 id 解析（冲秋冥）。
+
+### 来自 changes/2026-11-07-163628.md
+
+# 武学时间轴本机改动整理为独立 PR
+
+## 什么与为什么
+
+整理当前本机的战斗时间轴与武学面板改动，接续 #104，避免与其已提交内容重复审查。
+
+- 时序引擎支持独立 DOT、引导分段、提前触发与刷新；补充真实伤害汇总、动作步骤及相关回归。
+- 武学面板、秘籍匹配与效果文案、奇穴分组/门控、合法性与累计伤害改由后端 bundle/结果提供，前端按契约渲染。
+- 增加所有门派可用的“停手”占位技能，保存秘籍/奇穴草稿选择，改进技能目录和伤害记录展示。
+- 记录资源机制全门派通用化计划；具体行为和数据决策见本批另外两份变更日志。
+
+## 关键决策
+
+- 新 PR 以 `feature/timeline-miji-qixue`（#104）为目标，只展示当前本机未提交的增量；#104 合入 dev 后需更新目标并重跑 CI。
+- #105 已独立 squash 合入 dev，不在本增量中重复包含；与其组合的前端隔离验证已通过。
+- 不改组件版本。清除莫问 combat TOML 文件尾多余空行，满足 diff 检查。
+- 现有 CI 仅触发 dev/beta/release PR；本堆叠 PR 的本机检查与后续 dev CI 分别记录，不混作同一验证。
+- 修复 `test-gear-dynamic.py` 及其调用的 `test-attributes-dynamic.py` 的测试输入：正式配装数据已不再是 sample，脚本改用现有 synthetic fixture，保留示例标记、合成和目录校验断言；属性脚本同步复制附魔/五彩石配置并替换样本值集标识。
+
+## 验证
+
+本机 `make check-all CARGO_JOBS=2` 全部通过，包含 Rust fmt/clippy、workspace 测试（含 9 项金标准）、dynamic 模式 4 项测试、五个模块库、static/dynamic app 构建以及前端 113/113 与 TypeScript/Vite 构建。保留 Clippy 警告和 Vite 大 chunk 提示。双 cdylib 数值集恢复脚本通过；gear dynamic 脚本修正测试样本后通过（含 4 个虚构门派的属性流程）。构建顺序守卫及 diff 检查通过。先前隔离验证：本机内容叠加 #105，前端 121/121 和 TypeScript/Vite 构建通过；原生 GUI 未实测。
+
+### 来自 changes/2026-11-07-174536.md
+
+# 后端计算边界第一轮修复
+
+## 改动与原因
+
+- 桌面 static / dynamic FFI 时间轴统一从后端存储读取完整技能、奇穴、秘籍、形态和增益定义。展示分组会省略奇穴同组的附加定义，不能将其回传后作为引擎输入。
+- 后端校验未知/未建模奇穴、固定重互斥、混选格数和每技能秘籍上限；同一奇穴格的多效果自动完整展开。底层 `calculate_timeline` 仍保留自定义 DTO 的引擎测试接口，桌面/FFI 必须走 `calculate_timeline_from_store`。
+- 时间轴输入变化时在 layout effect 中使请求版本失效并清空旧结果，计算失败显示错误和重试入口。
+- 新增 PanelStatsDTO / panel_stats（静态、动态两条链路），属性面板会心与破防换算移到 Rust，沿用引擎系数及破防量化。前端只格式化，过期或不可用结果显示占位。
+- ComboResultDTO 增加追加真伤合计，前端停止汇总各步真伤。
+- 减伤输入 10 按 10% 展示，修复原先放大 100 倍的问题。
+- 补全主题变量、提高暗色警告/选中/次要文字对比度；奇穴盘可收起并限制滚动高度，修正技能目录位置文案。
+
+## 设计边界
+
+这是可独立验证的第一轮修复，尚未宣称全项目满足“前端只渲染”：ResultTable 的汇总与基准差值、CockpitCombo 的概率差、前端选择交互规则、类型自动生成及浏览器 mock 拆分仍待后续迁移。新增 panel_stats 需要配套更新 core 动态模块；旧模块不支持时不回退 JS 计算。GUI 实机验证另列，不以单元测试或构建代替。
+
+## 验证
+
+- 新增非法选择、同格效果计数、桌面入口拒绝客户端定义、面板量化/单位回归。
+- 新增时间轴已完成结果清理、失败重试、迟到成功隔离回归。
+- 执行 make check-all CARGO_JOBS=2；最终结果见本次交付说明。
+
+### 来自 changes/2026-11-07-191200.md
+
+# 击杀率与招式配置器（时间轴）同源
+
+## 目标
+旧版击杀率走 `calculate_combo`（独立技能逐个一击、DOT 全结算、无奇穴/秘籍/时序/形态曲风/非法跳过），
+与招式配置器的时间轴引擎不一致。本次把击杀率搬进时间轴引擎，旧版 ComboResultDisplay 直接退役。
+
+## 后端（jpcg_combo / jpcg_api）
+- 时间轴每个伤害事件增加内部 `DamageDice { g, h, rate, fixed, q }`（Cast/ChannelTick/DotTick），
+  保存会心分布；确定性总伤仍用 q，不改变原数值。
+- `TimelineInput`/`TimelineRequestDTO` 增加 `samples`、`seed`；`TimelineResultDTO` 增加
+  `final_kill_prob`、`kill_prob_curve`。
+- `Sim::run` 在事件排序后新增击杀率蒙特卡洛：对同一份事件流掷会心、扣血、结算，
+  记录击杀时刻 → 归入对应动作步；累计曲线 (动作序号, 概率)。samples=0 保持纯确定性。
+- 击杀语义沿用 `hp_preset`（max_hp/current_hp，否则 target_hp 满血）。
+- 回归测试 `kill_probability_matches_deterministic_total`：血量高于总伤→0、低于总伤→1、samples=0→无曲线。
+
+## 前端（jpcg_app）
+- `ComboPage` 删除旧 `calculateCombo`/`handleCalculate`/`ComboResultDisplay` 及「计算连招」按钮，
+  击杀率改由时间轴实时给出（samples=50000，与其它组件一样自动重算）。
+- 新增「击杀率」指标 + 「曲线」按钮 + 悬浮卡片（recharts 击杀概率曲线）。
+- mock 时间轴补齐 `final_kill_prob`/`kill_prob_curve`；类型/测试同步。
+
+## 验证
+- `cargo test -p jpcg_combo`：38 + 20 全绿；`cargo fmt` 通过。
+- 前端 `tsc` + 115 项 vitest + `npm run build` 通过。
+- 注意：`cargo test --workspace` 仍有一处**既有失败**（非本次改动）：
+  `jpcg_core::host::calc::panel_uses_engine_quantization_and_percentage_units` 的破防期望应为 350
+  （floor(333*1024/1000)=340 + floor(1*1024/100)=10），测试却断言 351，期望值 off-by-one。
+
+## 追加：修复既有面板破防测试 off-by-one
+- `jpcg_core::host::calc::panel_uses_engine_quantization_and_percentage_units` 期望值 351 与引擎截断语义不符：
+  引擎 `guo_pofang_with` 截断 `333*1024/1000 = 340.992 → 340`，加 buff `1% → 10`，正确应为 350。
+  已把期望与注释改为 350，`cargo test --workspace` 全绿。
+
+## 追加：驾驶台连招结果也切到时间轴（消除 2w vs 61548 不一致）
+- `CockpitCombo` 由旧 `calculateCombo`（独立技能逐个一击）改为 `calculateTimeline`（与排轴器同一请求、samples=50000），
+  显示「窗口总伤 · 击杀率」；`App`/`state/cockpit` 的快照与校验从 `ComboResultDTO` 换成 `TimelineResultDTO`。
+- 前端 `GearCockpit.test` 改用 `calculateTimeline` mock 与 `loadCombatBundle` mock，115 项通过。
+
+## 追加：退役旧连招引擎的桌面入口
+- 删除前端 `api.calculateCombo`、`calculate_combo_cmd` mock、`ComboResultDTO`/`ComboStepResultDTO` TS 类型。
+- 删除 Tauri `calculate_combo_cmd`（static/dynamic 两路）与 lib.rs 注册。
+- 保留 `jpcg_combo::host::calculate_combo` + `engine.rs` + `jpcg_api::ComboResultDTO`：
+  它们仍被配装优化器的 `Objective::KillProbability` 使用，待后续迁移到 `Objective::Timeline`
+  （时间轴击杀率）后一起退役。
+- `cargo test --workspace` / `cargo fmt` / 前端 tsc + 115 项 vitest + build 全绿。
+
+### 来自 changes/2026-11-07-200500.md
+
+# 排轴器「计算开始/结束」flag（只作用于击杀率）
+
+## 需求
+给排轴器加两个标记「计算开始」「计算结束」，各最多一个、独立序列项，用于切分垃圾时间；
+只影响击杀率，总伤/DPS 不变。语义 B：把 [开始,结束] 视为独立爆发，开始时刻满血重置（前段伤害不计入）。
+flag 时刻对齐「下一个施放的起手」。
+
+## 后端（jpcg_api / jpcg_combo）
+- `TimelineActionDTO::Flag { flag }`、`TimelineResultDTO.kill_start / kill_end`。
+- 引擎 `TimelineAction::Flag { start }`：不占 GCD、不产生事件；时刻吸附到下一个成功施放的 `start`。
+- 击杀率 MC 改为：`kill_start`（缺省 0）/`kill_end`（缺省 window）窗口内、从满血开始独立结算；
+  总伤/DPS 统计逻辑不变。
+- `calculate_timeline_from_store` 校验：开始/结束各≤1、开始早于结束。
+
+## 前端（jpcg_app）
+- `SequenceItem` 联合（技能步 | flag），`ComboDraft.sequence` 改为 `SequenceItem[]`，`comboDraftSchema` v2→v3 迁移。
+- 排轴页新增「计算开始/结束」按钮（各最多一个）；flag 项可拖动/删除，渲染为虚线标记卡。
+- 动作映射把 flag 项转成 `TimelineActionDTO::Flag`；CockpitCombo 同步；预设只读写技能步（flag 不入预设）。
+- 击杀率曲线卡片标注测量窗口（前端按 kill_start/kill_end 显示）。
+
+## 验证
+- Rust 回归：`kill_flag_scopes_kill_probability_with_full_hp_reset`（B 语义满血重置、总伤不变）、
+  `kill_flag_validation_rejects_duplicates_and_bad_order`（各≤1、顺序合法）。
+- `cargo test --workspace` / `cargo fmt` 全绿；前端 `tsc` + 115 项 vitest + `npm run build` 通过。
+
+### 来自 changes/2026-11-07-201500.md
+
+# 配装自动调优（按连招选配装）第一版
+
+## 目标
+首页（驾驶台）配装面板「重置配装」左边新增「自动调优」：按当前连招（时间轴）自动搜索更优配装并应用。
+
+## 后端
+- `jpcg_gear::Objective` 新增 `Timeline { request: TimelineRequestDTO, metric: TimelineMetric }`；
+  `TimelineMetric = total_damage | window_dps | kill_probability`。
+- `optimize::score`：克隆时间轴请求、用 `player(composed)` 覆盖玩家属性后调 `jpcg_combo::timeline_host::calculate_timeline`，
+  按 metric 取总伤/窗口DPS/击杀率；沿用 `(stats, cooldowns)` 去重缓存。
+- `validate_context`：Timeline 校验动作非空；击杀率指标要求 samples>0 且目标有血量。
+- `jpcg_gear::host::dispatch` 增加 `optimize`；Tauri 新增 `optimize_gear` 命令（static/dynamic 两路）。
+
+## 前端
+- `types/gear.ts` 新增 OptimizeRequest / Objective / TimelineMetric / OptimizeResult 等契约；
+  `api.optimizeGear`；`utils/timelineRequest.ts` 抽公共 `buildTimelineRequest`（排轴器/调优共用）。
+- `GearPanel` 增加「自动调优」按钮（重置配装左边）；`App.handleOptimize`：按连招组装时间轴请求
+  （目标有血量→击杀率，否则→窗口总伤），调 optimize，应用 best 配装并 toast。
+
+## 验证
+- `cargo test --workspace` / `cargo fmt` 全绿；前端 `tsc` + 115 项 vitest + `npm run build` 通过。
+- 备注：Timeline 目标暂缺独立 Rust 集成测试（依赖 data/gear + 值集），GUI 实机冒烟待桌面验证。
+
+## 追加：自动调优进度百分比
+- 问题：调优在后台跑，前端只有「调优中…」一直卡着，没有反馈。
+- 后端：Tauri `optimize_gear`（static）直接调 `jpcg_gear::optimize`，用 `on_progress` 按「visited / min(组合数, 预算)」算百分比，
+  整数变化才 emit `gear-optimize-progress`（最多 101 次，避免刷屏），结束时补发 100；dynamic 路径无进度（FFI 无法流式回调）。
+- 前端：`api.listenGearOptimizeProgress`（处理监听注册竞态）；`App` 加 `optProgress` 状态，调优期间监听进度、
+  结束后取消；`GearPanel` 按钮显示「调优中 N%」。
+- 验证：cargo fmt/test 全绿；前端 tsc + 115 项测试 + build 通过。
+
+## 追加：全核并行调优 + dev 提速 + 调优约束/目标选项
+
+### A. 全核并行（rayon）
+- `jpcg_gear` 新增 `optimize_parallel(catalog, req, &OptimizeProgress)`：
+  - 候选按 flat index 用 rayon 并行枚举（默认 = 全部逻辑核；`RAYON_NUM_THREADS` 可覆盖）；
+  - 线程本地缓存（`map_init` 的 `HashMap`，key=(stats,cooldowns)）去重、避免锁竞争；
+  - `OptimizeProgress { visited/evaluated/total: AtomicU64, cancel/done: AtomicBool }`，主线程轮询发进度事件；
+  - best 归并 + `dominates` Pareto（Mutex 小集合）；确定性 tie-break 由 flat index 顺序保证。
+- Tauri `optimize_gear`（static）改调并行版：监视线程每 100ms 轮询原子并发 `gear-optimize-progress`，结束后补 100。
+- 保留串行 `optimize` 供 CLI/测试/FFI(dynamic) 使用。
+
+### B. dev 构建提速
+- 根 `Cargo.toml` 给热路径 crate 加 dev 优化：`jpcg_core` / `jpcg_combo` / `jpcg_gear` `opt-level = 2`
+  （debug 默认 opt-0，蒙特卡洛循环会慢 10~50x；app/UI crate 仍 debug）。
+
+### 调优约束
+- `Constraints.required_sets: BTreeMap<String, usize>`（必须凑齐的套装件数）；
+  `Composed.set_counts: BTreeMap<String, usize>`（实际穿戴件数）；`satisfied()` 校验、`validate()` 校验套装存在与件数范围。
+- 前端 GearPanel 新增「调优设置」栏：
+  - 目标：击杀率 / 区间 DPS；
+  - 必须竞技场四件套（按 catalog 的 mingjian+armor 套装动态取 id，≥4 件）；
+  - 加速 ≥ 下限（`stats.jiasu.min`）。
+- 「区间 DPS」目标 samples=0（纯确定性、快），「击杀率」samples=50000。
+
+### 验证
+- `cargo test --workspace` / `cargo fmt` 全绿；前端 tsc + 115 项 vitest + build 通过。
+- 备注：并行版尚缺独立 Rust 集成测试（依赖 data/gear + 值集 + 连招数据），需 GUI 实机冒烟。
+
+## 追加：调优结果常驻面板
+- 之前调优完成只有 toast + 最优配装自动应用到配装卡，缺少可回看的输出。
+- 现在 `GearPanel` 在「调优设置」下方新增「调优结果」面板（`App` 保存 `optResult`）：
+  - 目标指标值（击杀率 % / 区间 DPS）+ 相对当前配装的提升（percentage points / DPS）；
+  - 遍历状态（已遍历全部组合 / 预算内最优 / 已取消）与评估数；
+  - 12 部位最优选择摘要（来源 · 绿字）；
+  - 警告列表。
+- 验证：前端 tsc + 115 项 vitest + build 通过。
+
+## 追加：调优纳入附魔/五彩石
+- 之前优化器只枚举 12 部位模板，附魔（`loadout.enchants`）与五彩石（`loadout.wucai`）沿用当前配装、从未被选择。
+- 现在 `optimize`/`optimize_parallel` 在模板搜索结束后追加「附魔/五彩石坐标下降」：
+  - 逐部位比较「各附魔 / 移除」与「各五彩石 / 移除」，取使目标分数最高者，多轮直至不再提升；
+  - 旧属性模式（无 attribute_rules）下无法合成的附魔/五彩石（如带五维的五彩石）直接跳过而不是报错；
+  - 结果 `best.composed.loadout` 已含最优附魔/五彩石，前端应用后配装卡与合成属性会体现。
+- 调优结果面板的 12 部位摘要追加显示「附魔：xxx」与五彩石名称。
+- 验证：`cargo test --workspace` / `cargo fmt` 全绿；前端 tsc + 115 项 vitest + build 通过。
+
+## 修复：优化器选到了基础套装（被升级档支配的劣解）
+### 根因
+- 组合空间 37.7M，预算 100k；旧实现用 odometer 顺序从 0 开始穷举，**前 100k 个组合的前几个槽位一直固定为候选列表的第 0 项**。
+- 候选按 `Choice` 排序（`Tier::Base < Tier::Upgraded`），所以基础档永远排在前面 → 预算截断后前几个部位永远选基础档，而基础档属性逐项更低，结果必然更差。
+
+### 修复
+- 新增 `build_candidates`：剪掉「被同槽/同来源/同变体的升级档逐项 >= 支配」且升级档本身被允许（`permits`）的基础档，避免劣解进入候选。
+- 新增 `combination_indices`：组合数 <= 预算时全遍历；否则用固定种子 splitmix64 **确定性均匀抽样**，避免 odometer 前缀偏差。
+- `optimize_with`（串行）与 `optimize_parallel`（全核）都改用上述候选/下标；`complete` 仅在空间真正全覆盖时为真。
+- 附带：附魔/五彩石坐标下降改为从当前配装出发、跳过不可合成的单品，避免旧属性模式误报错。
+
+### 验证
+- `cargo test --workspace` / `cargo fmt` 全绿（jpcg_gear 既有 18 项测试通过）。
+- 建议 GUI 复测：确认调优结果不再出现基础档（升级档属性更高时应选升级档）。
+
+## 修复：调优结果 12 部位摘要被截断成省略号
+- 原因：`.optResultSlots` 用 `minmax(150px,1fr)` + `white-space:nowrap; overflow:hidden; text-overflow:ellipsis`，
+  窄列下「部位 · 来源 · 绿字 · 附魔 · 五彩石」被截断成 `……`。
+- 修复：列最小宽 220px、允许换行（`white-space:normal; overflow-wrap:anywhere`），部位名单独一行；
+  每个格子加 `title` 兜底显示完整内容。
+- 验证：前端 tsc + 115 项 vitest + build 通过。
+
+### 来自 changes/2026-11-07-220000.md
+
+# 修复：区间 DPS 用固定 300s 窗口做分母
+
+## 问题
+- 时间轴结果 `window_dps` 一直是 `total_damage / window`，而 `window` 固定 300 秒（模拟上限）。
+- 一次只有几秒的连招（如 6 万伤害）会被 300 秒稀释成 DPS≈200~300，明显错误。
+
+## 修复
+- `timeline.rs` 在汇总总伤时同时记录「最后一个伤害事件时刻」`last_damage_time`
+  （Cast 用 hit_time，ChannelTick/DotTick 用事件时刻，且仅统计 damage > 0）。
+- 区间 DPS 改为 `total_damage / max(last_damage_time, 1.0)`：正常连招即「总伤 ÷ 实际伤害跨度」，
+  只有 0/单次瞬发等退化情况才用 1 秒兜底。
+- 总伤、击杀率逻辑不变；配装调优的 `TimelineMetric::WindowDps` 自动沿用修正后的 DPS。
+
+## 验证
+- 新增 Rust 回归 `window_dps_uses_actual_damage_span`：3 次瞬发（GCD 1.5，末跳 3.0s）断言
+  `window_dps ≈ total/3`，而不是 `total/300`。
+- `cargo test --workspace` / `cargo fmt` 全绿；前端 tsc + build 通过。
+
+### 来自 changes/2026-11-07-230000.md
+
+# 修复调优输入锁定与时间轴计算边界
+
+- 用户要求：调优期间不可更改输入。整个编辑区设为 inert，并展示全屏进度遮罩；成功、失败均解锁，同步锁防止重复提交。开始时作废先前导入/环境切换请求。
+- 抽取 prepare_timeline_from_store，桌面与调优都从完整后端数据准备请求；调优只准备一次，各候选复用冻结定义，避免同组奇穴附加效果丢失。
+- 串行/并行优化共用约束和预算校验，限制时间轴动作与采样数量。
+- 修复 DOT 起手在 MC 中额外掷伤害；追加真伤复用 core 唯一公式，按期望路径与每条 MC 路径实时扣血结算。
+- 多个相邻 flag 全部解析；没有后续施放的末尾 flag 落在当前动作结束时刻，不回退到整个模拟窗口。零长度测量窗口不产生击杀。
+- 驾驶台缓存键包含秘籍/奇穴，恢复基准使用相同键。
+- 调优工作线程异常时也终止进度监视线程。
+
+验证：新增 DOT、追加真伤、相邻/末尾标记、完整奇穴定义同源、双优化入口非法预算/约束、调优成功/失败解锁回归；make check-all CARGO_JOBS=2 全部通过（fmt、clippy、全量 Rust 测试、模块库、静态/动态桌面构建、前端 117/117 与 TypeScript/Vite）。GUI 原生交互仍需实机验收。
+
+### 来自 changes/2026-11-08-133100.md
+
+# 整合 dev 初始化修复与过期导数保护
+
+- 将已合入 dev 的 #101（独立持久化心法/系数就绪状态）与 #105（输入变化使导数请求失效）同步至战斗时间轴整合分支。
+- 解决 App、ConfigPanel、cockpit 状态契约冲突，同时保留模板版本迁移、同步初始化 ref、调优输入锁、秘籍/奇穴缓存键、Rust 属性面板和时间轴结果类型。
+- 本机前端 149/149、TypeScript/Vite 构建及 diff 检查通过。此次整合只改变前端及变更记录，Rust 代码未变；远端 CI 将针对整合后提交重跑。
+
+### 来自 changes/2026-11-08-134200.md
+
+# 修复 PR 审阅确认的八项问题
+
+- DOT 每次施加保留独立进攻快照与本轮跳序，刷新保留已结算跳；按时间和动作顺序处理提前跳，避免未来 DOT 被旧事件提前，并停止被刷新实例的后续触发。
+- 装备搜索存在属性上限时关闭升级档支配剪枝，保证满足上限的基础档不会被删除，串行与并行一致。
+- 驾驶舱存档版本升级至 v3，迁移 v1/v2；保留输入、配装、基准和已兼容时间轴，只丢弃旧形状的连招结果，迁移内嵌草稿。
+- 固定奇穴槽切换移除同槽完整 group_ids；浏览器战斗包复用已有模拟技能池。
+- 跨门派装备卡与调优摘要按门派和选择键匹配模板。
+- 技能添加使用原生按钮，与秘籍按钮并列，支持键盘聚焦和激活。
+- 增加 DOT 刷新/先羽后商/商羽商、上限搜索双模式、存档迁移、奇穴切换、模拟技能池及跨门派显示回归。保留调优期间输入锁定。
+
+验证：`cargo test -p jpcg_combo -p jpcg_gear`、前端 155 项测试、TypeScript/Vite 构建通过。此次未执行原生 GUI 人工验证；远端 CI 以推送后的新提交结果为准。
+
+### 来自 changes/2026-11-08-222800.md
+
+# 修复 PR #107 新一轮五项审阅问题
+
+- 时间轴 Cast DTO 携带单步 overrides，Rust 使用每次施放的独立副本应用覆盖值，不修改技能目录或冷却身份。排轴器、驾驶舱和调优共用请求组装，覆盖基础伤害、攻击系数、目标减伤、化劲忽略、额外攻击、郭氏增益、会心及会效。
+- 预设在既有 steps 外新增 flags（位置 + 开始/结束），保留完整序列的标记位置，包括相邻和末尾标记。旧文件缺省 flags 为空；Tauri 静态和动态/FFI 链路均支持。
+- 显式 charges=1 按 recharge 恢复；charges=0 继续走普通 cooldown。真实剑·羽/疏影横斜验证 16 秒/28 秒间隔。
+- 附魔和五彩石纳入模板的联合搜索维度，完整配装合成后才判断属性硬约束。取消模板最优后的贪心附魔阶段，预算、组合总数及完成状态覆盖所有维度；预算耗尽不声称穷尽。搜索空间增大时可能更早耗尽同一预算，结果仍明确为预算内候选。
+- 日志按实际命中时刻排序并仅保留窗口内事件，累计值与总伤一致；Cast 的 start_time 单独保留起手时间，界面显示为“结算”，明细展示起手。
+- 回归覆盖单步覆盖隔离和冷却身份、桌面/调优一致性、预设往返及旧格式、真实单充能、附魔与五彩石共同满足下限、预算状态、读条/引导跨窗口及读条期间 DOT。
+- 调优期间的输入锁定保持不变。未执行原生 GUI 人工验证。
+
+逐步减伤覆盖应用于本动作的目标快照（含 DOT 后续跳）；郭氏增益覆盖技能增益，保留全局 buff。补齐核心无视化劲百分比的实际计算及导数，零值不改变金标准。
+
+最终验证（2026-11-09）：串行执行 `make check-all CARGO_JOBS=2` 全部通过，覆盖 fmt、Clippy、全量 Rust/金标准/文档测试、五个模块库、动态桥接冒烟、静态/动态桌面构建、前端 156/156 及 TypeScript/Vite 构建。此前交错构建的文档测试产物引用错误在串行检查中未再出现。`git diff --check` 通过。
+
+### 来自 changes/2026-11-09-025029.md
+
+# 修复 PR #107 商/角独立 DOT 的逐步属性覆盖
+
+- 每次施放的增益、无视化劲、额外会心与额外会效覆盖，同时应用于本体和独立 DOT 的技能副本，确保后续 DOT 结算使用本次覆盖后的快照。
+- 本体基础伤害与攻击系数的覆盖仍只影响本体，不改写独立 DOT 的每跳基础伤害和专属系数；技能目录及随后未覆盖的刷新保持不变。
+- 新增真实商/角 combat overlay 回归，分别覆盖四项共享修饰、存活 DOT 刷新后的覆盖隔离，以及本体伤害/系数覆盖不污染 DOT。
+- 修复前新增回归失败：商的 gain_override=100 仍得到首跳 84（与无覆盖相同）。修复后该回归与 combo/core/gear 测试通过；未执行原生 GUI 人工验收。
+
+### 来自 changes/2026-11-09-063000.md
+
+# 修复旧配装存档的自动调优入口
+
+## 改动与原因
+
+- `optimizeGear` 与已有合成、导出入口一致，在调用 Tauri 前清理已删除的 `loadout.sockets` 字段。
+- 旧持久化配装可通过前端校验并正常合成，但调优原先发送未经清理的对象，触发 Rust `Loadout` 的 `deny_unknown_fields` 反序列化拒绝。
+- 复用已有清理函数，不改变装备固定镶嵌、五彩石、附魔、搜索参数或计算规则，不修改调用方存档对象。
+
+## 回归验证
+
+- 新增真实 API 封装层测试，截获三种入口的 Tauri 调用，确认旧字段被清理、合法参数完整保留且输入不被修改。
+- 先运行新测试，原实现仅调优 payload 多出 `sockets` 而失败；应用单行修复后重跑。
+- 验证范围与完整检查结果见本 PR 说明。组件与数据版本不变。
+
 ## [Unreleased]
 
 ### 新增
