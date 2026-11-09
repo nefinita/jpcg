@@ -675,7 +675,7 @@ export async function importGear(toml: string): Promise<import("../types/gear").
 
 export async function optimizeGear(request: import("../types/gear").GearOptimizeRequest): Promise<import("../types/gear").GearOptimizeResult> {
   if (!isTauri()) throw new Error("配装调优需要桌面应用");
-  return invoke("optimize_gear", { request });
+  return invoke("optimize_gear", { request: { ...request, loadout: sanitizeGearLoadout(request.loadout) } });
 }
 
 export async function panelStats(req: CalculateRequest): Promise<PanelStatsDTO> {
