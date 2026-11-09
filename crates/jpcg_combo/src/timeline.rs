@@ -732,20 +732,26 @@ impl<'a> Sim<'a> {
             if let Some(v) = o.atk_xishu_override {
                 st.atk_xishu = v;
             }
-            if let Some(v) = o.wushihuajin_override {
-                st.wushihuajin = v as u32;
-            }
-            if let Some(v) = o.extra_crit_pct {
-                st.huixin_up = v as u32;
-            }
-            if let Some(v) = o.extra_crit_dmg_pct {
-                st.huixiao_up = v as u32;
-            }
             if let Some(v) = o.extra_atk_pct {
                 buff_cfg.base_atk_pct += v;
             }
-            if let Some(v) = o.gain_override {
-                st.hit_up = v.max(0.0) as u32;
+            // 共享修饰同时作用于本体与独立 DOT 的本次快照；
+            // 基础伤害/攻击系数仅覆盖本体，保留 DOT 自己的每跳参数。
+            for st in std::iter::once(&mut cast_skill.skill)
+                .chain(cast_skill.dot_tick.as_mut().map(|spec| &mut spec.skill))
+            {
+                if let Some(v) = o.wushihuajin_override {
+                    st.wushihuajin = v as u32;
+                }
+                if let Some(v) = o.extra_crit_pct {
+                    st.huixin_up = v as u32;
+                }
+                if let Some(v) = o.extra_crit_dmg_pct {
+                    st.huixiao_up = v as u32;
+                }
+                if let Some(v) = o.gain_override {
+                    st.hit_up = v.max(0.0) as u32;
+                }
             }
         }
         let sk = &cast_skill;

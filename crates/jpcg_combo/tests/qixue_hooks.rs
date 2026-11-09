@@ -1025,3 +1025,113 @@ fn real_single_charge_skills_wait_for_recharge() {
         );
     }
 }
+
+fn independent_dot_ticks(result: &TimelineResultDTO, name: &str) -> Vec<(f32, u32)> {
+    result
+        .events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            TimelineEventKindDTO::DotTick {
+                skill_name, damage, ..
+            } if skill_name == &format!("{name}·持续") => Some((event.time, *damage)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn real_independent_dots_apply_shared_step_overrides_without_leaking_on_refresh() {
+    for (id, sub, name) in [(14065, 14311, "商"), (14066, 14312, "角")] {
+        let mut request = req(
+            vec![],
+            vec![
+                cast(id, sub, name),
+                cast(14064, 14474, "宫"),
+                cast(14064, 14474, "宫"),
+                cast(id, sub, name),
+            ],
+        );
+        request.xinfa.profession = "mowen".into();
+        request.player.jichu_gongji = 8438;
+        request.buff.huixin_pct = 25.0;
+        request.hostile.huajin_dengji = 20000;
+        request.window = 40.0;
+        let baseline =
+            jpcg_combo::timeline_host::calculate_timeline_from_store(request.clone()).unwrap();
+        assert!(baseline.steps.iter().all(|s| s.legal));
+        let refresh = baseline.steps[3].time.unwrap();
+        assert!(refresh > 3.0 && refresh < 18.0, "must refresh a live DOT");
+        let base_ticks = independent_dot_ticks(&baseline, name);
+        assert!(
+            base_ticks
+                .iter()
+                .any(|(time, damage)| *time < refresh && *damage > 0)
+        );
+        assert!(base_ticks.iter().any(|(time, _)| *time > refresh));
+        for (label, step_override) in [
+            (
+                "gain",
+                StepOverrideDTO {
+                    gain_override: Some(100.0),
+                    ..Default::default()
+                },
+            ),
+            (
+                "ignore mitigation",
+                StepOverrideDTO {
+                    wushihuajin_override: Some(100.0),
+                    ..Default::default()
+                },
+            ),
+            (
+                "crit",
+                StepOverrideDTO {
+                    extra_crit_pct: Some(50.0),
+                    ..Default::default()
+                },
+            ),
+            (
+                "crit damage",
+                StepOverrideDTO {
+                    extra_crit_dmg_pct: Some(100.0),
+                    ..Default::default()
+                },
+            ),
+        ] {
+            let mut modified = request.clone();
+            if let TimelineActionDTO::Cast { overrides, .. } = &mut modified.actions[0] {
+                *overrides = Some(step_override);
+            }
+            let result =
+                jpcg_combo::timeline_host::calculate_timeline_from_store(modified).unwrap();
+            let ticks = independent_dot_ticks(&result, name);
+            assert_eq!(ticks.len(), base_ticks.len(), "{name}: {label}");
+            for ((time, damage), (base_time, base_damage)) in ticks.iter().zip(&base_ticks) {
+                assert_eq!(time, base_time);
+                if *time < refresh {
+                    assert!(
+                        damage > base_damage,
+                        "{name}: {label} at {time}: {damage} <= {base_damage}"
+                    );
+                } else if *time > refresh {
+                    assert_eq!(
+                        damage, base_damage,
+                        "{name}: {label} leaked into refresh at {time}"
+                    );
+                }
+            }
+        }
+
+        // 本体的基础伤害/系数覆盖不能覆盖独立 DOT 的专属系数。
+        if let TimelineActionDTO::Cast { overrides, .. } = &mut request.actions[0] {
+            *overrides = Some(StepOverrideDTO {
+                base_damage_override: Some(99999.0),
+                atk_xishu_override: Some(10.0),
+                ..Default::default()
+            });
+        }
+        let result = jpcg_combo::timeline_host::calculate_timeline_from_store(request).unwrap();
+        assert_eq!(independent_dot_ticks(&result, name), base_ticks);
+        assert!(casts(&result)[0].1 > casts(&baseline)[0].1);
+    }
+}
