@@ -6,7 +6,8 @@ members = [
     "server_tools/manifest-gen",
     "server_tools/deploy-gen",
     "server_tools/forum",
-    "server_tools/json-to-toml"
+    "server_tools/json-to-toml",
+    "server_tools/skill-shots",
 ]
 
 [workspace.package]

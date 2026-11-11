@@ -13,3 +13,10 @@ data.zip
 # 工作区内本地缓存（npm 缓存等）与临时工作目录（HOME 只读环境必需）
 .cache/
 .scratch/
+
+# 技能截图：人工维护的 OCR 输入，体积大不进仓库
+data/skill-shots/**/*.png
+data/skill-shots/**/*.jpg
+data/skill-shots/**/*.jpeg
+data/skill-shots/**/*.webp
+data/skill-shots/out/
