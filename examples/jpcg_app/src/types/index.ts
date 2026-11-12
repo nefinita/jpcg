@@ -502,6 +502,8 @@ export interface TimelineStepDTO {
   legal: boolean;
   instrument: string;
   qifeng: string;
+  /** 本动作对应的技能名（计算开始/结束、器形切换为说明文字） */
+  skill_name?: string | null;
   skipped_reason: string;
   required_instrument?: string | null;
   required_qifeng?: string | null;

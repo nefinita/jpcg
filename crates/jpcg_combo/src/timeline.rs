@@ -304,6 +304,8 @@ pub struct TimelineStep {
     /// 动作执行前的器形 / 曲风状态
     pub instrument: String,
     pub qifeng: String,
+    /// 本动作对应的技能名（flag / 切换为说明文字），供曲线/日志与技能对应
+    pub skill_name: Option<String>,
     /// 被跳过时的原因（成功为空）
     pub skipped_reason: String,
     /// 非法时缺少的器形 / 曲风要求
@@ -1173,6 +1175,7 @@ impl<'a> Sim<'a> {
             let ev_start = self.events.len();
             let instrument_before = self.instrument.clone();
             let qifeng_before = self.qifeng_id.clone();
+            let mut step_skill_name: Option<String> = None;
             let mut legal = true;
             let mut skipped_reason = String::new();
             let mut required_instrument: Option<String> = None;
@@ -1180,6 +1183,7 @@ impl<'a> Sim<'a> {
 
             match action {
                 TimelineAction::SwitchForm(to) => {
+                    step_skill_name = Some("切换器形".to_string());
                     if self.form(to).is_some() && *to != self.instrument {
                         let from = self.instrument.clone();
                         self.instrument = to.clone();
@@ -1198,6 +1202,14 @@ impl<'a> Sim<'a> {
                 }
                 TimelineAction::Flag { start } => {
                     // flag 不是技能：不占 GCD、不产生事件；时刻吸附到下一个施放的起手
+                    step_skill_name = Some(
+                        if *start {
+                            "计算开始"
+                        } else {
+                            "计算结束"
+                        }
+                        .to_string(),
+                    );
                     pending_flags.push((steps.len(), *start));
                 }
                 TimelineAction::Cast {
@@ -1209,6 +1221,7 @@ impl<'a> Sim<'a> {
                     if let Some(index) =
                         self.resolve_skill(*skill_id, *sub_id, skill_name.as_deref())
                     {
+                        step_skill_name = Some(self.input.skills[index].skill.skill_name.clone());
                         // 先按当前时刻结算充能，再判断能否施放
                         self.settle_charges(index, now);
                         if !self.skill_allowed(&self.input.skills[index]) {
@@ -1256,6 +1269,7 @@ impl<'a> Sim<'a> {
                 legal,
                 instrument: instrument_before,
                 qifeng: qifeng_before,
+                skill_name: step_skill_name,
                 skipped_reason,
                 required_instrument,
                 required_qifeng,

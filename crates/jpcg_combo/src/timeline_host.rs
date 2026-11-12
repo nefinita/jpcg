@@ -341,6 +341,7 @@ impl From<timeline::TimelineResult> for TimelineResultDTO {
                 legal: step.legal,
                 instrument: step.instrument,
                 qifeng: step.qifeng,
+                skill_name: step.skill_name,
                 skipped_reason: step.skipped_reason,
                 required_instrument: step.required_instrument,
                 required_qifeng: step.required_qifeng,

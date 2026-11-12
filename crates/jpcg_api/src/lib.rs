@@ -863,6 +863,9 @@ pub struct TimelineStepDTO {
     pub legal: bool,
     pub instrument: String,
     pub qifeng: String,
+    /// 本动作对应的技能名（计算开始/结束、器形切换为说明文字）
+    #[serde(default)]
+    pub skill_name: Option<String>,
     pub skipped_reason: String,
     #[serde(default)]
     pub required_instrument: Option<String>,

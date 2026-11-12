@@ -421,10 +421,14 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const hasLostHpSkills = sequence.some((s) => s.kind === "skill" && (s.skill.lost_hp_zhenshishanghai ?? 0) > 0);
   const hasStartFlag = sequence.some((s) => s.kind === "flag" && s.flag === "start");
   const hasEndFlag = sequence.some((s) => s.kind === "flag" && s.flag === "end");
-  const curveData = (timelineResult?.kill_prob_curve ?? []).map(([step, prob]) => ({
-    step: `第${step}招`,
-    prob: Math.round(prob * 10000) / 100,
-  }));
+  // 曲线横轴 = 第几招 + 对应技能名（后端 steps 带 skill_name）；技能缺失时回退到序号。
+  const curveData = (timelineResult?.kill_prob_curve ?? []).map(([step, prob]) => {
+    const skill = timelineResult?.steps?.[step - 1]?.skill_name ?? "";
+    return {
+      step: skill ? `${step}.${skill}` : `第${step}招`,
+      prob: Math.round(prob * 10000) / 100,
+    };
+  });
 
   return (
     <div className={styles.page}>
@@ -805,7 +809,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={curveData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                  <XAxis dataKey="step" tick={{ fontSize: 10 }} />
+                  <XAxis dataKey="step" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" height={72} interval={0} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v: any) => Number(v) + "%"} />
                   <Tooltip formatter={(v: any) => Number(v).toFixed(1) + "%"} />
                   <Line type="monotone" dataKey="prob" stroke="var(--primary-500)" strokeWidth={2} dot={{ r: 3 }} />
