@@ -248,3 +248,17 @@ fn step_reduction_gain_and_ignore_mitigation_have_effect_without_leaking() {
         "技能增益不能覆盖全局伤害 buff"
     );
 }
+
+#[test]
+fn kill_curve_only_covers_flag_window() {
+    // 步骤：cast / 开始 / cast / 结束 / cast
+    // 曲线只应覆盖 [开始 flag, 结束 flag] 之间的步骤（1-based 2..4），窗口外不出点。
+    let mut req = request();
+    // 需要目标血量才会跑击杀率 MC（full_hp 非空）。
+    req.hostile.target_hp = 1_000_000;
+    req.actions = vec![cast(), flag("start"), cast(), flag("end"), cast()];
+    let result = calculate_timeline(req).expect("timeline");
+    assert!(result.kill_prob_curve.len() >= 2, "曲线不应为空");
+    assert_eq!(result.kill_prob_curve.first().unwrap().0, 2);
+    assert_eq!(result.kill_prob_curve.last().unwrap().0, 4);
+}

@@ -1168,6 +1168,9 @@ impl<'a> Sim<'a> {
         let mut steps: Vec<TimelineStep> = Vec::new();
         let mut start_flag_time: Option<f32> = None;
         let mut end_flag_time: Option<f32> = None;
+        // flag 所在的 step 下标（击杀曲线只保留 [开始, 结束] 之间的点）
+        let mut start_flag_step: Option<usize> = None;
+        let mut end_flag_step: Option<usize> = None;
         // 待吸附的 flag：(step 下标, 是否开始)；时刻由下一个施放的起手决定
         let mut pending_flags: Vec<(usize, bool)> = Vec::new();
 
@@ -1210,6 +1213,11 @@ impl<'a> Sim<'a> {
                         }
                         .to_string(),
                     );
+                    if *start {
+                        start_flag_step = Some(steps.len());
+                    } else {
+                        end_flag_step = Some(steps.len());
+                    }
                     pending_flags.push((steps.len(), *start));
                 }
                 TimelineAction::Cast {
@@ -1545,10 +1553,15 @@ impl<'a> Sim<'a> {
                         kills_at[idx] += 1;
                     }
                 }
+                // 曲线只覆盖「计算开始 → 计算结束」之间的步骤；窗口外不再出点。
+                let curve_from = start_flag_step.unwrap_or(0);
+                let curve_to = end_flag_step.unwrap_or(steps.len().saturating_sub(1));
                 let mut acc = 0u64;
                 for (i, _) in steps.iter().enumerate() {
                     acc += kills_at[i];
-                    kill_prob_curve.push((i + 1, acc as f64 / n as f64));
+                    if i >= curve_from && i <= curve_to {
+                        kill_prob_curve.push((i + 1, acc as f64 / n as f64));
+                    }
                 }
                 final_kill_prob = kill_prob_curve.last().map(|(_, p)| *p).unwrap_or(0.0);
             }
