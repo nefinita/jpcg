@@ -623,6 +623,9 @@ pub struct MijiDefDTO {
     pub name: String,
     pub skill_id: u32,
     pub sub_id: u32,
+    /// 共享作用技能列表 `[[skill_id, sub_id], ...]`（非空时优先于 skill_id/sub_id）。
+    #[serde(default)]
+    pub applies_to: Vec<(u32, u32)>,
     pub modifiers: Vec<SkillModifierDTO>,
     /// 后端生成的效果文案（前端只渲染，不翻译 modifiers）
     #[serde(default)]

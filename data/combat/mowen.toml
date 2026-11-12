@@ -604,6 +604,7 @@ id = "gong_cast1"
 name = "《音·宫》经脉图残页"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ cast_time_add = -0.125 }]
 
 [[miji]]
@@ -611,6 +612,7 @@ id = "gong_cast2"
 name = "《音·宫》经脉图断篇"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ cast_time_add = -0.125 }]
 
 [[miji]]
@@ -618,6 +620,7 @@ id = "gong_dmg3"
 name = "《音·宫》参悟残页"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ hit_up_add = 3 }]
 
 [[miji]]
@@ -625,6 +628,7 @@ id = "gong_dmg4"
 name = "《音·宫》参悟断篇"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ hit_up_add = 4 }]
 
 [[miji]]
@@ -632,6 +636,7 @@ id = "gong_crit2"
 name = "《音·宫》秘决残页"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ huixin_up_add = 2 }]
 
 [[miji]]
@@ -639,6 +644,7 @@ id = "gong_crit3"
 name = "《音·宫》秘决断篇"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ huixin_up_add = 3 }]
 
 [[miji]]
@@ -646,6 +652,7 @@ id = "gong_crit4"
 name = "《音·宫》秘决绝章"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ huixin_up_add = 4 }]
 
 [[miji]]
@@ -695,6 +702,7 @@ id = "zheng_dmg3"
 name = "《音·徵》参悟残页"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ hit_up_add = 3 }]
 
 [[miji]]
@@ -702,6 +710,7 @@ id = "zheng_dmg4"
 name = "《音·徵》参悟断篇"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ hit_up_add = 4 }]
 
 [[miji]]
@@ -709,6 +718,7 @@ id = "zheng_crit2"
 name = "《音·徵》秘决残页"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ huixin_up_add = 2 }]
 
 [[miji]]
@@ -716,6 +726,7 @@ id = "zheng_crit3"
 name = "《音·徵》秘决断篇"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ huixin_up_add = 3 }]
 
 [[miji]]
@@ -723,6 +734,7 @@ id = "zheng_crit4"
 name = "《音·徵》秘决绝章"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ huixin_up_add = 4 }]
 
 [[miji]]

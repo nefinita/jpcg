@@ -1225,3 +1225,36 @@ fn kill_end_defaults_to_last_action_not_window() {
         "kill_end 应为最后动作结束 3.0s，实际 {end}"
     );
 }
+
+#[test]
+fn variant_skills_share_base_miji() {
+    // 变宫(14298/18860) / 变徵(14299/18859) 应共享宫(14064/14474) / 徵(14067/14227) 的秘籍。
+    let data = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    unsafe { std::env::set_var("JPCG_DATA_DIR", &data) };
+    let (_skills, combat) =
+        jpcg_core::host::combat::load_combat_with_skills("mowen".to_string()).expect("combat");
+    let find = |id: u32, sub: u32| {
+        combat
+            .skill_combat
+            .iter()
+            .find(|sc| sc.skill_id == id && sc.sub_id == sub)
+            .unwrap_or_else(|| panic!("skill {id}/{sub}"))
+    };
+    let gong = find(14064, 14474);
+    let biangong = find(14298, 18860);
+    let zheng = find(14067, 14227);
+    let bianzheng = find(14299, 18859);
+    assert!(!biangong.miji_ids.is_empty(), "变宫应共享宫的秘籍");
+    assert!(
+        gong.miji_ids
+            .iter()
+            .all(|id| biangong.miji_ids.contains(id))
+    );
+    assert!(!bianzheng.miji_ids.is_empty(), "变徵应共享徵的秘籍");
+    assert!(
+        zheng
+            .miji_ids
+            .iter()
+            .all(|id| bianzheng.miji_ids.contains(id))
+    );
+}
