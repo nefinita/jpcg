@@ -213,7 +213,7 @@ fn miji_cuts_cast_time() {
 
 #[test]
 fn replacement_qixue_changes_skill() {
-    // 变徵（14299/18859）默认是 84-92 ×3；洞天替换成 4851 ×3 固定伤害
+    // 变徵（14299/18859）默认是 84-92 ×3；洞天替换成 4608 ×3 固定伤害
     let switch = || TimelineActionDTO::Cast {
         skill_id: 14069,
         sub_id: 0,
@@ -358,7 +358,7 @@ fn shuqu_dot_ticks_ramp_up() {
 
 #[test]
 fn dongtian_advances_shang_dot_ticks() {
-    // 洞天：变徵被替换为 3 跳 4851，每次跳让商/角下一跳立刻生效（提前，不补跳）
+    // 洞天：变徵被替换为 3 跳 4608，每次跳让商/角下一跳立刻生效（提前，不补跳）
     let mut request = req(
         vec!["dongtian".into()],
         vec![
@@ -1134,4 +1134,46 @@ fn real_independent_dots_apply_shared_step_overrides_without_leaking_on_refresh(
         assert_eq!(independent_dot_ticks(&result, name), base_ticks);
         assert!(casts(&result)[0].1 > casts(&baseline)[0].1);
     }
+}
+
+#[test]
+fn dongtian_damage_is_nerfed_to_4608() {
+    // 2026-11-12 技改：洞天伤害降低 5%（4851 → 4608，3 跳合计 13824）。
+    // 用 pvp 全局系数 1.0 + 默认零防御，单跳应等于基础伤害。
+    let mut request = req(
+        vec!["dongtian".into()],
+        vec![
+            TimelineActionDTO::Cast {
+                skill_id: 14069,
+                sub_id: 0,
+                skill_name: Some("高山流水".into()),
+                overrides: None,
+            },
+            TimelineActionDTO::Cast {
+                skill_id: 14299,
+                sub_id: 18859,
+                skill_name: None,
+                overrides: None,
+            },
+        ],
+    );
+    request.coeff.pvp_global_jianshang = 1.0;
+    let result = jpcg_combo::timeline_host::calculate_timeline(request).expect("dongtian");
+    let ticks: Vec<u32> = result
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            TimelineEventKindDTO::DotTick {
+                skill_name, damage, ..
+            } if skill_name == "洞天" => Some(*damage),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ticks.len(), 3, "洞天应为 3 跳");
+    // base 4608 经引擎伤害链路（PVP 0.9、化劲/破防取整）后单跳 4149；
+    // 削弱前 base 4851 时约 4368，4149/4368 ≈ 0.95，即伤害降低 5%。
+    assert!(
+        ticks.iter().all(|d| *d == 4149),
+        "洞天单跳应为 4149（base 4608 经伤害链路），实际 {ticks:?}"
+    );
 }
