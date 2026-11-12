@@ -290,6 +290,8 @@ pub enum TimelineEventKind {
 pub struct TimelineEvent {
     pub time: f32,
     pub kind: TimelineEventKind,
+    /// 产生该事件的动作 step 下标（DOT 跳 = 施加该 DOT 的 step），用于按动作归属裁剪窗口。
+    pub owner_step: usize,
 }
 
 /// 单个动作的结算结果（供前端直接渲染，不再由前端推导）
@@ -304,6 +306,8 @@ pub struct TimelineStep {
     /// 动作执行前的器形 / 曲风状态
     pub instrument: String,
     pub qifeng: String,
+    /// 本动作对应的技能名（flag / 切换为说明文字），供曲线/日志与技能对应
+    pub skill_name: Option<String>,
     /// 被跳过时的原因（成功为空）
     pub skipped_reason: String,
     /// 非法时缺少的器形 / 曲风要求
@@ -327,6 +331,8 @@ pub struct TimelineStepSwitch {
 pub struct TimelineResult {
     pub window: f32,
     pub events: Vec<TimelineEvent>,
+    /// 测量窗口内的可见事件（总伤/DPS/击杀率/伤害日志都只基于它；`events` 保留完整事件供调试）。
+    pub visible_events: Vec<TimelineEvent>,
     /// 每个动作一个步骤结果（与输入 actions 一一对应）
     pub steps: Vec<TimelineStep>,
     pub total_damage: f64,
@@ -368,6 +374,8 @@ struct ActiveBuff {
 struct DotInstance {
     applied_at: f32,
     order: usize,
+    /// 施加该 DOT 的动作 step 下标。
+    step_index: usize,
     key: SkillKey,
     skill_name: String,
     skill: Skilltype,
@@ -439,6 +447,8 @@ struct Sim<'a> {
     qifeng_points: u8,
     events: Vec<TimelineEvent>,
     dots: Vec<DotInstance>,
+    /// 当前正在结算的动作 step 下标（每个 action 开始时设置）。
+    current_step: usize,
     /// 各 GCD 通道就绪时刻
     lane_ready: HashMap<String, f32>,
     /// 各技能就绪时刻（按下标记录，避免同名 id 变体共享状态；有充能技能不使用）
@@ -477,6 +487,7 @@ impl<'a> Sim<'a> {
             qifeng_points: MAX_QIFENG,
             events: Vec::new(),
             dots: Vec::new(),
+            current_step: 0,
             lane_ready: HashMap::new(),
             skill_ready: HashMap::new(),
             charges: HashMap::new(),
@@ -512,6 +523,7 @@ impl<'a> Sim<'a> {
         self.dots.push(DotInstance {
             applied_at: now,
             order,
+            step_index: self.current_step,
             key: (sid, sub),
             skill_name: name,
             skill,
@@ -836,6 +848,7 @@ impl<'a> Sim<'a> {
         let gcd_ready_at = start + gcd_secs;
         self.events.push(TimelineEvent {
             time: start,
+            owner_step: self.current_step,
             kind: TimelineEventKind::Cast {
                 skill_name: sk.skill.skill_name.clone(),
                 damage: if channel_cast { 0 } else { direct_damage },
@@ -899,6 +912,7 @@ impl<'a> Sim<'a> {
                 let tick_q = per_tick_damage + bonus;
                 self.events.push(TimelineEvent {
                     time: t,
+                    owner_step: self.current_step,
                     kind: TimelineEventKind::ChannelTick {
                         skill_name: sk.skill.skill_name.clone(),
                         index: k,
@@ -1120,6 +1134,7 @@ impl<'a> Sim<'a> {
             if let Some(stacks) = applied_stacks {
                 self.events.push(TimelineEvent {
                     time: start,
+                    owner_step: self.current_step,
                     kind: TimelineEventKind::BuffGain { buff_id, stacks },
                 });
             }
@@ -1134,6 +1149,7 @@ impl<'a> Sim<'a> {
             self.instrument = to.clone();
             self.events.push(TimelineEvent {
                 time: start,
+                owner_step: self.current_step,
                 kind: TimelineEventKind::FormSwitch {
                     from,
                     to: to.clone(),
@@ -1148,6 +1164,7 @@ impl<'a> Sim<'a> {
             self.qifeng_id = to.clone();
             self.events.push(TimelineEvent {
                 time: start,
+                owner_step: self.current_step,
                 kind: TimelineEventKind::QifengSwitch {
                     from,
                     to: to.clone(),
@@ -1160,17 +1177,25 @@ impl<'a> Sim<'a> {
 
     fn run(mut self) -> TimelineResult {
         let mut now: f32 = 0.0;
+        // 最后一次成功施放的起手时刻（用来判断「最后一次施放施加的 DOT 是否算进窗口」）
+        let mut last_cast_start: Option<f32> = None;
         let mut skipped = 0u32;
         let mut steps: Vec<TimelineStep> = Vec::new();
         let mut start_flag_time: Option<f32> = None;
         let mut end_flag_time: Option<f32> = None;
+        // flag 所在的 step 下标（击杀曲线只保留 [开始, 结束] 之间的点）
+        let mut start_flag_step: Option<usize> = None;
+        let mut end_flag_step: Option<usize> = None;
         // 待吸附的 flag：(step 下标, 是否开始)；时刻由下一个施放的起手决定
         let mut pending_flags: Vec<(usize, bool)> = Vec::new();
 
         for action in &self.input.actions {
+            // 当前动作 step：cast 内的事件 / DOT 施加都用它做归属。
+            self.current_step = steps.len();
             let ev_start = self.events.len();
             let instrument_before = self.instrument.clone();
             let qifeng_before = self.qifeng_id.clone();
+            let mut step_skill_name: Option<String> = None;
             let mut legal = true;
             let mut skipped_reason = String::new();
             let mut required_instrument: Option<String> = None;
@@ -1178,11 +1203,13 @@ impl<'a> Sim<'a> {
 
             match action {
                 TimelineAction::SwitchForm(to) => {
+                    step_skill_name = Some("切换器形".to_string());
                     if self.form(to).is_some() && *to != self.instrument {
                         let from = self.instrument.clone();
                         self.instrument = to.clone();
                         self.events.push(TimelineEvent {
                             time: now,
+                            owner_step: self.current_step,
                             kind: TimelineEventKind::FormSwitch {
                                 from,
                                 to: to.clone(),
@@ -1196,6 +1223,19 @@ impl<'a> Sim<'a> {
                 }
                 TimelineAction::Flag { start } => {
                     // flag 不是技能：不占 GCD、不产生事件；时刻吸附到下一个施放的起手
+                    step_skill_name = Some(
+                        if *start {
+                            "计算开始"
+                        } else {
+                            "计算结束"
+                        }
+                        .to_string(),
+                    );
+                    if *start {
+                        start_flag_step = Some(steps.len());
+                    } else {
+                        end_flag_step = Some(steps.len());
+                    }
                     pending_flags.push((steps.len(), *start));
                 }
                 TimelineAction::Cast {
@@ -1207,6 +1247,7 @@ impl<'a> Sim<'a> {
                     if let Some(index) =
                         self.resolve_skill(*skill_id, *sub_id, skill_name.as_deref())
                     {
+                        step_skill_name = Some(self.input.skills[index].skill.skill_name.clone());
                         // 先按当前时刻结算充能，再判断能否施放
                         self.settle_charges(index, now);
                         if !self.skill_allowed(&self.input.skills[index]) {
@@ -1229,10 +1270,12 @@ impl<'a> Sim<'a> {
                                             start_flag_time = Some(start);
                                         }
                                     } else if end_flag_time.is_none() {
-                                        end_flag_time = Some(start);
+                                        // 结束标记在下一个施放之前：用「施放起点 - ε」，避免同一时刻的下一招被算进窗口。
+                                        end_flag_time = Some((start - 1e-3).max(0.0));
                                     }
                                     steps[flag_step_idx].time = Some(start);
                                 }
+                                last_cast_start = Some(start);
                                 now = self.cast(index, start, overrides.as_ref());
                             }
                         }
@@ -1253,6 +1296,7 @@ impl<'a> Sim<'a> {
                 legal,
                 instrument: instrument_before,
                 qifeng: qifeng_before,
+                skill_name: step_skill_name,
                 skipped_reason,
                 required_instrument,
                 required_qifeng,
@@ -1290,6 +1334,12 @@ impl<'a> Sim<'a> {
                 }
             }
             steps.push(step);
+        }
+
+        // 只放了「计算开始」、没放「计算结束」时，测量窗口结束于最后一个动作（紧跟上一个技能），
+        // 而不是固定模拟窗口；否则连招结束后 DOT 会继续跳完，击杀率被高估。
+        if end_flag_time.is_none() && start_flag_time.is_some() && !steps.is_empty() {
+            end_flag_time = Some(now.min(self.input.window));
         }
 
         // 没有后续施放时，末尾标记落在当前动作结束处，不隐式扩展到 300 秒。
@@ -1373,6 +1423,7 @@ impl<'a> Sim<'a> {
                 let dice = dot.tick_dice(&self.input.hostile, i);
                 self.events.push(TimelineEvent {
                     time: t,
+                    owner_step: dot.step_index,
                     kind: TimelineEventKind::DotTick {
                         skill_name: dot.skill_name.clone(),
                         index: *dot.tick_labels.get(i).unwrap_or(&(i as u32 + 1)),
@@ -1426,61 +1477,103 @@ impl<'a> Sim<'a> {
                 }
             }
         }
+        // ============ 测量窗口：显式动作边界 + 归属 ============
+        // 窗口 = 开始标记之后、结束标记之前的动作 step：
+        //   - 施放/引导伤害按「产生它的 step」归属（同一时刻的前后两招可区分）；
+        //   - DOT 跳按时间窗口统计（窗口外的 DOT 尾跳不计入）；
+        //   - 显式开始/结束邻接时窗口为空（总伤/击杀率均为 0）。
+        let window_first = start_flag_step.map(|s| s + 1).unwrap_or(0);
+        let window_last = end_flag_step
+            .map(|s| s.saturating_sub(1))
+            .unwrap_or_else(|| steps.len().saturating_sub(1));
+        let window_empty = window_first > window_last;
+        let kill_start = start_flag_time.unwrap_or(0.0);
+        let kill_end = if let Some(end) = end_flag_time {
+            end
+        } else {
+            let mut end = now;
+            if let Some(last_start) = last_cast_start {
+                for dot in &self.dots {
+                    if dot.applied_at >= last_start - 1e-4 {
+                        for t in &dot.tick_times {
+                            end = end.max(*t);
+                        }
+                    }
+                }
+            }
+            end.max(1e-3).min(self.input.window)
+        };
+        let in_window = |e: &TimelineEvent| -> bool {
+            if window_empty {
+                return false;
+            }
+            let horizon = self.input.window + 1e-4;
+            match &e.kind {
+                // 施放/引导：按产生它的 step 归属（同刻前后两招可区分），并受模拟窗口约束。
+                TimelineEventKind::Cast { hit_time, .. } => {
+                    *hit_time <= horizon
+                        && e.owner_step >= window_first
+                        && e.owner_step <= window_last
+                }
+                TimelineEventKind::ChannelTick { .. } => {
+                    e.time <= horizon && e.owner_step >= window_first && e.owner_step <= window_last
+                }
+                // DOT 跳：按时间窗口（窗口外的 DOT 尾跳不计入）。
+                TimelineEventKind::DotTick { .. } => {
+                    e.time <= horizon && e.time >= kill_start - 1e-4 && e.time <= kill_end + 1e-4
+                }
+                // 器形/曲风/增益等非伤害事件按所属动作 step 归属（供伤害日志展示）。
+                _ => e.owner_step >= window_first && e.owner_step <= window_last,
+            }
+        };
+
+        // 总伤 / DPS 只统计测量窗口内的伤害。
         let mut total = 0f64;
-        // 区间 DPS 的分母是「实际伤害跨度」，不是固定模拟窗口（否则 10 秒的连招会被 300 秒稀释）。
         let mut last_damage_time = 0.0f32;
         for e in &self.events {
-            match &e.kind {
-                // 读条/引导的伤害在命中时刻结算：只有命中落在窗口内才计入总伤
+            let (damage, time) = match &e.kind {
                 TimelineEventKind::Cast {
                     damage, hit_time, ..
-                } => {
-                    if *hit_time <= self.input.window {
-                        total += *damage as f64;
-                        if *damage > 0 {
-                            last_damage_time = last_damage_time.max(*hit_time);
-                        }
-                    }
+                } => (*damage, *hit_time),
+                TimelineEventKind::ChannelTick { damage, .. } => (*damage, e.time),
+                TimelineEventKind::DotTick { damage, .. } => (*damage, e.time),
+                _ => continue,
+            };
+            if in_window(e) {
+                total += damage as f64;
+                if damage > 0 {
+                    last_damage_time = last_damage_time.max(time);
                 }
-                TimelineEventKind::ChannelTick { damage, .. } => {
-                    if e.time <= self.input.window {
-                        total += *damage as f64;
-                        if *damage > 0 {
-                            last_damage_time = last_damage_time.max(e.time);
-                        }
-                    }
-                }
-                TimelineEventKind::DotTick { damage, .. } => {
-                    total += *damage as f64;
-                    if *damage > 0 {
-                        last_damage_time = last_damage_time.max(e.time);
-                    }
-                }
-                _ => {}
             }
         }
-        // 至少 1 秒，避免单次瞬发除零；正常连招取最后一个伤害事件时刻。
-        let span = last_damage_time.max(1.0);
+        let span = if last_damage_time > kill_start {
+            (last_damage_time - kill_start).max(1.0)
+        } else {
+            1.0
+        };
         let window_dps = total / span as f64;
 
-        // ---- 击杀率蒙特卡洛：在 [start,end] 内独立结算（开始时刻满血重置） ----
-        let kill_start = start_flag_time.unwrap_or(0.0);
-        let kill_end = end_flag_time.unwrap_or(self.input.window);
+        // ---- 击杀率蒙特卡洛：只结算窗口内事件（开始时刻满血重置） ----
         let mut final_kill_prob = 0.0f64;
         let mut kill_prob_curve: Vec<(usize, f64)> = Vec::new();
-        if self.input.samples > 0 && !steps.is_empty() {
+        if self.input.samples > 0 && !steps.is_empty() && !window_empty {
             if let Some(hp0) = full_hp(&self.input.hostile) {
-                let mut damage_events: Vec<(f32, DamageDice)> = self
+                // (time, dice, owner_step, is_dot)
+                let mut damage_events: Vec<(f32, DamageDice, usize, bool)> = self
                     .events
                     .iter()
+                    .filter(|e| in_window(e))
                     .filter_map(|e| match &e.kind {
-                        TimelineEventKind::Cast { hit_time, dice, .. } => Some((*hit_time, *dice)),
-                        TimelineEventKind::ChannelTick { dice, .. } => Some((e.time, *dice)),
-                        TimelineEventKind::DotTick { dice, .. } => Some((e.time, *dice)),
+                        TimelineEventKind::Cast { hit_time, dice, .. } => {
+                            Some((*hit_time, *dice, e.owner_step, false))
+                        }
+                        TimelineEventKind::ChannelTick { dice, .. } => {
+                            Some((e.time, *dice, e.owner_step, false))
+                        }
+                        TimelineEventKind::DotTick { dice, .. } => {
+                            Some((e.time, *dice, e.owner_step, true))
+                        }
                         _ => None,
-                    })
-                    .filter(|(t, _)| {
-                        kill_end > kill_start && *t >= kill_start - 1e-4 && *t <= kill_end + 1e-4
                     })
                     .collect();
                 damage_events.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -1492,8 +1585,8 @@ impl<'a> Sim<'a> {
                 let mut kills_at = vec![0u64; steps.len()];
                 for _ in 0..n {
                     let mut cur = hp0;
-                    let mut killed: Option<f32> = None;
-                    for (t, dice) in &damage_events {
+                    let mut killed: Option<(f32, usize, bool)> = None;
+                    for (t, dice, owner, is_dot) in &damage_events {
                         cur = (cur - dice.roll(&mut rng) as f64).max(0.0);
                         let extra = jpcg_core::engine::atkcal::lost_hp_append_damage(
                             dice.lost_hp_factor,
@@ -1502,20 +1595,29 @@ impl<'a> Sim<'a> {
                         );
                         cur = (cur - extra).max(0.0);
                         if cur <= 0.0 {
-                            killed = Some(*t);
+                            killed = Some((*t, *owner, *is_dot));
                             break;
                         }
                     }
-                    if let Some(kt) = killed {
-                        let idx = steps
-                            .iter()
-                            .position(|s| s.time.is_some_and(|tm| tm >= kt))
-                            .unwrap_or(steps.len() - 1);
+                    if let Some((kt, owner, is_dot)) = killed {
+                        let idx = if is_dot {
+                            // DOT 跳：归到「它发生时已经执行完的最后一个窗口动作」
+                            let mut idx = window_first;
+                            for i in window_first..=window_last {
+                                if steps[i].time.is_some_and(|tm| tm <= kt + 1e-4) {
+                                    idx = i;
+                                }
+                            }
+                            idx
+                        } else {
+                            owner.clamp(window_first, window_last)
+                        };
                         kills_at[idx] += 1;
                     }
                 }
+                // 曲线只覆盖窗口内的动作 step。
                 let mut acc = 0u64;
-                for (i, _) in steps.iter().enumerate() {
+                for i in window_first..=window_last {
                     acc += kills_at[i];
                     kill_prob_curve.push((i + 1, acc as f64 / n as f64));
                 }
@@ -1523,10 +1625,17 @@ impl<'a> Sim<'a> {
             }
         }
 
+        let visible_events: Vec<TimelineEvent> = self
+            .events
+            .iter()
+            .filter(|e| in_window(e))
+            .cloned()
+            .collect();
         let final_instrument = self.instrument.clone();
         let final_qifeng = self.qifeng_id.clone();
         TimelineResult {
             events: self.events,
+            visible_events,
             steps,
             final_instrument,
             final_qifeng,
@@ -1536,8 +1645,9 @@ impl<'a> Sim<'a> {
             skipped_actions: skipped,
             final_kill_prob,
             kill_prob_curve,
-            kill_start: start_flag_time,
-            kill_end: end_flag_time,
+            // 返回有效测量窗口（缺省已折算：开始=0，结束=最后一个动作/DOT 尾）。
+            kill_start: Some(kill_start),
+            kill_end: Some(kill_end),
         }
     }
 }
@@ -2196,7 +2306,7 @@ cast_time = 2.0
 
     #[test]
     fn cast_straddling_window_counts_damage_only_when_hit_inside() {
-        // 2 秒读条、窗口 1 秒：起手事件保留，但命中在 2 秒 → 窗口伤害 0
+        // 2 秒读条、窗口 1 秒：命中在 2 秒（窗口外）→ 窗口伤害 0；结果事件只保留窗口内事件。
         let mut sk = skill(1, 0, "长读条");
         sk.cast_time = 2.0;
         let input = base_input(

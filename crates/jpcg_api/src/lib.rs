@@ -623,6 +623,9 @@ pub struct MijiDefDTO {
     pub name: String,
     pub skill_id: u32,
     pub sub_id: u32,
+    /// 共享作用技能列表 `[[skill_id, sub_id], ...]`（非空时优先于 skill_id/sub_id）。
+    #[serde(default)]
+    pub applies_to: Vec<(u32, u32)>,
     pub modifiers: Vec<SkillModifierDTO>,
     /// 后端生成的效果文案（前端只渲染，不翻译 modifiers）
     #[serde(default)]
@@ -845,7 +848,7 @@ pub struct TimelineResultDTO {
     /// 累计击杀概率曲线：(动作序号 1..=n, 概率 0..1)
     #[serde(default)]
     pub kill_prob_curve: Vec<(usize, f64)>,
-    /// 击杀率测量窗口起止时刻（flag 解析后的结果；None = 未提供该 flag）
+    /// 有效测量窗口起止（缺省已折算：开始=0，结束=最后一个动作 / 最后一次施放的 DOT 尾）
     #[serde(default)]
     pub kill_start: Option<f32>,
     #[serde(default)]
@@ -863,6 +866,9 @@ pub struct TimelineStepDTO {
     pub legal: bool,
     pub instrument: String,
     pub qifeng: String,
+    /// 本动作对应的技能名（计算开始/结束、器形切换为说明文字）
+    #[serde(default)]
+    pub skill_name: Option<String>,
     pub skipped_reason: String,
     #[serde(default)]
     pub required_instrument: Option<String>,

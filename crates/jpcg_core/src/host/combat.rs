@@ -74,7 +74,10 @@ fn enrich_combat_dto(
         sc.miji_ids = dto
             .miji
             .iter()
-            .filter(|m| m.skill_id == sc.skill_id && (m.sub_id == 0 || m.sub_id == sc.sub_id))
+            .filter(|m| {
+                let core: MijiDef = (*m).clone().into();
+                core.targets_skill(sc.skill_id, sc.sub_id)
+            })
             .map(|m| m.id.clone())
             .collect();
     }
@@ -278,6 +281,7 @@ impl From<MijiDef> for MijiDefDTO {
             name: m.name,
             skill_id: m.skill_id,
             sub_id: m.sub_id,
+            applies_to: m.applies_to,
             modifiers: m.modifiers.into_iter().map(Into::into).collect(),
             effects,
         }
@@ -454,6 +458,7 @@ impl From<MijiDefDTO> for MijiDef {
             name: m.name,
             skill_id: m.skill_id,
             sub_id: m.sub_id,
+            applies_to: m.applies_to,
             modifiers: m.modifiers.into_iter().map(Into::into).collect(),
         }
     }
@@ -570,6 +575,7 @@ mod tests {
                 name: "秘籍".into(),
                 skill_id: 1,
                 sub_id: 0,
+                applies_to: Vec::new(),
                 modifiers: vec![SkillModifier::HitUpAdd(3)],
             }],
             qixue: Vec::new(),

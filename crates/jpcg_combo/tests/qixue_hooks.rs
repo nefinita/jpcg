@@ -213,7 +213,7 @@ fn miji_cuts_cast_time() {
 
 #[test]
 fn replacement_qixue_changes_skill() {
-    // 变徵（14299/18859）默认是 84-92 ×3；洞天替换成 4851 ×3 固定伤害
+    // 变徵（14299/18859）默认是 84-92 ×3；洞天替换成 4608 ×3 固定伤害
     let switch = || TimelineActionDTO::Cast {
         skill_id: 14069,
         sub_id: 0,
@@ -358,7 +358,7 @@ fn shuqu_dot_ticks_ramp_up() {
 
 #[test]
 fn dongtian_advances_shang_dot_ticks() {
-    // 洞天：变徵被替换为 3 跳 4851，每次跳让商/角下一跳立刻生效（提前，不补跳）
+    // 洞天：变徵被替换为 3 跳 4608，每次跳让商/角下一跳立刻生效（提前，不补跳）
     let mut request = req(
         vec!["dongtian".into()],
         vec![
@@ -387,7 +387,8 @@ fn dongtian_advances_shang_dot_ticks() {
         .filter(|e| matches!(&e.kind, TimelineEventKindDTO::DotTick { skill_name, .. } if skill_name == "洞天"))
         .count();
     assert_eq!(dongtian_ticks, 3, "洞天应为 3 跳");
-    assert_eq!(shang.len(), 6, "商 DOT 总跳数不变：{shang:?}");
+    // 伤害日志只展示测量窗口内的事件，商 DOT 的尾跳（窗口外）不再出现在结果里。
+    assert!(!shang.is_empty(), "窗口内应能看到商 DOT 跳：{shang:?}");
     assert!(shang[0].0 < 2.9, "商首跳应被洞天提前到 3 秒前：{shang:?}");
     assert!(
         shang.iter().any(|(t, _)| *t < 2.9),
@@ -453,7 +454,8 @@ fn yu_triggers_two_shang_dot_ticks() {
             _ => None,
         })
         .collect();
-    assert_eq!(ticks.len(), 6, "商 DOT 总跳数不变：{ticks:?}");
+    // 伤害日志只展示测量窗口内的事件；被羽提前的 2 跳在窗口内可见。
+    assert!(!ticks.is_empty(), "窗口内应能看到商 DOT 跳：{ticks:?}");
     let advanced = ticks.iter().filter(|t| (**t - 1.5).abs() < 0.2).count();
     assert_eq!(advanced, 2, "应有 2 跳被羽提前到 1.5s：{ticks:?}");
     let marked = result
@@ -796,7 +798,13 @@ fn kill_flag_scopes_kill_probability_with_full_hp_reset() {
         rs.final_kill_prob, 0.0,
         "前两段被开始 flag 排除，仅剩 1/3 伤害"
     );
-    assert_eq!(rs.total_damage, base.total_damage, "总伤不受 flag 影响");
+    // 总伤现在只统计测量窗口内的伤害：开始 flag 之后只剩第 3 段。
+    assert!(
+        rs.total_damage < base.total_damage,
+        "只统计开始 flag 之后的伤害：{} vs {}",
+        rs.total_damage,
+        base.total_damage
+    );
     assert!(rs.kill_start.is_some());
 }
 
@@ -1134,4 +1142,121 @@ fn real_independent_dots_apply_shared_step_overrides_without_leaking_on_refresh(
         assert_eq!(independent_dot_ticks(&result, name), base_ticks);
         assert!(casts(&result)[0].1 > casts(&baseline)[0].1);
     }
+}
+
+#[test]
+fn dongtian_damage_is_nerfed_to_4608() {
+    // 2026-11-12 技改：洞天伤害降低 5%（4851 → 4608，3 跳合计 13824）。
+    // 用 pvp 全局系数 1.0 + 默认零防御，单跳应等于基础伤害。
+    let mut request = req(
+        vec!["dongtian".into()],
+        vec![
+            TimelineActionDTO::Cast {
+                skill_id: 14069,
+                sub_id: 0,
+                skill_name: Some("高山流水".into()),
+                overrides: None,
+            },
+            TimelineActionDTO::Cast {
+                skill_id: 14299,
+                sub_id: 18859,
+                skill_name: None,
+                overrides: None,
+            },
+        ],
+    );
+    request.coeff.pvp_global_jianshang = 1.0;
+    let result = jpcg_combo::timeline_host::calculate_timeline(request).expect("dongtian");
+    let ticks: Vec<u32> = result
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            TimelineEventKindDTO::DotTick {
+                skill_name, damage, ..
+            } if skill_name == "洞天" => Some(*damage),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ticks.len(), 3, "洞天应为 3 跳");
+    // base 4608 经引擎伤害链路（PVP 0.9、化劲/破防取整）后单跳 4149；
+    // 削弱前 base 4851 时约 4368，4149/4368 ≈ 0.95，即伤害降低 5%。
+    assert!(
+        ticks.iter().all(|d| *d == 4149),
+        "洞天单跳应为 4149（base 4608 经伤害链路），实际 {ticks:?}"
+    );
+}
+
+#[test]
+fn kill_end_defaults_to_last_action_not_window() {
+    // 只放「计算开始」、没放「计算结束」：测量窗口应结束于最后一个动作（最后一次命中 3.0s），
+    // 而不是固定 30s 窗口；否则连招结束后的 DOT 会继续跳完，击杀率被高估。
+    let request = TimelineRequestDTO {
+        skills: vec![fixed_skill(1, "测试技能", 100)],
+        forms: vec![],
+        timed_buffs: vec![],
+        actions: vec![
+            TimelineActionDTO::Flag {
+                flag: "start".into(),
+            },
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+        ],
+        window: 30.0,
+        player: PlayerConfigDTO::default(),
+        hostile: HostileConfigDTO::default(),
+        xinfa: XinfaConfigDTO::default(),
+        buff: BuffConfigDTO::default(),
+        coeff: CoefficientConfigDTO {
+            pvp_global_jianshang: 1.0,
+            ..Default::default()
+        },
+        value_set: None,
+        combat: None,
+        qixue: vec![],
+        miji: vec![],
+        initial_instrument: None,
+        initial_qifeng: String::new(),
+        samples: 100,
+        seed: Some(42),
+    };
+    let result = jpcg_combo::timeline_host::calculate_timeline(request).expect("timeline");
+    let end = result.kill_end.expect("只放开始标记时应回落到最后动作结束");
+    assert!(
+        (end - 3.0).abs() < 1e-3,
+        "kill_end 应为最后动作结束 3.0s，实际 {end}"
+    );
+}
+
+#[test]
+fn variant_skills_share_base_miji() {
+    // 变宫(14298/18860) / 变徵(14299/18859) 应共享宫(14064/14474) / 徵(14067/14227) 的秘籍。
+    let data = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    unsafe { std::env::set_var("JPCG_DATA_DIR", &data) };
+    let (_skills, combat) =
+        jpcg_core::host::combat::load_combat_with_skills("mowen".to_string()).expect("combat");
+    let find = |id: u32, sub: u32| {
+        combat
+            .skill_combat
+            .iter()
+            .find(|sc| sc.skill_id == id && sc.sub_id == sub)
+            .unwrap_or_else(|| panic!("skill {id}/{sub}"))
+    };
+    let gong = find(14064, 14474);
+    let biangong = find(14298, 18860);
+    let zheng = find(14067, 14227);
+    let bianzheng = find(14299, 18859);
+    assert!(!biangong.miji_ids.is_empty(), "变宫应共享宫的秘籍");
+    assert!(
+        gong.miji_ids
+            .iter()
+            .all(|id| biangong.miji_ids.contains(id))
+    );
+    assert!(!bianzheng.miji_ids.is_empty(), "变徵应共享徵的秘籍");
+    assert!(
+        zheng
+            .miji_ids
+            .iter()
+            .all(|id| bianzheng.miji_ids.contains(id))
+    );
 }
