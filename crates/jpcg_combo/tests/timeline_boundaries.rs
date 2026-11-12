@@ -256,10 +256,12 @@ fn kill_curve_only_covers_flag_window() {
     let mut req = request();
     // 需要目标血量才会跑击杀率 MC（full_hp 非空）。
     req.hostile.target_hp = 1_000_000;
-    req.actions = vec![cast(), flag("start"), cast(), flag("end"), cast()];
+    // 步骤：cast / 开始 / cast / cast / 结束 / cast
+    req.actions = vec![cast(), flag("start"), cast(), cast(), flag("end"), cast()];
     let result = calculate_timeline(req).expect("timeline");
     assert!(result.kill_prob_curve.len() >= 2, "曲线不应为空");
-    assert_eq!(result.kill_prob_curve.first().unwrap().0, 2);
+    // 窗口内的动作 step：第 3、4 步（1-based）。
+    assert_eq!(result.kill_prob_curve.first().unwrap().0, 3);
     assert_eq!(result.kill_prob_curve.last().unwrap().0, 4);
 }
 
@@ -279,4 +281,42 @@ fn end_flag_excludes_cast_at_same_time() {
         "结束标记后的第二招不应计入总伤"
     );
     assert_eq!(result.final_kill_prob, 0.0, "只有第一招伤害，打不死目标");
+}
+
+#[test]
+fn end_flag_keeps_previous_cast_at_same_time() {
+    // 上一招 2s 读条，命中与下一招起点同为 2s；结束标记在两者之间，上一招的合法命中必须保留。
+    let mut one = request();
+    one.skills[0].cast_time = 2.0;
+    one.hostile.target_hp = 0;
+    let single = calculate_timeline(one).expect("single").total_damage;
+    assert!(single > 0.0);
+
+    let mut req = request();
+    req.skills[0].cast_time = 2.0;
+    req.actions = vec![cast(), flag("end"), cast()];
+    req.hostile.target_hp = single as u32 + 10;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(result.total_damage, single, "上一招的命中必须保留");
+    assert_eq!(result.final_kill_prob, 0.0);
+}
+
+#[test]
+fn end_flag_before_first_instant_cast_excludes_it() {
+    let mut req = request();
+    req.actions = vec![flag("end"), cast()];
+    req.hostile.target_hp = 1;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(result.total_damage, 0.0, "结束标记之后的瞬发不应计入");
+    assert_eq!(result.final_kill_prob, 0.0);
+}
+
+#[test]
+fn adjacent_start_end_is_empty_window() {
+    let mut req = request();
+    req.actions = vec![flag("start"), flag("end"), cast()];
+    req.hostile.target_hp = 1;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(result.total_damage, 0.0);
+    assert_eq!(result.final_kill_prob, 0.0);
 }

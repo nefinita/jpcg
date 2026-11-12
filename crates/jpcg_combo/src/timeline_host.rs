@@ -311,13 +311,12 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
 
 impl From<timeline::TimelineResult> for TimelineResultDTO {
     fn from(r: timeline::TimelineResult) -> Self {
-        // 伤害日志按实际命中排序，起手另存 start_time；窗口外命中不进入日志。
+        // 伤害日志按实际命中排序，起手另存 start_time；只展示测量窗口内的事件。
         let settlement = |e: &TimelineEvent| match e.kind {
             TimelineEventKind::Cast { hit_time, .. } => hit_time,
             _ => e.time,
         };
-        let mut events = r.events;
-        events.retain(|e| settlement(e) <= r.window);
+        let mut events = r.visible_events;
         events.sort_by(|a, b| settlement(a).total_cmp(&settlement(b)));
         let mut cumulative = 0.0;
         let events = events

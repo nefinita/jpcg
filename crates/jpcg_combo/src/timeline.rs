@@ -290,6 +290,8 @@ pub enum TimelineEventKind {
 pub struct TimelineEvent {
     pub time: f32,
     pub kind: TimelineEventKind,
+    /// 产生该事件的动作 step 下标（DOT 跳 = 施加该 DOT 的 step），用于按动作归属裁剪窗口。
+    pub owner_step: usize,
 }
 
 /// 单个动作的结算结果（供前端直接渲染，不再由前端推导）
@@ -329,6 +331,8 @@ pub struct TimelineStepSwitch {
 pub struct TimelineResult {
     pub window: f32,
     pub events: Vec<TimelineEvent>,
+    /// 测量窗口内的可见事件（总伤/DPS/击杀率/伤害日志都只基于它；`events` 保留完整事件供调试）。
+    pub visible_events: Vec<TimelineEvent>,
     /// 每个动作一个步骤结果（与输入 actions 一一对应）
     pub steps: Vec<TimelineStep>,
     pub total_damage: f64,
@@ -370,6 +374,8 @@ struct ActiveBuff {
 struct DotInstance {
     applied_at: f32,
     order: usize,
+    /// 施加该 DOT 的动作 step 下标。
+    step_index: usize,
     key: SkillKey,
     skill_name: String,
     skill: Skilltype,
@@ -441,6 +447,8 @@ struct Sim<'a> {
     qifeng_points: u8,
     events: Vec<TimelineEvent>,
     dots: Vec<DotInstance>,
+    /// 当前正在结算的动作 step 下标（每个 action 开始时设置）。
+    current_step: usize,
     /// 各 GCD 通道就绪时刻
     lane_ready: HashMap<String, f32>,
     /// 各技能就绪时刻（按下标记录，避免同名 id 变体共享状态；有充能技能不使用）
@@ -479,6 +487,7 @@ impl<'a> Sim<'a> {
             qifeng_points: MAX_QIFENG,
             events: Vec::new(),
             dots: Vec::new(),
+            current_step: 0,
             lane_ready: HashMap::new(),
             skill_ready: HashMap::new(),
             charges: HashMap::new(),
@@ -514,6 +523,7 @@ impl<'a> Sim<'a> {
         self.dots.push(DotInstance {
             applied_at: now,
             order,
+            step_index: self.current_step,
             key: (sid, sub),
             skill_name: name,
             skill,
@@ -838,6 +848,7 @@ impl<'a> Sim<'a> {
         let gcd_ready_at = start + gcd_secs;
         self.events.push(TimelineEvent {
             time: start,
+            owner_step: self.current_step,
             kind: TimelineEventKind::Cast {
                 skill_name: sk.skill.skill_name.clone(),
                 damage: if channel_cast { 0 } else { direct_damage },
@@ -901,6 +912,7 @@ impl<'a> Sim<'a> {
                 let tick_q = per_tick_damage + bonus;
                 self.events.push(TimelineEvent {
                     time: t,
+                    owner_step: self.current_step,
                     kind: TimelineEventKind::ChannelTick {
                         skill_name: sk.skill.skill_name.clone(),
                         index: k,
@@ -1122,6 +1134,7 @@ impl<'a> Sim<'a> {
             if let Some(stacks) = applied_stacks {
                 self.events.push(TimelineEvent {
                     time: start,
+                    owner_step: self.current_step,
                     kind: TimelineEventKind::BuffGain { buff_id, stacks },
                 });
             }
@@ -1136,6 +1149,7 @@ impl<'a> Sim<'a> {
             self.instrument = to.clone();
             self.events.push(TimelineEvent {
                 time: start,
+                owner_step: self.current_step,
                 kind: TimelineEventKind::FormSwitch {
                     from,
                     to: to.clone(),
@@ -1150,6 +1164,7 @@ impl<'a> Sim<'a> {
             self.qifeng_id = to.clone();
             self.events.push(TimelineEvent {
                 time: start,
+                owner_step: self.current_step,
                 kind: TimelineEventKind::QifengSwitch {
                     from,
                     to: to.clone(),
@@ -1175,6 +1190,8 @@ impl<'a> Sim<'a> {
         let mut pending_flags: Vec<(usize, bool)> = Vec::new();
 
         for action in &self.input.actions {
+            // 当前动作 step：cast 内的事件 / DOT 施加都用它做归属。
+            self.current_step = steps.len();
             let ev_start = self.events.len();
             let instrument_before = self.instrument.clone();
             let qifeng_before = self.qifeng_id.clone();
@@ -1192,6 +1209,7 @@ impl<'a> Sim<'a> {
                         self.instrument = to.clone();
                         self.events.push(TimelineEvent {
                             time: now,
+                            owner_step: self.current_step,
                             kind: TimelineEventKind::FormSwitch {
                                 from,
                                 to: to.clone(),
@@ -1405,6 +1423,7 @@ impl<'a> Sim<'a> {
                 let dice = dot.tick_dice(&self.input.hostile, i);
                 self.events.push(TimelineEvent {
                     time: t,
+                    owner_step: dot.step_index,
                     kind: TimelineEventKind::DotTick {
                         skill_name: dot.skill_name.clone(),
                         index: *dot.tick_labels.get(i).unwrap_or(&(i as u32 + 1)),
@@ -1458,8 +1477,16 @@ impl<'a> Sim<'a> {
                 }
             }
         }
-        // 测量窗口：计算开始 → 计算结束（结束缺省 = 最后一个动作；若最后一次施放带 DOT，
-        // 其 DOT 跳到结束——那是最后一次施放自己的伤害）。
+        // ============ 测量窗口：显式动作边界 + 归属 ============
+        // 窗口 = 开始标记之后、结束标记之前的动作 step：
+        //   - 施放/引导伤害按「产生它的 step」归属（同一时刻的前后两招可区分）；
+        //   - DOT 跳按时间窗口统计（窗口外的 DOT 尾跳不计入）；
+        //   - 显式开始/结束邻接时窗口为空（总伤/击杀率均为 0）。
+        let window_first = start_flag_step.map(|s| s + 1).unwrap_or(0);
+        let window_last = end_flag_step
+            .map(|s| s.saturating_sub(1))
+            .unwrap_or_else(|| steps.len().saturating_sub(1));
+        let window_empty = window_first > window_last;
         let kill_start = start_flag_time.unwrap_or(0.0);
         let kill_end = if let Some(end) = end_flag_time {
             end
@@ -1476,9 +1503,31 @@ impl<'a> Sim<'a> {
             }
             end.max(1e-3).min(self.input.window)
         };
+        let in_window = |e: &TimelineEvent| -> bool {
+            if window_empty {
+                return false;
+            }
+            let horizon = self.input.window + 1e-4;
+            match &e.kind {
+                // 施放/引导：按产生它的 step 归属（同刻前后两招可区分），并受模拟窗口约束。
+                TimelineEventKind::Cast { hit_time, .. } => {
+                    *hit_time <= horizon
+                        && e.owner_step >= window_first
+                        && e.owner_step <= window_last
+                }
+                TimelineEventKind::ChannelTick { .. } => {
+                    e.time <= horizon && e.owner_step >= window_first && e.owner_step <= window_last
+                }
+                // DOT 跳：按时间窗口（窗口外的 DOT 尾跳不计入）。
+                TimelineEventKind::DotTick { .. } => {
+                    e.time <= horizon && e.time >= kill_start - 1e-4 && e.time <= kill_end + 1e-4
+                }
+                // 器形/曲风/增益等非伤害事件按所属动作 step 归属（供伤害日志展示）。
+                _ => e.owner_step >= window_first && e.owner_step <= window_last,
+            }
+        };
 
-        // 总伤 / DPS 只统计测量窗口内的伤害，不再保留固定 300 秒口径。
-        // 区间 DPS 的分母是「实际伤害跨度」（末次伤害 - 窗口起点），不是固定窗口。
+        // 总伤 / DPS 只统计测量窗口内的伤害。
         let mut total = 0f64;
         let mut last_damage_time = 0.0f32;
         for e in &self.events {
@@ -1490,14 +1539,13 @@ impl<'a> Sim<'a> {
                 TimelineEventKind::DotTick { damage, .. } => (*damage, e.time),
                 _ => continue,
             };
-            if time >= kill_start - 1e-4 && time <= kill_end + 1e-4 {
+            if in_window(e) {
                 total += damage as f64;
                 if damage > 0 {
                     last_damage_time = last_damage_time.max(time);
                 }
             }
         }
-        // 至少 1 秒，避免单次瞬发除零；正常连招取窗口内最后一个伤害事件时刻。
         let span = if last_damage_time > kill_start {
             (last_damage_time - kill_start).max(1.0)
         } else {
@@ -1505,22 +1553,27 @@ impl<'a> Sim<'a> {
         };
         let window_dps = total / span as f64;
 
-        // ---- 击杀率蒙特卡洛：在 [start,end] 内独立结算（开始时刻满血重置） ----
+        // ---- 击杀率蒙特卡洛：只结算窗口内事件（开始时刻满血重置） ----
         let mut final_kill_prob = 0.0f64;
         let mut kill_prob_curve: Vec<(usize, f64)> = Vec::new();
-        if self.input.samples > 0 && !steps.is_empty() {
+        if self.input.samples > 0 && !steps.is_empty() && !window_empty {
             if let Some(hp0) = full_hp(&self.input.hostile) {
-                let mut damage_events: Vec<(f32, DamageDice)> = self
+                // (time, dice, owner_step, is_dot)
+                let mut damage_events: Vec<(f32, DamageDice, usize, bool)> = self
                     .events
                     .iter()
+                    .filter(|e| in_window(e))
                     .filter_map(|e| match &e.kind {
-                        TimelineEventKind::Cast { hit_time, dice, .. } => Some((*hit_time, *dice)),
-                        TimelineEventKind::ChannelTick { dice, .. } => Some((e.time, *dice)),
-                        TimelineEventKind::DotTick { dice, .. } => Some((e.time, *dice)),
+                        TimelineEventKind::Cast { hit_time, dice, .. } => {
+                            Some((*hit_time, *dice, e.owner_step, false))
+                        }
+                        TimelineEventKind::ChannelTick { dice, .. } => {
+                            Some((e.time, *dice, e.owner_step, false))
+                        }
+                        TimelineEventKind::DotTick { dice, .. } => {
+                            Some((e.time, *dice, e.owner_step, true))
+                        }
                         _ => None,
-                    })
-                    .filter(|(t, _)| {
-                        kill_end > kill_start && *t >= kill_start - 1e-4 && *t <= kill_end + 1e-4
                     })
                     .collect();
                 damage_events.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -1532,8 +1585,8 @@ impl<'a> Sim<'a> {
                 let mut kills_at = vec![0u64; steps.len()];
                 for _ in 0..n {
                     let mut cur = hp0;
-                    let mut killed: Option<f32> = None;
-                    for (t, dice) in &damage_events {
+                    let mut killed: Option<(f32, usize, bool)> = None;
+                    for (t, dice, owner, is_dot) in &damage_events {
                         cur = (cur - dice.roll(&mut rng) as f64).max(0.0);
                         let extra = jpcg_core::engine::atkcal::lost_hp_append_damage(
                             dice.lost_hp_factor,
@@ -1542,36 +1595,47 @@ impl<'a> Sim<'a> {
                         );
                         cur = (cur - extra).max(0.0);
                         if cur <= 0.0 {
-                            killed = Some(*t);
+                            killed = Some((*t, *owner, *is_dot));
                             break;
                         }
                     }
-                    if let Some(kt) = killed {
-                        let idx = steps
-                            .iter()
-                            .position(|s| s.time.is_some_and(|tm| tm >= kt))
-                            .unwrap_or(steps.len() - 1);
+                    if let Some((kt, owner, is_dot)) = killed {
+                        let idx = if is_dot {
+                            // DOT 跳：归到「它发生时已经执行完的最后一个窗口动作」
+                            let mut idx = window_first;
+                            for i in window_first..=window_last {
+                                if steps[i].time.is_some_and(|tm| tm <= kt + 1e-4) {
+                                    idx = i;
+                                }
+                            }
+                            idx
+                        } else {
+                            owner.clamp(window_first, window_last)
+                        };
                         kills_at[idx] += 1;
                     }
                 }
-                // 曲线只覆盖「计算开始 → 计算结束」之间的步骤；窗口外不再出点。
-                let curve_from = start_flag_step.unwrap_or(0);
-                let curve_to = end_flag_step.unwrap_or(steps.len().saturating_sub(1));
+                // 曲线只覆盖窗口内的动作 step。
                 let mut acc = 0u64;
-                for (i, _) in steps.iter().enumerate() {
+                for i in window_first..=window_last {
                     acc += kills_at[i];
-                    if i >= curve_from && i <= curve_to {
-                        kill_prob_curve.push((i + 1, acc as f64 / n as f64));
-                    }
+                    kill_prob_curve.push((i + 1, acc as f64 / n as f64));
                 }
                 final_kill_prob = kill_prob_curve.last().map(|(_, p)| *p).unwrap_or(0.0);
             }
         }
 
+        let visible_events: Vec<TimelineEvent> = self
+            .events
+            .iter()
+            .filter(|e| in_window(e))
+            .cloned()
+            .collect();
         let final_instrument = self.instrument.clone();
         let final_qifeng = self.qifeng_id.clone();
         TimelineResult {
             events: self.events,
+            visible_events,
             steps,
             final_instrument,
             final_qifeng,
