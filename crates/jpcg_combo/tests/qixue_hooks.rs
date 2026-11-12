@@ -1177,3 +1177,45 @@ fn dongtian_damage_is_nerfed_to_4608() {
         "洞天单跳应为 4149（base 4608 经伤害链路），实际 {ticks:?}"
     );
 }
+
+#[test]
+fn kill_end_defaults_to_last_action_not_window() {
+    // 只放「计算开始」、没放「计算结束」：测量窗口应结束于最后一个动作（最后一次命中 3.0s），
+    // 而不是固定 30s 窗口；否则连招结束后的 DOT 会继续跳完，击杀率被高估。
+    let request = TimelineRequestDTO {
+        skills: vec![fixed_skill(1, "测试技能", 100)],
+        forms: vec![],
+        timed_buffs: vec![],
+        actions: vec![
+            TimelineActionDTO::Flag {
+                flag: "start".into(),
+            },
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+            cast(1, 0, "测试技能"),
+        ],
+        window: 30.0,
+        player: PlayerConfigDTO::default(),
+        hostile: HostileConfigDTO::default(),
+        xinfa: XinfaConfigDTO::default(),
+        buff: BuffConfigDTO::default(),
+        coeff: CoefficientConfigDTO {
+            pvp_global_jianshang: 1.0,
+            ..Default::default()
+        },
+        value_set: None,
+        combat: None,
+        qixue: vec![],
+        miji: vec![],
+        initial_instrument: None,
+        initial_qifeng: String::new(),
+        samples: 100,
+        seed: Some(42),
+    };
+    let result = jpcg_combo::timeline_host::calculate_timeline(request).expect("timeline");
+    let end = result.kill_end.expect("只放开始标记时应回落到最后动作结束");
+    assert!(
+        (end - 3.0).abs() < 1e-3,
+        "kill_end 应为最后动作结束 3.0s，实际 {end}"
+    );
+}

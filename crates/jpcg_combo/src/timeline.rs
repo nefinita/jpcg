@@ -1292,6 +1292,12 @@ impl<'a> Sim<'a> {
             steps.push(step);
         }
 
+        // 只放了「计算开始」、没放「计算结束」时，测量窗口结束于最后一个动作（紧跟上一个技能），
+        // 而不是固定模拟窗口；否则连招结束后 DOT 会继续跳完，击杀率被高估。
+        if end_flag_time.is_none() && start_flag_time.is_some() && !steps.is_empty() {
+            end_flag_time = Some(now.min(self.input.window));
+        }
+
         // 没有后续施放时，末尾标记落在当前动作结束处，不隐式扩展到 300 秒。
         for (index, is_start) in pending_flags {
             let time = now.min(self.input.window);
