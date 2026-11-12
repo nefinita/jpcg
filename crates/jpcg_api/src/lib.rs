@@ -845,7 +845,7 @@ pub struct TimelineResultDTO {
     /// 累计击杀概率曲线：(动作序号 1..=n, 概率 0..1)
     #[serde(default)]
     pub kill_prob_curve: Vec<(usize, f64)>,
-    /// 击杀率测量窗口起止时刻（flag 解析后的结果；None = 未提供该 flag）
+    /// 有效测量窗口起止（缺省已折算：开始=0，结束=最后一个动作 / 最后一次施放的 DOT 尾）
     #[serde(default)]
     pub kill_start: Option<f32>,
     #[serde(default)]

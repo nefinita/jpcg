@@ -707,7 +707,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           ) : timelineResult ? (
             <>
               <div className={styles.logScroll}>
-                <TimelineDamageLog events={timelineResult.events} />
+                <TimelineDamageLog events={timelineResult.events} killStart={timelineResult.kill_start} killEnd={timelineResult.kill_end} />
               </div>
               <div className={styles.totalsRow}>
                 <div className={styles.totalBox}>
@@ -717,6 +717,12 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                 <div className={styles.totalBox}>
                   <b>{timelineResult.window_dps.toFixed(0)}</b>
                   <span>DPS</span>
+                </div>
+                <div className={styles.totalBox}>
+                  <b>{timelineResult.kill_start != null && timelineResult.kill_end != null
+                    ? `${timelineResult.kill_start.toFixed(1)}–${timelineResult.kill_end.toFixed(1)}s`
+                    : "—"}</b>
+                  <span>测量窗口</span>
                 </div>
                 <div className={styles.totalBox}>
                   <b>{timelineResult.skipped_actions}</b>

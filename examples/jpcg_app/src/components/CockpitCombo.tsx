@@ -34,7 +34,9 @@ export default function CockpitCombo({ form, draft, inputKey, saved, baseline, a
       {!form && <p>先完成当前属性计算。</p>}
       {error && <p role="alert">{error}</p>}
       {form && !current && !error && <p role="status">正在计算连招…</p>}
-      {current && <p>窗口总伤 {Math.round(current.total_damage).toLocaleString()} · 击杀率 {((current.final_kill_prob ?? 0) * 100).toFixed(1)}%
+      {current && <p>窗口总伤 {Math.round(current.total_damage).toLocaleString()}
+        {current.kill_start != null && current.kill_end != null && `（${current.kill_start.toFixed(1)}–${current.kill_end.toFixed(1)}s）`}
+        {" · "}击杀率 {((current.final_kill_prob ?? 0) * 100).toFixed(1)}%
         {difference !== null && ` · Δ ${difference >= 0 ? "+" : ""}${difference.toFixed(1)} 个百分点`}</p>}
     </div>
   </section>;

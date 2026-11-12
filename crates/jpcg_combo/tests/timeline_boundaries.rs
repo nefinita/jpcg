@@ -191,7 +191,21 @@ fn cumulative_uses_only_hits_inside_window_in_hit_order() {
         }
     }
     assert!(result.events.windows(2).all(|w| w[0].time <= w[1].time));
-    assert_eq!(sum, result.total_damage);
+    // 总伤只统计测量窗口内的伤害；窗口外事件仍在 events 里（供展示/调试）。
+    let kill_start = result.kill_start.unwrap_or(0.0);
+    let kill_end = result.kill_end.unwrap_or(0.0);
+    let window_sum: f64 = result
+        .events
+        .iter()
+        .filter(|e| e.time >= kill_start - 1e-4 && e.time <= kill_end + 1e-4)
+        .map(|e| match e.kind {
+            TimelineEventKindDTO::Cast { damage, .. }
+            | TimelineEventKindDTO::DotTick { damage, .. }
+            | TimelineEventKindDTO::ChannelTick { damage, .. } => damage as f64,
+            _ => 0.0,
+        })
+        .sum();
+    assert_eq!(window_sum, result.total_damage);
 }
 
 #[test]

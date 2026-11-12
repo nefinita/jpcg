@@ -520,7 +520,7 @@ export interface TimelineResultDTO {
   final_kill_prob?: number;
   /** 累计击杀概率曲线：[动作序号, 概率] */
   kill_prob_curve?: [number, number][];
-  /** 击杀率测量窗口起止（flag 解析时刻；None = 未提供该 flag） */
+  /** 有效测量窗口起止（缺省已折算：开始=0，结束=最后一个动作 / 最后一个技能的 DOT 尾） */
   kill_start?: number | null;
   kill_end?: number | null;
 }

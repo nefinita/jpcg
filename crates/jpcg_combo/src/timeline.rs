@@ -1160,6 +1160,8 @@ impl<'a> Sim<'a> {
 
     fn run(mut self) -> TimelineResult {
         let mut now: f32 = 0.0;
+        // 最后一次成功施放的起手时刻（用来判断「最后一次施放施加的 DOT 是否算进窗口」）
+        let mut last_cast_start: Option<f32> = None;
         let mut skipped = 0u32;
         let mut steps: Vec<TimelineStep> = Vec::new();
         let mut start_flag_time: Option<f32> = None;
@@ -1233,6 +1235,7 @@ impl<'a> Sim<'a> {
                                     }
                                     steps[flag_step_idx].time = Some(start);
                                 }
+                                last_cast_start = Some(start);
                                 now = self.cast(index, start, overrides.as_ref());
                             }
                         }
@@ -1432,46 +1435,54 @@ impl<'a> Sim<'a> {
                 }
             }
         }
+        // 测量窗口：计算开始 → 计算结束（结束缺省 = 最后一个动作；若最后一次施放带 DOT，
+        // 其 DOT 跳到结束——那是最后一次施放自己的伤害）。
+        let kill_start = start_flag_time.unwrap_or(0.0);
+        let kill_end = if let Some(end) = end_flag_time {
+            end
+        } else {
+            let mut end = now;
+            if let Some(last_start) = last_cast_start {
+                for dot in &self.dots {
+                    if dot.applied_at >= last_start - 1e-4 {
+                        for t in &dot.tick_times {
+                            end = end.max(*t);
+                        }
+                    }
+                }
+            }
+            end.max(1e-3).min(self.input.window)
+        };
+
+        // 总伤 / DPS 只统计测量窗口内的伤害，不再保留固定 300 秒口径。
+        // 区间 DPS 的分母是「实际伤害跨度」（末次伤害 - 窗口起点），不是固定窗口。
         let mut total = 0f64;
-        // 区间 DPS 的分母是「实际伤害跨度」，不是固定模拟窗口（否则 10 秒的连招会被 300 秒稀释）。
         let mut last_damage_time = 0.0f32;
         for e in &self.events {
-            match &e.kind {
-                // 读条/引导的伤害在命中时刻结算：只有命中落在窗口内才计入总伤
+            let (damage, time) = match &e.kind {
                 TimelineEventKind::Cast {
                     damage, hit_time, ..
-                } => {
-                    if *hit_time <= self.input.window {
-                        total += *damage as f64;
-                        if *damage > 0 {
-                            last_damage_time = last_damage_time.max(*hit_time);
-                        }
-                    }
+                } => (*damage, *hit_time),
+                TimelineEventKind::ChannelTick { damage, .. } => (*damage, e.time),
+                TimelineEventKind::DotTick { damage, .. } => (*damage, e.time),
+                _ => continue,
+            };
+            if time >= kill_start - 1e-4 && time <= kill_end + 1e-4 {
+                total += damage as f64;
+                if damage > 0 {
+                    last_damage_time = last_damage_time.max(time);
                 }
-                TimelineEventKind::ChannelTick { damage, .. } => {
-                    if e.time <= self.input.window {
-                        total += *damage as f64;
-                        if *damage > 0 {
-                            last_damage_time = last_damage_time.max(e.time);
-                        }
-                    }
-                }
-                TimelineEventKind::DotTick { damage, .. } => {
-                    total += *damage as f64;
-                    if *damage > 0 {
-                        last_damage_time = last_damage_time.max(e.time);
-                    }
-                }
-                _ => {}
             }
         }
-        // 至少 1 秒，避免单次瞬发除零；正常连招取最后一个伤害事件时刻。
-        let span = last_damage_time.max(1.0);
+        // 至少 1 秒，避免单次瞬发除零；正常连招取窗口内最后一个伤害事件时刻。
+        let span = if last_damage_time > kill_start {
+            (last_damage_time - kill_start).max(1.0)
+        } else {
+            1.0
+        };
         let window_dps = total / span as f64;
 
         // ---- 击杀率蒙特卡洛：在 [start,end] 内独立结算（开始时刻满血重置） ----
-        let kill_start = start_flag_time.unwrap_or(0.0);
-        let kill_end = end_flag_time.unwrap_or(self.input.window);
         let mut final_kill_prob = 0.0f64;
         let mut kill_prob_curve: Vec<(usize, f64)> = Vec::new();
         if self.input.samples > 0 && !steps.is_empty() {
@@ -1542,8 +1553,9 @@ impl<'a> Sim<'a> {
             skipped_actions: skipped,
             final_kill_prob,
             kill_prob_curve,
-            kill_start: start_flag_time,
-            kill_end: end_flag_time,
+            // 返回有效测量窗口（缺省已折算：开始=0，结束=最后一个动作/DOT 尾）。
+            kill_start: Some(kill_start),
+            kill_end: Some(kill_end),
         }
     }
 }
@@ -2202,7 +2214,7 @@ cast_time = 2.0
 
     #[test]
     fn cast_straddling_window_counts_damage_only_when_hit_inside() {
-        // 2 秒读条、窗口 1 秒：起手事件保留，但命中在 2 秒 → 窗口伤害 0
+        // 2 秒读条、窗口 1 秒：命中在 2 秒（窗口外）→ 窗口伤害 0；结果事件只保留窗口内事件。
         let mut sk = skill(1, 0, "长读条");
         sk.cast_time = 2.0;
         let input = base_input(

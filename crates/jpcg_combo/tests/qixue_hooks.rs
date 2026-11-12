@@ -796,7 +796,13 @@ fn kill_flag_scopes_kill_probability_with_full_hp_reset() {
         rs.final_kill_prob, 0.0,
         "前两段被开始 flag 排除，仅剩 1/3 伤害"
     );
-    assert_eq!(rs.total_damage, base.total_damage, "总伤不受 flag 影响");
+    // 总伤现在只统计测量窗口内的伤害：开始 flag 之后只剩第 3 段。
+    assert!(
+        rs.total_damage < base.total_damage,
+        "只统计开始 flag 之后的伤害：{} vs {}",
+        rs.total_damage,
+        base.total_damage
+    );
     assert!(rs.kill_start.is_some());
 }
 
