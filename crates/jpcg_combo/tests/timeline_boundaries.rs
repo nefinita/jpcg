@@ -262,3 +262,21 @@ fn kill_curve_only_covers_flag_window() {
     assert_eq!(result.kill_prob_curve.first().unwrap().0, 2);
     assert_eq!(result.kill_prob_curve.last().unwrap().0, 4);
 }
+
+#[test]
+fn end_flag_excludes_cast_at_same_time() {
+    // 结束标记下方的第二招（同一 GCD 起点）不应计入窗口。
+    let mut one = request();
+    one.hostile.target_hp = 0;
+    let single = calculate_timeline(one).expect("single").total_damage;
+
+    let mut req = request();
+    req.actions = vec![cast(), flag("end"), cast()];
+    req.hostile.target_hp = single as u32 + 10;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(
+        result.total_damage, single,
+        "结束标记后的第二招不应计入总伤"
+    );
+    assert_eq!(result.final_kill_prob, 0.0, "只有第一招伤害，打不死目标");
+}

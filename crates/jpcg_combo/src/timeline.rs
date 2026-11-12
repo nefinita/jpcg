@@ -1252,7 +1252,8 @@ impl<'a> Sim<'a> {
                                             start_flag_time = Some(start);
                                         }
                                     } else if end_flag_time.is_none() {
-                                        end_flag_time = Some(start);
+                                        // 结束标记在下一个施放之前：用「施放起点 - ε」，避免同一时刻的下一招被算进窗口。
+                                        end_flag_time = Some((start - 1e-3).max(0.0));
                                     }
                                     steps[flag_step_idx].time = Some(start);
                                 }
