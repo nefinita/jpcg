@@ -35,6 +35,10 @@ pub enum ApiRequest {
     Player {
         loadout: Box<Loadout>,
     },
+    /// 导出 loadout 为 TOML（可直接在 app 的「导入配装」里使用）。
+    Export {
+        loadout: Box<Loadout>,
+    },
 }
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
