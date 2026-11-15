@@ -20,7 +20,7 @@ import { buildTimelineRequest } from "./utils/timelineRequest";
 import { usePersistentState, writePreference, readPreference } from "./hooks/usePersistentState";
 import { cockpitSchema, defaultCockpit, comboDraftSchema, defaultComboDraft } from "./state/cockpit";
 import SnapshotDiff from "./components/SnapshotDiff";
-import type { GearCatalog, GearLoadout, GearComposition, OptimizeOptions, GearOptimizeResult } from "./types/gear";
+import type { GearCatalog, GearLoadout, GearComposition, OptimizeOptions, GearOptimizeResult, GearOptimizeRequest, GearTimelineMetric } from "./types/gear";
 import { initialLoadout, gearInputKey, gearPlayerForm, PROFESSION_ATTRIBUTE_RULES } from "./state/gear";
 import CockpitCombo from "./components/CockpitCombo";
 import GearPanel from "./components/GearPanel";
@@ -209,31 +209,55 @@ export default function App() {
   }, [gearMode, loadout, contextReady]);
   const changeLoadout = (next: GearLoadout) => { ++actionRevision.current; setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } })); };
 
-  const handleOptimize = useCallback(async (opts: OptimizeOptions) => {
-    if (optimizeLock.current) return;
-    if (!catalog || !loadout || !compatible || !rulesCurrent) { addToast("配装模板或职业规则尚未就绪", "warning"); return; }
-    if (!comboDraft.sequence.length) { addToast("请先在排轴器编辑连招", "warning"); return; }
-    const targetHp = Number(formData.hostile?.target_hp) || 0;
-    if (opts.metric === "kill_probability" && targetHp <= 0) { addToast("击杀率目标需要先设置目标血量", "warning"); return; }
+  /** 组装调优请求：app 调优与「导出全量穷举请求」共用同一份口径。 */
+  const buildOptimizeRequest = useCallback(async (opts: OptimizeOptions, exhaustive = false): Promise<GearOptimizeRequest | null> => {
+    if (!catalog || !loadout || !compatible || !rulesCurrent) { addToast("配装模板或职业规则尚未就绪", "warning"); return null; }
+    if (!comboDraft.sequence.length) { addToast("请先在排轴器编辑连招", "warning"); return null; }
+    if (!exhaustive) {
+      const targetHp = Number(formData.hostile?.target_hp) || 0;
+      if (opts.metric === "kill_probability" && targetHp <= 0) { addToast("击杀率目标需要先设置目标血量", "warning"); return null; }
+    }
     const arenaSet = catalog.sets.find((x) => x.source === "mingjian" && x.kind === "armor");
     const requiredSets: Record<string, number> = opts.arena4 && arenaSet ? { [arenaSet.id]: 4 } : {};
     const stats: Record<string, { min?: number; max?: number }> = opts.hasteMin != null ? { jiasu: { min: opts.hasteMin } } : {};
-    const samples = opts.metric === "kill_probability" ? 50000 : 0;
+    // 全量穷举只能用确定性指标（击杀率 50k MC 逐候选太慢），约束完全一致。
+    const metric: GearTimelineMetric = exhaustive ? "total_damage" : opts.metric;
+    const samples = metric === "kill_probability" ? 50000 : 0;
+    const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
+    const request = buildTimelineRequest(formData, bundle, comboDraft.sequence, comboDraft.miji ?? [], comboDraft.qixue ?? [], samples, samples > 0 ? 12345 : null);
+    return {
+      loadout,
+      config: toCalculateRequest(formData),
+      objective: { kind: "timeline", request, metric },
+      constraints: { sources: ["mingjian", "weiwang", "baowu"], allow_upgraded: true, locked: [], banned: [], required_sources: {}, banned_sources: {}, stats, allow_cross_source_2plus2: true, required_sets: requiredSets },
+      max_combinations: 1_000_000,
+    };
+  }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, addToast]);
+
+  const handleExportOptimizeRequest = useCallback(async (opts: OptimizeOptions) => {
+    const request = await buildOptimizeRequest(opts, true);
+    if (!request) return;
+    const blob = new Blob([JSON.stringify(request, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `jpcg-exhaustive-request-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    addToast("已导出全量穷举请求（确定性总伤口径，含当前约束）", "success");
+  }, [buildOptimizeRequest, addToast]);
+
+  const handleOptimize = useCallback(async (opts: OptimizeOptions) => {
+    if (optimizeLock.current) return;
+    const request = await buildOptimizeRequest(opts);
+    if (!request) return;
     optimizeLock.current = true;
     ++actionRevision.current; // 作废调优开始前尚未完成的导入/环境切换
     setOptimizing(true); setOptProgress(null); setStatus("配装自动调优中…");
     let unlisten = () => {};
     try {
       unlisten = api.listenGearOptimizeProgress((pct) => setOptProgress(pct));
-      const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
-      const request = buildTimelineRequest(formData, bundle, comboDraft.sequence, comboDraft.miji ?? [], comboDraft.qixue ?? [], samples, samples > 0 ? 12345 : null);
-      const result = await api.optimizeGear({
-        loadout,
-        config: toCalculateRequest(formData),
-        objective: { kind: "timeline", request, metric: opts.metric },
-        constraints: { sources: ["mingjian", "weiwang", "baowu"], allow_upgraded: true, locked: [], banned: [], required_sources: {}, banned_sources: {}, stats, allow_cross_source_2plus2: true, required_sets: requiredSets },
-        max_combinations: 1_000_000,
-      });
+      const result = await api.optimizeGear(request);
       setOptResult({ result, metric: opts.metric });
       if (result.best) {
         changeLoadout(result.best.composed.loadout);
@@ -255,7 +279,7 @@ export default function App() {
       optimizeLock.current = false;
       setOptimizing(false);
     }
-  }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, changeLoadout, addToast]);
+  }, [buildOptimizeRequest, changeLoadout, addToast]);
   const exportLoadout = async () => {
     if (!loadout) return;
     try {
@@ -330,7 +354,7 @@ export default function App() {
             {catalog && loadout && <GearPanel catalog={catalog} loadout={loadout} composition={composition} pending={stale || calculating}
               onOptimize={(options) => void handleOptimize(options)} optimizing={optimizing} optProgress={optProgress} optResult={optResult} onChange={changeLoadout}
               onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
-              onExport={() => void exportLoadout()} onImport={importLoadout} />}
+              onExport={() => void exportLoadout()} onImport={importLoadout} onExportRequest={(options) => void handleExportOptimizeRequest(options)} />}
             {resultPanel}
           </div>
         </> : <div className={styles.manualBody}><div className={styles.configPanel}>{configPanel}</div>{resultPanel}</div>}

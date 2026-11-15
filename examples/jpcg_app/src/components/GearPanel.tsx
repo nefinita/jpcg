@@ -11,7 +11,7 @@ const SCHOOL_NAMES: Record<string, string> = { mowen: "莫问", bingxin: "冰心
 export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, optimizing, optProgress, optResult, pending }: {
   catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
   onChange: (loadout: GearLoadout) => void; onReset: () => void; onExport: () => void;
-  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
+  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; onExportRequest?: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
   optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
 }) {
   const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: true, hasteMin: 928 });

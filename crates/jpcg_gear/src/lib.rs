@@ -61,6 +61,11 @@ pub fn call(catalog: &Catalog, input: &str) -> ApiResponse {
                 serde_json::to_value(optimize(catalog, &request, |_| true)?)
                     .map_err(|e| e.to_string())
             }
+            ApiRequest::Export { loadout } => {
+                catalog.compose(&loadout).map_err(|e| e.to_string())?;
+                let text = toml::to_string_pretty(&*loadout).map_err(|e| e.to_string())?;
+                Ok(serde_json::Value::String(text))
+            }
             ApiRequest::Player { loadout } => {
                 let composed = catalog.compose(&loadout)?;
                 serde_json::to_value(player(&composed)).map_err(|e| e.to_string())
