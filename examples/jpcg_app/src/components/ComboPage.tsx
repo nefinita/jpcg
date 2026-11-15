@@ -234,7 +234,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     setTimelineResult(null);
     try {
       const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
-      const result = await api.calculateTimeline(buildTimelineRequest(formData, bundle, sequence, selMiji, selQixue, 50000));
+      const result = await api.calculateTimeline(buildTimelineRequest(formData, bundle, sequence, selMiji, selQixue, 50000, 12345));
       if (revision === timelineRevision.current) setTimelineResult(result);
     } catch (err) {
       if (revision === timelineRevision.current) setTimelineError(err instanceof Error ? err.message : String(err));

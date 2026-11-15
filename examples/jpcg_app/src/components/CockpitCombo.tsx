@@ -19,7 +19,7 @@ export default function CockpitCombo({ form, draft, inputKey, saved, baseline, a
       try {
         const profession = form.xinfa_config.profession;
         const bundle = await api.loadCombatBundle(profession);
-        const result = await api.calculateTimeline(buildTimelineRequest(form, bundle, draft.sequence, draft.miji ?? [], draft.qixue ?? [], 50000));
+        const result = await api.calculateTimeline(buildTimelineRequest(form, bundle, draft.sequence, draft.miji ?? [], draft.qixue ?? [], 50000, 12345));
         if (!cancelled) onResult(inputKey, result);
       } catch (err) { if (!cancelled) setError(String(err)); }
       finally { if (!cancelled) onBusy(false); }
