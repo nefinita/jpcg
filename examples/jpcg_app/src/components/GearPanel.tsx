@@ -14,7 +14,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
   onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
   optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
 }) {
-  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: false, hasteMin: 928 });
+  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: true, hasteMin: 928 });
   const arenaSet = catalog.sets.find((s) => s.source === "mingjian" && s.kind === "armor");
   const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
   const panel = loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
