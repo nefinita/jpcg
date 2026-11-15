@@ -634,7 +634,12 @@ fn score(
             Ok(match metric {
                 crate::TimelineMetric::TotalDamage => result.total_damage,
                 crate::TimelineMetric::WindowDps => result.window_dps,
-                crate::TimelineMetric::KillProbability => result.final_kill_prob,
+                // 击杀率相同时用确定性总伤做 tie-break：否则「无用属性」附魔/装备与有效属性
+                // 可能因击杀率恰好相同而保留（例如根骨职业选出元气附魔）。
+                // 系数远小于 1/50000 的击杀率分辨率，不会覆盖真实的击杀率差异。
+                crate::TimelineMetric::KillProbability => {
+                    result.final_kill_prob + result.total_damage * 1e-12
+                }
             })
         }
     }
