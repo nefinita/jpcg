@@ -14,7 +14,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
   onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
   optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
 }) {
-  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: false, hasteMin: null });
+  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: false, hasteMin: 928 });
   const arenaSet = catalog.sets.find((s) => s.source === "mingjian" && s.kind === "armor");
   const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
   const panel = loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
@@ -44,8 +44,8 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
       </label>
       <label><input type="checkbox" checked={opts.arena4} disabled={!arenaSet}
         onChange={(e) => setOpts((p) => ({ ...p, arena4: e.target.checked }))} /> 必须竞技场四件套</label>
-      <label>加速 ≥
-        <input type="number" min={0} step={1} value={opts.hasteMin ?? ""}
+      <label title="最低加速等级（默认 928）">加速 ≥
+        <input type="number" min={0} step={1} placeholder="928" value={opts.hasteMin ?? ""}
           onChange={(e) => setOpts((p) => ({ ...p, hasteMin: e.target.value === "" ? null : Number(e.target.value) }))} />
       </label>
     </div>
