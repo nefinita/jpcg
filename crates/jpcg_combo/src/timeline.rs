@@ -216,6 +216,8 @@ pub struct TimelineInput {
     pub samples: u32,
     /// 击杀率随机种子（None = 每次随机；固定便于回归）
     pub seed: Option<u64>,
+    /// 固定击杀范围（秒）：Some 时覆盖 flag 推导的窗口（调优时所有候选共用同一绝对时间段）。
+    pub fixed_window: Option<(f32, f32)>,
 }
 
 /// 单个伤害事件的会心分布（供击杀率蒙特卡洛掷点；确定性总伤用 `q`）。
@@ -1487,21 +1489,27 @@ impl<'a> Sim<'a> {
             .map(|s| s.saturating_sub(1))
             .unwrap_or_else(|| steps.len().saturating_sub(1));
         let window_empty = window_first > window_last;
-        let kill_start = start_flag_time.unwrap_or(0.0);
-        let kill_end = if let Some(end) = end_flag_time {
-            end
+        // 固定击杀范围（调优）：所有候选共用同一绝对时间段，攻速不再改变窗口长度。
+        let (kill_start, kill_end) = if let Some((ws, we)) = self.input.fixed_window {
+            (ws, we.max(ws + 1e-3).min(self.input.window))
         } else {
-            let mut end = now;
-            if let Some(last_start) = last_cast_start {
-                for dot in &self.dots {
-                    if dot.applied_at >= last_start - 1e-4 {
-                        for t in &dot.tick_times {
-                            end = end.max(*t);
+            let kill_start = start_flag_time.unwrap_or(0.0);
+            let kill_end = if let Some(end) = end_flag_time {
+                end
+            } else {
+                let mut end = now;
+                if let Some(last_start) = last_cast_start {
+                    for dot in &self.dots {
+                        if dot.applied_at >= last_start - 1e-4 {
+                            for t in &dot.tick_times {
+                                end = end.max(*t);
+                            }
                         }
                     }
                 }
-            }
-            end.max(1e-3).min(self.input.window)
+                end.max(1e-3).min(self.input.window)
+            };
+            (kill_start, kill_end)
         };
         let in_window = |e: &TimelineEvent| -> bool {
             if window_empty {
@@ -1763,6 +1771,7 @@ mod tests {
             window,
             samples: 0,
             seed: None,
+            fixed_window: None,
         }
     }
 
@@ -1938,6 +1947,40 @@ mod tests {
             hit2, 1.1875,
             "20.02% 加速后读条 floor(24/1.2002)=19 帧 = 1.1875 秒"
         );
+    }
+
+    #[test]
+    fn fixed_window_counts_dot_ticks_beyond_flag_window() {
+        // 调优用固定击杀范围：所有候选共用同一绝对时间段，flag 窗口外的 DOT 跳也按固定范围统计。
+        let mut sk = skill(1, 0, "dot");
+        sk.dot_flag = 1;
+        sk.dot_interval = 2.0;
+        sk.dot_duration = 18.0;
+        let mut input = base_input(
+            vec![timing(sk, "default")],
+            vec![
+                TimelineAction::Flag { start: true },
+                TimelineAction::cast(1, 0),
+                TimelineAction::Flag { start: false },
+            ],
+            30.0,
+        );
+        let narrow = simulate(&input);
+        input.fixed_window = Some((0.0, 18.0));
+        let wide = simulate(&input);
+        assert!(
+            wide.total_damage > narrow.total_damage,
+            "固定窗口应包含更多 DOT 跳：{} vs {}",
+            wide.total_damage,
+            narrow.total_damage
+        );
+        let ticks = |r: &TimelineResult| {
+            r.visible_events
+                .iter()
+                .filter(|e| matches!(e.kind, TimelineEventKind::DotTick { .. }))
+                .count()
+        };
+        assert!(ticks(&wide) > ticks(&narrow));
     }
 
     #[test]

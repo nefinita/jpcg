@@ -468,6 +468,14 @@ fn prepare_request(catalog: &Catalog, req: &OptimizeRequest) -> Result<OptimizeR
         request.coeff = req.config.coefficient.clone();
         request.value_set = req.config.value_set.clone();
         *request = jpcg_combo::timeline_host::prepare_timeline_from_store(request.clone())?;
+        // 固定击杀范围：用基准（当前）配装跑一次得到 flag 窗口，所有候选共用同一绝对时间段，
+        // 避免攻速快的候选窗口变短、DOT 跳数变少而被系统性低估。
+        request.fixed_window = None;
+        if let Ok(base) = jpcg_combo::timeline_host::calculate_timeline(request.clone())
+            && let (Some(start), Some(end)) = (base.kill_start, base.kill_end)
+        {
+            request.fixed_window = Some([start, end]);
+        }
     }
     Ok(prepared)
 }

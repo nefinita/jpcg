@@ -33,6 +33,7 @@ fn req_full(
         },
         value_set: None,
         combat: Some(combat),
+        fixed_window: None,
         samples: 0,
         seed: None,
     }
@@ -763,6 +764,7 @@ fn kill_flag_scopes_kill_probability_with_full_hp_reset() {
         miji: vec![],
         initial_instrument: None,
         initial_qifeng: String::new(),
+        fixed_window: None,
         samples: 2000,
         seed: Some(42),
     };
@@ -830,6 +832,7 @@ fn kill_flag_validation_rejects_duplicates_and_bad_order() {
         miji: vec![],
         initial_instrument: None,
         initial_qifeng: String::new(),
+        fixed_window: None,
         samples: 0,
         seed: None,
     };
@@ -882,6 +885,7 @@ fn window_dps_uses_actual_damage_span() {
         miji: vec![],
         initial_instrument: None,
         initial_qifeng: String::new(),
+        fixed_window: None,
         samples: 0,
         seed: None,
     };
@@ -926,6 +930,7 @@ fn haste_overflow_beyond_cap_does_not_change_dps() {
         miji: vec![],
         initial_instrument: None,
         initial_qifeng: String::new(),
+        fixed_window: None,
         samples: 0,
         seed: None,
     };
@@ -1217,6 +1222,7 @@ fn kill_end_defaults_to_last_action_not_window() {
         miji: vec![],
         initial_instrument: None,
         initial_qifeng: String::new(),
+        fixed_window: None,
         samples: 100,
         seed: Some(42),
     };

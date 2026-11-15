@@ -21,12 +21,20 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ApiRequest {
     Validate {},
-    Compose { loadout: Loadout },
-    Optimize { request: Box<OptimizeRequest> },
+    Compose {
+        loadout: Loadout,
+    },
+    Optimize {
+        request: Box<OptimizeRequest>,
+    },
     /// 时间轴模拟（调试用）：直接返回 TimelineResultDTO，便于比对窗口/事件。
-    Timeline { request: Box<jpcg_api::TimelineRequestDTO> },
+    Timeline {
+        request: Box<jpcg_api::TimelineRequestDTO>,
+    },
     /// 由 loadout 合成并返回计算用 player 面板（调试/对拍用）。
-    Player { loadout: Box<Loadout> },
+    Player {
+        loadout: Box<Loadout>,
+    },
 }
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]

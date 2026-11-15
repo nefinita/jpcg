@@ -304,6 +304,7 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         window,
         samples: req.samples,
         seed: req.seed,
+        fixed_window: req.fixed_window.map(|w| (w[0], w[1])),
     });
 
     Ok(TimelineResultDTO::from(result))
@@ -501,6 +502,7 @@ mod tests {
             combat: None,
             samples: 0,
             seed: None,
+            fixed_window: None,
         }
     }
 
