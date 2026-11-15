@@ -23,6 +23,8 @@ pub enum ApiRequest {
     Validate {},
     Compose { loadout: Loadout },
     Optimize { request: Box<OptimizeRequest> },
+    /// 时间轴模拟（调试用）：直接返回 TimelineResultDTO，便于比对窗口/事件。
+    Timeline { request: Box<jpcg_api::TimelineRequestDTO> },
 }
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -49,6 +51,11 @@ pub fn call(catalog: &Catalog, input: &str) -> ApiResponse {
                 serde_json::to_value(optimize(catalog, &request, |_| true)?)
                     .map_err(|e| e.to_string())
             }
+            ApiRequest::Timeline { request } => jpcg_combo::timeline_host::calculate_timeline(
+                jpcg_combo::timeline_host::prepare_timeline_from_store(*request)?,
+            )
+            .map_err(|e| e.to_string())
+            .and_then(|r| serde_json::to_value(r).map_err(|e| e.to_string())),
         }
     }
     match run(catalog, input) {
