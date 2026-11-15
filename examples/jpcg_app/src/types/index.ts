@@ -464,8 +464,6 @@ export interface TimelineRequestDTO {
   initial_qifeng?: string;
   /** 激活的秘籍 id 列表 */
   miji?: string[];
-  /** 固定击杀范围（秒，[start,end]）：调优时所有候选共用同一绝对时间段。 */
-  fixed_window?: [number, number] | null;
   /** 激活的奇穴 id 列表 */
   qixue?: string[];
   /** 击杀率蒙特卡洛样本数（0 = 纯确定性） */

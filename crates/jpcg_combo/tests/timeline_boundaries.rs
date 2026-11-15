@@ -39,7 +39,6 @@ fn request() -> TimelineRequestDTO {
         miji: vec![],
         initial_instrument: None,
         initial_qifeng: String::new(),
-        fixed_window: None,
         samples: 100,
         seed: Some(1),
     }

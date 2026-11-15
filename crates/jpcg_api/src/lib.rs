@@ -755,10 +755,6 @@ pub struct TimelineRequestDTO {
     /// 激活的秘籍 id 列表（可选；激活后按 [[miji]] 的 modifiers 生效）
     #[serde(default)]
     pub miji: Vec<String>,
-    /// 固定击杀范围（秒，[start, end]）：调优时所有候选共用同一绝对时间段，
-    /// 避免攻速改变窗口长度；None = 由计算开始/结束 flag 自行推导。
-    #[serde(default)]
-    pub fixed_window: Option<[f32; 2]>,
     /// 初始器形 id（空 = 取 combat.forms 里 initial 的）
     #[serde(default)]
     pub initial_instrument: Option<String>,
