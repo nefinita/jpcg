@@ -647,6 +647,173 @@ fn score(
 
 // ============ 全核并行调优 ============
 
+/// 全量联合穷举：装备候选 × 附魔/五彩石（每个槽位必须选一个，不含「无」），多核并行。
+/// 不抽样、不使用预算；返回 `complete = true` 表示整个空间遍历完毕。
+pub fn optimize_joint(
+    catalog: &Catalog,
+    req: &OptimizeRequest,
+    progress: &OptimizeProgress,
+) -> Result<OptimizeResult, String> {
+    let prepared = prepare_request(catalog, req)?;
+    let req = &prepared;
+    let skill_table = jpcg_core::skill_editor::load_skills(&req.loadout.school);
+    let x = &skill_table.xinfa;
+    let dto = &req.config.xinfa_config;
+    if skill_table.skill.is_empty()
+        || x.xinfa_nom != dto.xinfa_nom
+        || x.atk_up != dto.atk_up
+        || x.pofang_up != dto.pofang_up
+        || x.huixin_up != dto.huixin_up
+    {
+        return Err("技能数据缺失或心法系数与现有计算器数据不一致".into());
+    }
+    let rules = crate::attributes::load_rules(&req.loadout)?;
+    let baseline_composed = catalog.compose_validated(&req.loadout, rules.as_ref())?;
+    let baseline_score = score(
+        req,
+        &baseline_composed,
+        &skill_table.skill,
+        &skill_table.xinfa,
+    )?;
+    let baseline = Candidate {
+        score: baseline_score,
+        composed: baseline_composed,
+    };
+    let (candidates, mut combinations) = build_candidates(catalog, req)?;
+    // 与 optimize_parallel 的 decoration_axes 不同：每个槽位必须选一个附魔（不含 None），
+    // 五彩石只要目录里有就必装，保证输出不会出现「无附魔」。
+    let mut axes: Vec<DecorationAxis> = Vec::new();
+    for slot in Slot::ALL {
+        let mut options: Vec<Option<String>> = catalog
+            .enchants
+            .iter()
+            .filter(|e| e.slot == slot)
+            .map(|e| Some(e.id.clone()))
+            .collect();
+        if options.len() > 1 {
+            options.sort();
+            axes.push((Some(slot), options));
+        }
+    }
+    if !catalog.wucai.is_empty() {
+        let mut options: Vec<Option<String>> =
+            catalog.wucai.iter().map(|w| Some(w.id.clone())).collect();
+        options.sort();
+        axes.push((None, options));
+    }
+    for (_, options) in &axes {
+        combinations = combinations
+            .checked_mul(options.len() as u64)
+            .ok_or("组合数溢出")?;
+    }
+    let total = combinations;
+    progress.total.store(total, Ordering::Relaxed);
+    progress.visited.store(0, Ordering::Relaxed);
+    progress.evaluated.store(0, Ordering::Relaxed);
+    progress.done.store(false, Ordering::Relaxed);
+    progress.cancel.store(false, Ordering::Relaxed);
+
+    let baseline_armor2 = armor2_count(catalog, &baseline.composed);
+    let mut result = OptimizeResult {
+        best: None,
+        baseline: baseline.clone(),
+        delta: None,
+        pareto: vec![],
+        progress: Progress {
+            visited: 0,
+            evaluated: 0,
+            combinations: total,
+        },
+        complete: false,
+        stop_reason: String::new(),
+        warnings: Vec::new(),
+    };
+    if req
+        .loadout
+        .choices
+        .iter()
+        .all(|c| req.constraints.permits(c))
+        && (req.constraints.allow_cross_source_2plus2 || baseline_armor2 <= 1)
+        && req.constraints.satisfied(&result.baseline.composed)?
+    {
+        result.best = Some(result.baseline.clone());
+        result.pareto.push(result.baseline.clone());
+    }
+    let shared: Mutex<(Option<Candidate>, Vec<Candidate>)> =
+        Mutex::new((result.best.clone(), result.pareto.clone()));
+
+    (0..total)
+        .into_par_iter()
+        .map_init(
+            BTreeMap::<String, f64>::new,
+            |cache, flat| -> Result<(), String> {
+                if progress.cancel.load(Ordering::Relaxed) {
+                    return Ok(());
+                }
+                progress.visited.fetch_add(1, Ordering::Relaxed);
+                let loadout = decode_loadout(flat, &candidates, &axes, &req.loadout);
+                let Ok(composed) = catalog.compose_validated(&loadout, rules.as_ref()) else {
+                    return Ok(());
+                };
+                let armor2 = armor2_count(catalog, &composed);
+                if !(req.constraints.allow_cross_source_2plus2 || armor2 <= 1) {
+                    return Ok(());
+                }
+                if !req.constraints.satisfied(&composed)? {
+                    return Ok(());
+                }
+                let key = serde_json::to_string(&(&composed.stats, &composed.cooldowns))
+                    .map_err(|e| e.to_string())?;
+                let value = if let Some(v) = cache.get(&key) {
+                    *v
+                } else {
+                    let v = score(req, &composed, &skill_table.skill, &skill_table.xinfa)?;
+                    cache.insert(key, v);
+                    progress.evaluated.fetch_add(1, Ordering::Relaxed);
+                    v
+                };
+                let candidate = Candidate {
+                    score: value,
+                    composed,
+                };
+                let mut guard = shared.lock().map_err(|_| "并行状态锁污染".to_string())?;
+                if guard.0.as_ref().is_none_or(|b| value > b.score) {
+                    guard.0 = Some(candidate.clone());
+                }
+                if !guard.1.iter().any(|p| dominates(p, &candidate)) {
+                    guard.1.retain(|p| !dominates(&candidate, p));
+                    guard.1.push(candidate);
+                }
+                Ok(())
+            },
+        )
+        .try_for_each(|r| r)?;
+
+    let (best, pareto) = shared
+        .into_inner()
+        .map_err(|_| "并行状态锁污染".to_string())?;
+    let visited = progress.visited.load(Ordering::Relaxed);
+    result.best = best;
+    result.delta = result
+        .best
+        .as_ref()
+        .map(|b| b.score - result.baseline.score);
+    result.pareto = pareto;
+    result.progress = Progress {
+        visited,
+        evaluated: progress.evaluated.load(Ordering::Relaxed),
+        combinations: total,
+    };
+    result.complete = visited >= total;
+    result.stop_reason = if progress.cancel.load(Ordering::Relaxed) {
+        "cancelled".into()
+    } else {
+        "exhausted".into()
+    };
+    progress.done.store(true, Ordering::Relaxed);
+    Ok(result)
+}
+
 /// 并行调优进度：原子字段供 Tauri 主线程轮询并发事件（worker 内不 emit）。
 #[derive(Default)]
 pub struct OptimizeProgress {
