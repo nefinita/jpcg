@@ -232,7 +232,7 @@ export default function App() {
         config: toCalculateRequest(formData),
         objective: { kind: "timeline", request, metric: opts.metric },
         constraints: { sources: ["mingjian", "weiwang", "baowu"], allow_upgraded: true, locked: [], banned: [], required_sources: {}, banned_sources: {}, stats, allow_cross_source_2plus2: true, required_sets: requiredSets },
-        max_combinations: 100000,
+        max_combinations: 1_000_000,
       });
       setOptResult({ result, metric: opts.metric });
       if (result.best) {

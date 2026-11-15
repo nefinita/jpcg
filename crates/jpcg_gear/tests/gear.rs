@@ -740,3 +740,32 @@ fn timeline_overrides_match_desktop_and_both_optimizer_paths() {
         assert_eq!(out.baseline.score, desktop.total_damage);
     }
 }
+
+#[test]
+fn allow_upgraded_searches_upgraded_tiers_only() {
+    if !runtime_child("allow_upgraded_searches_upgraded_tiers_only") {
+        return;
+    }
+    let c = catalog();
+    let mut r = request();
+    r.constraints = Constraints::default();
+    r.constraints.sources = vec![Source::Weiwang, Source::Mingjian];
+    r.constraints.allow_upgraded = true;
+    r.constraints.allow_cross_source_2plus2 = true;
+    r.max_combinations = 1_000_000;
+    for out in [
+        optimize(&c, &r, |_| true).unwrap(),
+        optimize_parallel(&c, &r, &OptimizeProgress::new()).unwrap(),
+    ] {
+        assert!(out.complete, "只考虑升级装备后空间应可全量遍历");
+        let best = out.best.expect("best");
+        assert!(
+            best.composed
+                .loadout
+                .choices
+                .iter()
+                .all(|ch| ch.tier == Tier::Upgraded),
+            "只考虑升级装备"
+        );
+    }
+}

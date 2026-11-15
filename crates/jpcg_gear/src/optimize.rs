@@ -112,77 +112,23 @@ fn dominates(a: &Candidate, b: &Candidate) -> bool {
         && x.huajin >= y.huajin
 }
 
-fn stats_ge(a: &Stats, b: &Stats) -> bool {
-    a.zhushuxing >= b.zhushuxing
-        && a.tizhi >= b.tizhi
-        && a.liliang >= b.liliang
-        && a.shenfa >= b.shenfa
-        && a.gengu >= b.gengu
-        && a.yuanqi >= b.yuanqi
-        && a.gongji >= b.gongji
-        && a.qixue >= b.qixue
-        && a.qixue_additional >= b.qixue_additional
-        && a.huixin >= b.huixin
-        && a.huixiao >= b.huixiao
-        && a.pofang >= b.pofang
-        && a.jiasu >= b.jiasu
-        && a.yujin >= b.yujin
-        && a.huajin >= b.huajin
-        && a.wuqi_shanghai >= b.wuqi_shanghai
-}
-
-fn template_total(t: &Template) -> Stats {
-    let mut total = t.stats.clone();
-    for extra in &t.sockets {
-        if total.add(extra).is_err() {
-            // 溢出视为不可支配（保守）
-            return Stats {
-                zhushuxing: u32::MAX,
-                ..Stats::default()
-            };
-        }
-    }
-    total
-}
-
-/// 每个槽位的候选组合；剪掉「被同槽/同来源/同变体的升级档逐项 >= 支配」的基础档。
-/// 避免预算截断时 odometer 前缀把基础档当成最优先、结果反而更差。
+/// 每个槽位的候选组合。
+/// 只考虑升级装备：`allow_upgraded` 且没有上限约束时，每个槽位只保留升级档（没有升级档则回退全部）。
+/// 存在上限约束时保留全部档位——上限可能只有基础档能满足。
 fn build_candidates(
     catalog: &Catalog,
     req: &OptimizeRequest,
 ) -> Result<(Vec<Vec<Choice>>, u64), String> {
-    let mut droppable: BTreeSet<(Slot, Source, u8)> = BTreeSet::new();
-    // 有上限时，属性更高不代表可行性更好，不能删去基础档。
     let has_upper_bound = req
         .constraints
         .stats
         .values()
         .any(|bounds| bounds.max.is_some());
-    for up in &catalog.templates {
-        if has_upper_bound
-            || up.school != req.loadout.school
-            || up.choice.tier != Tier::Upgraded
-            || !req.constraints.permits(&up.choice)
-        {
-            continue;
-        }
-        let base = catalog.templates.iter().find(|b| {
-            b.school == up.school
-                && b.choice.slot == up.choice.slot
-                && b.choice.source == up.choice.source
-                && b.choice.variant == up.choice.variant
-                && b.choice.tier == Tier::Base
-        });
-        if let Some(base) = base
-            && stats_ge(&template_total(up), &template_total(base))
-        {
-            droppable.insert((up.choice.slot, up.choice.source, up.choice.variant));
-        }
-    }
+    let only_upgraded = req.constraints.allow_upgraded && !has_upper_bound;
     let mut candidates = Vec::new();
     let mut combinations = 1u64;
     for slot in Slot::ALL {
-        let mut choices: Vec<_> = catalog
+        let all: Vec<Choice> = catalog
             .templates
             .iter()
             .filter(|t| {
@@ -190,12 +136,18 @@ fn build_candidates(
                     && t.choice.slot == slot
                     && req.constraints.permits(&t.choice)
             })
-            .filter(|t| {
-                !(t.choice.tier == Tier::Base
-                    && droppable.contains(&(t.choice.slot, t.choice.source, t.choice.variant)))
-            })
             .map(|t| t.choice.clone())
             .collect();
+        let mut choices = if only_upgraded {
+            let upgraded: Vec<Choice> = all
+                .iter()
+                .filter(|c| c.tier == Tier::Upgraded)
+                .cloned()
+                .collect();
+            if upgraded.is_empty() { all } else { upgraded }
+        } else {
+            all
+        };
         choices.sort();
         if choices.is_empty() {
             return Err(format!("槽位 {slot:?} 无候选（锁定或来源约束冲突）"));
@@ -208,9 +160,8 @@ fn build_candidates(
     Ok((candidates, combinations))
 }
 
-// 附魔/五彩石与模板共同构成搜索空间，硬约束只检查完整配装。
-// None 槽位代表五彩石；选项 None 代表不装备。预算覆盖全部维度。
 type DecorationAxis = (Option<Slot>, Vec<Option<String>>);
+
 fn decoration_axes(
     catalog: &Catalog,
     combinations: &mut u64,
