@@ -396,6 +396,58 @@ pub fn player(composed: &Composed) -> jpcg_api::PlayerConfigDTO {
         jiasu_dengji: stats.jiasu,
     }
 }
+/// 正态近似击杀率：总伤害 ≈ N(mean, variance)，P(D ≥ hp)。
+fn normal_kill_prob(mean: f64, variance: f64, hp: f64) -> f64 {
+    if hp <= 0.0 {
+        return 0.0;
+    }
+    if variance <= 1e-9 {
+        return if mean >= hp { 1.0 } else { 0.0 };
+    }
+    let z = (hp - mean) / variance.sqrt();
+    0.5 * erfc(z / std::f64::consts::SQRT_2)
+}
+
+fn erfc(x: f64) -> f64 {
+    1.0 - erf(x)
+}
+
+/// Abramowitz-Stegun 7.1.26；误差 < 1.5e-7，足够做搜索排序。
+fn erf(x: f64) -> f64 {
+    let sign = if x < 0.0 { -1.0 } else { 1.0 };
+    let x = x.abs();
+    let t = 1.0 / (1.0 + 0.3275911 * x);
+    let y = 1.0
+        - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t
+            + 0.254829592)
+            * t
+            * (-x * x).exp();
+    sign * y
+}
+
+/// 时间轴目标的确定性击杀率近似（总伤 + 方差的正态近似，不跑 MC）。
+/// 全量穷举用它做搜索指标，最后 Pareto 候选再用 50k MC 复核。
+fn approx_kill_prob(req: &OptimizeRequest, composed: &Composed) -> Result<f64, String> {
+    let Objective::Timeline { request, .. } = &req.objective else {
+        return Err("近似击杀率只用于时间轴目标".into());
+    };
+    let hp = if request.hostile.max_hp > 0 {
+        request.hostile.max_hp as f64
+    } else {
+        request.hostile.target_hp as f64
+    };
+    let mut r = request.clone();
+    r.player = player(composed);
+    r.samples = 0;
+    r.seed = None;
+    let result = jpcg_combo::timeline_host::calculate_timeline(r)?;
+    Ok(normal_kill_prob(
+        result.total_damage,
+        result.damage_variance,
+        hp,
+    ))
+}
+
 fn main_name(stat: MainStat) -> &'static str {
     match stat {
         MainStat::Liliang => "力道",
@@ -668,13 +720,26 @@ pub fn optimize_joint(
         return Err("技能数据缺失或心法系数与现有计算器数据不一致".into());
     }
     let rules = crate::attributes::load_rules(&req.loadout)?;
+    // 击杀率目标的全量穷举：搜索阶段用「确定性总伤 + 方差」的正态近似（无 MC，可全量遍历），
+    // 最后对 Pareto 候选做 50k MC 复核取真最优。
+    let kill_mode = matches!(
+        &req.objective,
+        Objective::Timeline {
+            metric: crate::TimelineMetric::KillProbability,
+            ..
+        }
+    );
     let baseline_composed = catalog.compose_validated(&req.loadout, rules.as_ref())?;
-    let baseline_score = score(
-        req,
-        &baseline_composed,
-        &skill_table.skill,
-        &skill_table.xinfa,
-    )?;
+    let baseline_score = if kill_mode {
+        approx_kill_prob(req, &baseline_composed)?
+    } else {
+        score(
+            req,
+            &baseline_composed,
+            &skill_table.skill,
+            &skill_table.xinfa,
+        )?
+    };
     let baseline = Candidate {
         score: baseline_score,
         composed: baseline_composed,
@@ -767,7 +832,11 @@ pub fn optimize_joint(
                 let value = if let Some(v) = cache.get(&key) {
                     *v
                 } else {
-                    let v = score(req, &composed, &skill_table.skill, &skill_table.xinfa)?;
+                    let v = if kill_mode {
+                        approx_kill_prob(req, &composed)?
+                    } else {
+                        score(req, &composed, &skill_table.skill, &skill_table.xinfa)?
+                    };
                     cache.insert(key, v);
                     progress.evaluated.fetch_add(1, Ordering::Relaxed);
                     v
@@ -793,6 +862,32 @@ pub fn optimize_joint(
         .into_inner()
         .map_err(|_| "并行状态锁污染".to_string())?;
     let visited = progress.visited.load(Ordering::Relaxed);
+    let mut best = best;
+    if kill_mode {
+        // 只对 Pareto 候选花 MC 预算：用真实 50k MC 击杀率复核，取真最优。
+        let mut mc_best: Option<Candidate> = None;
+        for c in &pareto {
+            let s = score(req, &c.composed, &skill_table.skill, &skill_table.xinfa)?;
+            if mc_best.as_ref().is_none_or(|b| s > b.score) {
+                mc_best = Some(Candidate {
+                    score: s,
+                    composed: c.composed.clone(),
+                });
+            }
+        }
+        let base_mc = score(
+            req,
+            &result.baseline.composed,
+            &skill_table.skill,
+            &skill_table.xinfa,
+        )?;
+        result.baseline.score = base_mc;
+        if let Some(mc) = mc_best
+            && mc.score >= base_mc
+        {
+            best = Some(mc);
+        }
+    }
     result.best = best;
     result.delta = result
         .best
@@ -1019,4 +1114,28 @@ pub fn optimize_parallel(
     }
     progress.done.store(true, Ordering::Relaxed);
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn erf_matches_known_values() {
+        assert!(erf(0.0).abs() < 1e-7);
+        assert!((erf(1.0) - 0.842_700_8).abs() < 1e-5);
+        assert!((erf(-1.0) + 0.842_700_8).abs() < 1e-5);
+    }
+
+    #[test]
+    fn normal_kill_prob_matches_known_values() {
+        // 均值 100、σ=10、目标 100 → 50%
+        assert!((normal_kill_prob(100.0, 100.0, 100.0) - 0.5).abs() < 1e-6);
+        // 目标远低于均值 → 接近 1；远高于 → 接近 0
+        assert!(normal_kill_prob(100.0, 100.0, 50.0) > 0.999);
+        assert!(normal_kill_prob(100.0, 100.0, 150.0) < 0.001);
+        // 方差 0 → 阈值判定
+        assert_eq!(normal_kill_prob(100.0, 0.0, 99.0), 1.0);
+        assert_eq!(normal_kill_prob(100.0, 0.0, 101.0), 0.0);
+    }
 }

@@ -360,6 +360,7 @@ impl From<timeline::TimelineResult> for TimelineResultDTO {
             events,
             steps,
             total_damage: r.total_damage,
+            damage_variance: r.damage_variance,
             window_dps: r.window_dps,
             skipped_actions: r.skipped_actions,
             final_instrument: r.final_instrument,

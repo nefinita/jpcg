@@ -837,6 +837,9 @@ pub struct TimelineResultDTO {
     /// 每个动作的结算结果（与请求 actions 一一对应；前端直接渲染，不再推导）
     pub steps: Vec<TimelineStepDTO>,
     pub total_damage: f64,
+    /// 窗口内总伤害方差（独立会心近似；供确定性击杀率近似）
+    #[serde(default)]
+    pub damage_variance: f64,
     pub window_dps: f64,
     pub skipped_actions: u32,
     /// 序列执行完后的器形 / 曲风（后端算好，前端直接显示）

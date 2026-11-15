@@ -210,18 +210,17 @@ export default function App() {
   const changeLoadout = (next: GearLoadout) => { ++actionRevision.current; setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } })); };
 
   /** 组装调优请求：app 调优与「导出全量穷举请求」共用同一份口径。 */
-  const buildOptimizeRequest = useCallback(async (opts: OptimizeOptions, exhaustive = false): Promise<GearOptimizeRequest | null> => {
+  const buildOptimizeRequest = useCallback(async (opts: OptimizeOptions): Promise<GearOptimizeRequest | null> => {
     if (!catalog || !loadout || !compatible || !rulesCurrent) { addToast("配装模板或职业规则尚未就绪", "warning"); return null; }
     if (!comboDraft.sequence.length) { addToast("请先在排轴器编辑连招", "warning"); return null; }
-    if (!exhaustive) {
-      const targetHp = Number(formData.hostile?.target_hp) || 0;
-      if (opts.metric === "kill_probability" && targetHp <= 0) { addToast("击杀率目标需要先设置目标血量", "warning"); return null; }
-    }
+    const targetHp = Number(formData.hostile?.target_hp) || 0;
+    if (opts.metric === "kill_probability" && targetHp <= 0) { addToast("击杀率目标需要先设置目标血量", "warning"); return null; }
     const arenaSet = catalog.sets.find((x) => x.source === "mingjian" && x.kind === "armor");
     const requiredSets: Record<string, number> = opts.arena4 && arenaSet ? { [arenaSet.id]: 4 } : {};
     const stats: Record<string, { min?: number; max?: number }> = opts.hasteMin != null ? { jiasu: { min: opts.hasteMin } } : {};
-    // 全量穷举只能用确定性指标（击杀率 50k MC 逐候选太慢），约束完全一致。
-    const metric: GearTimelineMetric = exhaustive ? "total_damage" : opts.metric;
+    // 全量穷举对击杀率目标用「总伤+方差」近似做搜索、Pareto 候选再 50k MC 复核；
+    // 采样调优则直接逐候选跑 50k MC。
+    const metric: GearTimelineMetric = opts.metric;
     const samples = metric === "kill_probability" ? 50000 : 0;
     const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
     const request = buildTimelineRequest(formData, bundle, comboDraft.sequence, comboDraft.miji ?? [], comboDraft.qixue ?? [], samples, samples > 0 ? 12345 : null);
@@ -235,7 +234,7 @@ export default function App() {
   }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, addToast]);
 
   const handleExportOptimizeRequest = useCallback(async (opts: OptimizeOptions) => {
-    const request = await buildOptimizeRequest(opts, true);
+    const request = await buildOptimizeRequest(opts);
     if (!request) return;
     const blob = new Blob([JSON.stringify(request, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -244,7 +243,7 @@ export default function App() {
     anchor.download = `jpcg-exhaustive-request-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    addToast("已导出全量穷举请求（确定性总伤口径，含当前约束）", "success");
+    addToast("已导出全量穷举请求（含当前约束；击杀率目标会先用总伤+方差近似搜索，再 MC 复核 Pareto）", "success");
   }, [buildOptimizeRequest, addToast]);
 
   const handleOptimize = useCallback(async (opts: OptimizeOptions) => {

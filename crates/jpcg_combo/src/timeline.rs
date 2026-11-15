@@ -336,6 +336,8 @@ pub struct TimelineResult {
     /// 每个动作一个步骤结果（与输入 actions 一一对应）
     pub steps: Vec<TimelineStep>,
     pub total_damage: f64,
+    /// 窗口内总伤害的方差（独立会心近似；击杀率近似用）
+    pub damage_variance: f64,
     pub window_dps: f64,
     /// 窗口内未能施放的动作数（GCD/CD/形态不满足或超出窗口）
     pub skipped_actions: u32,
@@ -1529,18 +1531,34 @@ impl<'a> Sim<'a> {
 
         // 总伤 / DPS 只统计测量窗口内的伤害。
         let mut total = 0f64;
+        // 窗口内总伤害的方差（各事件独立会心）：供「确定性总伤 + 方差」近似击杀率使用，
+        // 调优全量穷举用它做搜索指标（真实击杀率仍需 MC 复核）。
+        let mut variance = 0f64;
         let mut last_damage_time = 0.0f32;
         for e in &self.events {
-            let (damage, time) = match &e.kind {
+            let (damage, time, dice) = match &e.kind {
                 TimelineEventKind::Cast {
-                    damage, hit_time, ..
-                } => (*damage, *hit_time),
-                TimelineEventKind::ChannelTick { damage, .. } => (*damage, e.time),
-                TimelineEventKind::DotTick { damage, .. } => (*damage, e.time),
+                    damage,
+                    hit_time,
+                    dice,
+                    ..
+                } => (*damage, *hit_time, Some(*dice)),
+                TimelineEventKind::ChannelTick { damage, dice, .. } => {
+                    (*damage, e.time, Some(*dice))
+                }
+                TimelineEventKind::DotTick { damage, dice, .. } => (*damage, e.time, Some(*dice)),
                 _ => continue,
             };
             if in_window(e) {
                 total += damage as f64;
+                if let Some(d) = dice
+                    && !d.fixed
+                    && d.rate > 0.0
+                    && d.rate < 1.0
+                {
+                    let delta = (d.h as f64 - d.g as f64).abs();
+                    variance += d.rate as f64 * (1.0 - d.rate as f64) * delta * delta;
+                }
                 if damage > 0 {
                     last_damage_time = last_damage_time.max(time);
                 }
@@ -1641,6 +1659,7 @@ impl<'a> Sim<'a> {
             final_qifeng,
             window: self.input.window,
             total_damage: total,
+            damage_variance: variance,
             window_dps,
             skipped_actions: skipped,
             final_kill_prob,
