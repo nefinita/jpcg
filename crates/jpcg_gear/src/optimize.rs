@@ -852,15 +852,6 @@ pub fn optimize_joint(
                         if !(req.constraints.allow_cross_source_2plus2 || armor2 <= 1) {
                             return Ok(None);
                         }
-                        if f < 2 {
-                            eprintln!(
-                                "[debug] f={} jiasu={} sets={:?} satisfied={:?}",
-                                f,
-                                composed.stats.jiasu,
-                                composed.set_counts,
-                                req.constraints.satisfied(&composed)
-                            );
-                        }
                         if !req.constraints.satisfied(&composed)? {
                             return Ok(None);
                         }
@@ -881,20 +872,6 @@ pub fn optimize_joint(
                 .into_iter()
                 .flatten()
                 .collect();
-            if flat == 0 {
-                eprintln!(
-                    "[debug] constraints: stats={:?} required_sets={:?}",
-                    req.constraints.stats, req.constraints.required_sets
-                );
-            }
-            if flat < 3 * chunk {
-                eprintln!(
-                    "[debug] chunk {}: enumerated {}, feasible {}",
-                    flat / chunk,
-                    end - flat,
-                    jobs.len()
-                );
-            }
             if !jobs.is_empty() {
                 progress
                     .evaluated
