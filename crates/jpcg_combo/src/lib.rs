@@ -17,6 +17,7 @@ pub mod conv;
 pub mod engine;
 pub mod ffi;
 pub mod host;
+pub mod kill_mc;
 pub mod timeline;
 pub mod timeline_host;
 
