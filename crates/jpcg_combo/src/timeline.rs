@@ -230,22 +230,6 @@ pub struct DamageDice {
     pub lost_hp_factor: f32,
 }
 
-impl DamageDice {
-    fn roll(self, rng: &mut impl Rng) -> u32 {
-        if self.fixed {
-            self.q
-        } else if self.rate <= 0.0 || self.g == self.h {
-            self.g
-        } else if self.rate >= 1.0 {
-            self.h
-        } else if rng.random::<f64>() < self.rate as f64 {
-            self.h
-        } else {
-            self.g
-        }
-    }
-}
-
 /// 事件类型
 #[derive(Debug, Clone)]
 pub enum TimelineEventKind {

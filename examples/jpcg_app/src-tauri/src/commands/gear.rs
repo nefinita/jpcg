@@ -50,7 +50,10 @@ pub async fn optimize_gear(
     {
         use tauri::Manager;
         let state = app.state::<crate::OptimizeState>();
-        let mut guard = state.progress.lock().map_err(|_| "调优状态锁污染".to_string())?;
+        let mut guard = state
+            .progress
+            .lock()
+            .map_err(|_| "调优状态锁污染".to_string())?;
         *guard = Some(Arc::clone(&progress));
     }
     let monitor = {

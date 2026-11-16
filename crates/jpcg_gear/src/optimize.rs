@@ -474,7 +474,9 @@ pub fn optimize(
 ) -> Result<OptimizeResult, String> {
     let mut prepared = prepare_request(catalog, req)?;
     // 击杀率目标：CPU/GPU 批量 MC 与基准评分必须共用同一组样本（固定 seed）。
-    if let Objective::Timeline { request, metric, .. } = &mut prepared.objective
+    if let Objective::Timeline {
+        request, metric, ..
+    } = &mut prepared.objective
         && *metric == crate::TimelineMetric::KillProbability
         && request.seed.is_none()
     {
@@ -815,7 +817,9 @@ pub fn optimize_joint(
         // 击杀率目标：按选中后端的批量精确 MC（CPU AVX-512 / wgpu）逐批评分。
         let backend = req.compute.clone().unwrap_or_else(|| "cpu".to_string());
         let gpu = if let Some(idx) = backend.strip_prefix("wgpu:") {
-            let index: usize = idx.parse().map_err(|_| format!("非法计算后端: {backend}"))?;
+            let index: usize = idx
+                .parse()
+                .map_err(|_| format!("非法计算后端: {backend}"))?;
             Some(jpcg_compute::WgpuCompute::new(index)?)
         } else {
             None
