@@ -38,11 +38,21 @@ export interface GearConstraints {
   required_sets?: Record<string, number>;
 }
 export type GearTimelineMetric = "total_damage" | "window_dps" | "kill_probability";
-/** 自动调优的选项（目标指标 + 约束）。 */
+/** 可用的计算后端（CPU 或 wgpu 适配器）。 */
+export interface ComputeBackend {
+  id: string;
+  kind: "cpu" | "wgpu";
+  label: string;
+  detail: string;
+  available: boolean;
+}
+/** 自动调优的选项（目标指标 + 约束 + 计算平台）。 */
 export interface OptimizeOptions {
   metric: "kill_probability" | "window_dps";
   arena4: boolean;
   hasteMin: number | null;
+  /** 计算平台 id（cpu / wgpu:<n>；null = 自动/CPU）。 */
+  compute: string | null;
 }
 export type GearObjective =
   | { kind: "expected"; weights: Record<string, number> }
@@ -54,6 +64,8 @@ export interface GearOptimizeRequest {
   objective: GearObjective;
   constraints: GearConstraints;
   max_combinations: number;
+  /** 计算平台 id（cpu / wgpu:<n>；空 = CPU）。 */
+  compute?: string | null;
 }
 export interface GearCandidate { composed: GearComposed; score: number }
 export interface GearProgress { visited: number; evaluated: number; combinations: number }

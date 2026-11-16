@@ -1,5 +1,6 @@
 pub mod calculate;
 pub mod combo;
+pub mod compute;
 pub mod config;
 pub mod data;
 #[cfg(feature = "dynamic")]

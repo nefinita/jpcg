@@ -300,6 +300,10 @@ function _sanitizeNumbers(obj: Record<string, unknown>): Record<string, unknown>
 async function mockResponse(command: string, args?: Record<string, unknown>): Promise<unknown> {
   await new Promise((r) => setTimeout(r, 200));
   switch (command) {
+    case "list_compute_backends":
+      return [{ id: "cpu", kind: "cpu", label: "CPU（浏览器演示）", detail: "非桌面环境", available: true }];
+    case "cancel_gear_optimize":
+      return null;
     case "panel_stats":
       // 浏览器仅演示固定结果，不能以 JS 实现另一套属性公式。
       return { huixin_pct: 30, pofang_pct: 45, jianshang_pct: 0 };
@@ -676,6 +680,15 @@ export async function importGear(toml: string): Promise<import("../types/gear").
 export async function optimizeGear(request: import("../types/gear").GearOptimizeRequest): Promise<import("../types/gear").GearOptimizeResult> {
   if (!isTauri()) throw new Error("配装调优需要桌面应用");
   return invoke("optimize_gear", { request: { ...request, loadout: sanitizeGearLoadout(request.loadout) } });
+}
+
+/** 列举本机可用计算平台（CPU / wgpu 适配器）。 */
+export async function listComputeBackends(): Promise<import("../types/gear").ComputeBackend[]> {
+  return invoke("list_compute_backends");
+}
+/** 停止当前正在进行的配装调优。 */
+export async function cancelGearOptimize(): Promise<void> {
+  return invoke("cancel_gear_optimize");
 }
 
 export async function panelStats(req: CalculateRequest): Promise<PanelStatsDTO> {

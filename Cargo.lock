@@ -2419,6 +2419,7 @@ version = "2.2.0-alpha.1"
 dependencies = [
  "jpcg_api",
  "jpcg_combo",
+ "jpcg_compute",
  "jpcg_const",
  "jpcg_core",
  "jpcg_gear",
@@ -2480,6 +2481,7 @@ dependencies = [
  "clap",
  "jpcg_api",
  "jpcg_combo",
+ "jpcg_compute",
  "jpcg_core",
  "libloading 0.9.0",
  "rayon",

@@ -370,6 +370,9 @@ pub struct OptimizeRequest {
     pub constraints: Constraints,
     /// 枚举叶子上限，包含违反硬约束的组合；不虚报全局最优。
     pub max_combinations: u64,
+    /// 计算后端 id（`cpu` / `wgpu:<n>`；空 = CPU）。
+    #[serde(default)]
+    pub compute: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Candidate {

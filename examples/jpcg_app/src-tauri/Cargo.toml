@@ -27,6 +27,7 @@ toml.workspace = true
 reqwest = { workspace = true }
 jpcg_api = { workspace = true }
 jpcg_gear = { workspace = true }
+jpcg_compute = { workspace = true, optional = true }
 jpcg_const = { workspace = true }
 # 双模式：
 #   static  （默认）— 编译期链接 core，Rust 直调 host 模块
@@ -39,5 +40,5 @@ libloading = { version = "0.9", optional = true }
 
 [features]
 default = ["static"]
-static = ["dep:jpcg_core", "dep:jpcg_combo", "jpcg_gear/engine"]
+static = ["dep:jpcg_core", "dep:jpcg_combo", "dep:jpcg_compute", "jpcg_gear/engine"]
 dynamic = ["dep:libloading"]

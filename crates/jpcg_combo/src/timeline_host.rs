@@ -146,8 +146,8 @@ fn validate_selection(
     Ok(())
 }
 
-/// 时间轴模拟（DTO 请求 → 结果 DTO）
-pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+/// 组装时间轴输入（DTO → 引擎输入），供模拟与批量 MC 共用。
+pub fn build_timeline_input(req: TimelineRequestDTO) -> Result<timeline::TimelineInput, String> {
     let (player, hostile, xinfa, buff, coeff) = super::host::into_core(
         req.player,
         req.hostile,
@@ -287,7 +287,7 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         .collect();
     let window = if req.window > 0.0 { req.window } else { 300.0 };
 
-    let result = timeline::simulate(&TimelineInput {
+    Ok(TimelineInput {
         player,
         hostile,
         xinfa,
@@ -304,9 +304,60 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         window,
         samples: req.samples,
         seed: req.seed,
-    });
+    })
+}
 
-    Ok(TimelineResultDTO::from(result))
+/// 时间轴模拟（DTO 请求 → 结果 DTO）
+pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    let input = build_timeline_input(req)?;
+    Ok(TimelineResultDTO::from(timeline::simulate(&input)))
+}
+
+/// 批量 MC 输入：窗口内伤害事件（按结算时刻排序，与引擎内 MC 同序）+ 初始血量 + 确定性总伤。
+pub struct TimelineMcInput {
+    pub events: Vec<crate::kill_mc::McEvent>,
+    pub hp0: f64,
+    pub total_damage: f64,
+}
+
+/// 时间轴 → 批量 MC 输入（供 CPU/wgpu 后端跑精确 50k MC）。
+pub fn timeline_mc_input(req: TimelineRequestDTO) -> Result<TimelineMcInput, String> {
+    let input = build_timeline_input(req)?;
+    let hp0 = if input.hostile.max_hp > 0 {
+        input.hostile.max_hp as f64
+    } else {
+        input.hostile.target_hp as f64
+    };
+    let result = timeline::simulate(&input);
+    let mut timed: Vec<(f32, crate::kill_mc::McEvent)> = Vec::new();
+    for e in &result.visible_events {
+        let (time, dice) = match &e.kind {
+            TimelineEventKind::Cast { hit_time, dice, .. } => (*hit_time, *dice),
+            TimelineEventKind::ChannelTick { dice, .. } => (e.time, *dice),
+            TimelineEventKind::DotTick { dice, .. } => (e.time, *dice),
+            _ => continue,
+        };
+        let (g, h, rate) = if dice.fixed {
+            (dice.q, dice.q, 1.0_f32)
+        } else {
+            (dice.g, dice.h, dice.rate)
+        };
+        timed.push((
+            time,
+            crate::kill_mc::McEvent {
+                g,
+                h,
+                rate,
+                lost: dice.lost_hp_factor,
+            },
+        ));
+    }
+    timed.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Ok(TimelineMcInput {
+        events: timed.into_iter().map(|(_, ev)| ev).collect(),
+        hp0,
+        total_damage: result.total_damage,
+    })
 }
 
 impl From<timeline::TimelineResult> for TimelineResultDTO {

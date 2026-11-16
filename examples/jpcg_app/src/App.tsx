@@ -230,8 +230,18 @@ export default function App() {
       objective: { kind: "timeline", request, metric },
       constraints: { sources: ["mingjian", "weiwang", "baowu"], allow_upgraded: true, locked: [], banned: [], required_sources: {}, banned_sources: {}, stats, allow_cross_source_2plus2: true, required_sets: requiredSets },
       max_combinations: 1_000_000,
+      compute: opts.compute,
     };
   }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, addToast]);
+
+  const handleCancelOptimize = useCallback(async () => {
+    try {
+      await api.cancelGearOptimize();
+      addToast("已请求停止调优", "info");
+    } catch (err) {
+      addToast(String(err), "error");
+    }
+  }, [addToast]);
 
   const handleExportOptimizeRequest = useCallback(async (opts: OptimizeOptions) => {
     const request = await buildOptimizeRequest(opts);
@@ -353,7 +363,7 @@ export default function App() {
             {catalog && loadout && <GearPanel catalog={catalog} loadout={loadout} composition={composition} pending={stale || calculating}
               onOptimize={(options) => void handleOptimize(options)} optimizing={optimizing} optProgress={optProgress} optResult={optResult} onChange={changeLoadout}
               onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
-              onExport={() => void exportLoadout()} onImport={importLoadout} onExportRequest={(options) => void handleExportOptimizeRequest(options)} />}
+              onExport={() => void exportLoadout()} onImport={importLoadout} onExportRequest={(options) => void handleExportOptimizeRequest(options)} onCancel={() => void handleCancelOptimize()} />}
             {resultPanel}
           </div>
         </> : <div className={styles.manualBody}><div className={styles.configPanel}>{configPanel}</div>{resultPanel}</div>}

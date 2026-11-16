@@ -1,6 +1,7 @@
-import { useState } from "react";
-import type { GearCatalog, GearChoice, GearComposition, GearLoadout, OptimizeOptions, GearOptimizeResult } from "../types/gear";
+import { useEffect, useState } from "react";
+import type { ComputeBackend, GearCatalog, GearChoice, GearComposition, GearLoadout, OptimizeOptions, GearOptimizeResult } from "../types/gear";
 import { GEAR_SLOTS, emptyGearStats } from "../types/gear";
+import { listComputeBackends } from "../api/commands";
 import { choiceKey, slotNames, sourceNames, greenNames, statNames, PROFESSION_ATTRIBUTE_RULES } from "../state/gear";
 import styles from "./GearPanel.module.css";
 
@@ -8,13 +9,21 @@ const convertedFields = ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue
 /** 跨门派装备的显示名；后端 schools 里暂无 name 字段。 */
 const SCHOOL_NAMES: Record<string, string> = { mowen: "莫问", bingxin: "冰心" };
 
-export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, optimizing, optProgress, optResult, pending }: {
+export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, onCancel, optimizing, optProgress, optResult, pending }: {
   catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
   onChange: (loadout: GearLoadout) => void; onReset: () => void; onExport: () => void;
-  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; onExportRequest?: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
+  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; onExportRequest?: (options: OptimizeOptions) => void; onCancel?: () => void; optimizing: boolean; optProgress?: number | null;
   optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
 }) {
-  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: true, hasteMin: 928 });
+  const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: true, hasteMin: 928, compute: null });
+  const [backends, setBackends] = useState<ComputeBackend[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void Promise.resolve(listComputeBackends())
+      .then((list) => { if (alive && Array.isArray(list)) setBackends(list); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const arenaSet = catalog.sets.find((s) => s.source === "mingjian" && s.kind === "armor");
   const stale = loadout.revision !== catalog.version.revision || loadout.value_set !== catalog.version.value_set;
   const panel = loadout.attribute_rules === PROFESSION_ATTRIBUTE_RULES
@@ -27,6 +36,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
       <div><h2>当前配装</h2><p>{catalog.version.sample ? "合成测试样例 · 非游戏装备数值" : `赛季 ${catalog.version.season}`} · {catalog.version.revision}</p></div>
       <div className={styles.actions}>
         <button onClick={() => onOptimize(opts)} disabled={optimizing || pending}>{optimizing ? (optProgress != null ? `调优中 ${optProgress}%` : "调优中…") : "自动调优"}</button>
+        {optimizing && onCancel && <button onClick={onCancel} title="停止当前调优计算">停止</button>}
         <button onClick={onReset}>重置配装</button>
         <button onClick={onExport} disabled={stale}>导出配装</button>
         <label>导入配装<input type="file" accept=".toml" onChange={(e) => {
@@ -40,6 +50,12 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
         <select value={opts.metric} onChange={(e) => setOpts((p) => ({ ...p, metric: e.target.value as OptimizeOptions["metric"] }))}>
           <option value="kill_probability">击杀率</option>
           <option value="window_dps">区间 DPS</option>
+        </select>
+      </label>
+      <label title="选择调优时精确 MC 的计算平台">平台
+        <select value={opts.compute ?? "auto"} onChange={(e) => setOpts((p) => ({ ...p, compute: e.target.value === "auto" ? null : e.target.value }))}>
+          <option value="auto">自动（CPU）</option>
+          {backends.filter((b) => b.available).map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
         </select>
       </label>
       <label><input type="checkbox" checked={opts.arena4} disabled={!arenaSet}

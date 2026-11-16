@@ -472,7 +472,19 @@ pub fn optimize(
     req: &OptimizeRequest,
     on_progress: impl FnMut(Progress) -> bool,
 ) -> Result<OptimizeResult, String> {
-    let prepared = prepare_request(catalog, req)?;
+    let mut prepared = prepare_request(catalog, req)?;
+    // 击杀率目标：CPU/GPU 批量 MC 与基准评分必须共用同一组样本（固定 seed）。
+    if let Objective::Timeline { request, metric, .. } = &mut prepared.objective
+        && *metric == crate::TimelineMetric::KillProbability
+        && request.seed.is_none()
+    {
+        request.seed = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(42),
+        );
+    }
     let req = &prepared;
     let skill_table = jpcg_core::skill_editor::load_skills(&req.loadout.school);
     let x = &skill_table.xinfa;
@@ -720,8 +732,7 @@ pub fn optimize_joint(
         return Err("技能数据缺失或心法系数与现有计算器数据不一致".into());
     }
     let rules = crate::attributes::load_rules(&req.loadout)?;
-    // 击杀率目标的全量穷举：搜索阶段用「确定性总伤 + 方差」的正态近似（无 MC，可全量遍历），
-    // 最后对 Pareto 候选做 50k MC 复核取真最优。
+    // 击杀率目标走「按后端的批量精确 MC」（CPU AVX-512 / wgpu），其余指标走原有逐候选评分。
     let kill_mode = matches!(
         &req.objective,
         Objective::Timeline {
@@ -730,16 +741,12 @@ pub fn optimize_joint(
         }
     );
     let baseline_composed = catalog.compose_validated(&req.loadout, rules.as_ref())?;
-    let baseline_score = if kill_mode {
-        approx_kill_prob(req, &baseline_composed)?
-    } else {
-        score(
-            req,
-            &baseline_composed,
-            &skill_table.skill,
-            &skill_table.xinfa,
-        )?
-    };
+    let baseline_score = score(
+        req,
+        &baseline_composed,
+        &skill_table.skill,
+        &skill_table.xinfa,
+    )?;
     let baseline = Candidate {
         score: baseline_score,
         composed: baseline_composed,
@@ -804,9 +811,117 @@ pub fn optimize_joint(
         result.best = Some(result.baseline.clone());
         result.pareto.push(result.baseline.clone());
     }
+    if kill_mode {
+        // 击杀率目标：按选中后端的批量精确 MC（CPU AVX-512 / wgpu）逐批评分。
+        let backend = req.compute.clone().unwrap_or_else(|| "cpu".to_string());
+        let gpu = if let Some(idx) = backend.strip_prefix("wgpu:") {
+            let index: usize = idx.parse().map_err(|_| format!("非法计算后端: {backend}"))?;
+            Some(jpcg_compute::WgpuCompute::new(index)?)
+        } else {
+            None
+        };
+        let multi = match &req.objective {
+            Objective::Timeline { request, .. } => request,
+            _ => unreachable!(),
+        };
+        let samples = multi.samples.max(1);
+        let seed = multi.seed.unwrap_or(0);
+        let mut best = result.best.clone();
+        let mut pareto = result.pareto.clone();
+        let chunk: u64 = 32768;
+        let mut flat = 0u64;
+        while flat < total {
+            if progress.cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            let end = (flat + chunk).min(total);
+            let jobs: Vec<(Composed, jpcg_compute::CandidateMc, f64)> = (flat..end)
+                .into_par_iter()
+                .map(
+                    |f| -> Result<Option<(Composed, jpcg_compute::CandidateMc, f64)>, String> {
+                        let loadout = decode_loadout(f, &candidates, &axes, &req.loadout);
+                        let Ok(composed) = catalog.compose_validated(&loadout, rules.as_ref())
+                        else {
+                            return Ok(None);
+                        };
+                        let armor2 = armor2_count(catalog, &composed);
+                        if !(req.constraints.allow_cross_source_2plus2 || armor2 <= 1) {
+                            return Ok(None);
+                        }
+                        if !req.constraints.satisfied(&composed)? {
+                            return Ok(None);
+                        }
+                        let mut r = multi.clone();
+                        r.player = crate::player(&composed);
+                        let mc = jpcg_combo::timeline_host::timeline_mc_input(r)?;
+                        Ok(Some((
+                            composed,
+                            jpcg_compute::CandidateMc {
+                                events: mc.events,
+                                hp0: mc.hp0,
+                            },
+                            mc.total_damage,
+                        )))
+                    },
+                )
+                .collect::<Result<Vec<_>, String>>()?
+                .into_iter()
+                .flatten()
+                .collect();
+            if !jobs.is_empty() {
+                progress
+                    .evaluated
+                    .fetch_add(jobs.len() as u64, Ordering::Relaxed);
+                let (metas, mcs): (Vec<(Composed, f64)>, Vec<jpcg_compute::CandidateMc>) = jobs
+                    .into_iter()
+                    .map(|(composed, mc, damage)| ((composed, damage), mc))
+                    .unzip();
+                let kills = if let Some(gpu) = &gpu {
+                    gpu.run(&mcs, samples, seed)?
+                } else {
+                    jpcg_compute::run_cpu(&mcs, samples, seed)
+                };
+                for ((composed, total_damage), kill) in metas.into_iter().zip(kills) {
+                    let value = kill as f64 / samples as f64 + total_damage * 1e-12;
+                    let candidate = Candidate {
+                        score: value,
+                        composed,
+                    };
+                    if best.as_ref().is_none_or(|b| value > b.score) {
+                        best = Some(candidate.clone());
+                    }
+                    if !pareto.iter().any(|p| dominates(p, &candidate)) {
+                        pareto.retain(|p| !dominates(&candidate, p));
+                        pareto.push(candidate);
+                    }
+                }
+            }
+            progress.visited.fetch_add(end - flat, Ordering::Relaxed);
+            flat = end;
+        }
+        result.best = best;
+        result.pareto = pareto;
+        result.delta = result
+            .best
+            .as_ref()
+            .map(|b| b.score - result.baseline.score);
+        result.progress = Progress {
+            visited: progress.visited.load(Ordering::Relaxed),
+            evaluated: progress.evaluated.load(Ordering::Relaxed),
+            combinations: total,
+        };
+        result.complete = result.progress.visited >= total;
+        result.stop_reason = if progress.cancel.load(Ordering::Relaxed) {
+            "cancelled".into()
+        } else {
+            "exhausted".into()
+        };
+        progress.done.store(true, Ordering::Relaxed);
+        return Ok(result);
+    }
+
     let shared: Mutex<(Option<Candidate>, Vec<Candidate>)> =
         Mutex::new((result.best.clone(), result.pareto.clone()));
-
     (0..total)
         .into_par_iter()
         .map_init(
@@ -862,32 +977,6 @@ pub fn optimize_joint(
         .into_inner()
         .map_err(|_| "并行状态锁污染".to_string())?;
     let visited = progress.visited.load(Ordering::Relaxed);
-    let mut best = best;
-    if kill_mode {
-        // 只对 Pareto 候选花 MC 预算：用真实 50k MC 击杀率复核，取真最优。
-        let mut mc_best: Option<Candidate> = None;
-        for c in &pareto {
-            let s = score(req, &c.composed, &skill_table.skill, &skill_table.xinfa)?;
-            if mc_best.as_ref().is_none_or(|b| s > b.score) {
-                mc_best = Some(Candidate {
-                    score: s,
-                    composed: c.composed.clone(),
-                });
-            }
-        }
-        let base_mc = score(
-            req,
-            &result.baseline.composed,
-            &skill_table.skill,
-            &skill_table.xinfa,
-        )?;
-        result.baseline.score = base_mc;
-        if let Some(mc) = mc_best
-            && mc.score >= base_mc
-        {
-            best = Some(mc);
-        }
-    }
     result.best = best;
     result.delta = result
         .best

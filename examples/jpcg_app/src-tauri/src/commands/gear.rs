@@ -46,6 +46,13 @@ pub async fn optimize_gear(
     use std::sync::atomic::Ordering;
     use tauri::Emitter;
     let progress = Arc::new(jpcg_gear::OptimizeProgress::new());
+    // 记录当前调优进度，供前端「停止」按钮取消。
+    {
+        use tauri::Manager;
+        let state = app.state::<crate::OptimizeState>();
+        let mut guard = state.progress.lock().map_err(|_| "调优状态锁污染".to_string())?;
+        *guard = Some(Arc::clone(&progress));
+    }
     let monitor = {
         let progress = Arc::clone(&progress);
         let app = app.clone();
@@ -65,13 +72,37 @@ pub async fn optimize_gear(
     let p = Arc::clone(&progress);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let catalog = jpcg_gear::host::catalog()?;
-        jpcg_gear::optimize_parallel(&catalog, &request, &p)
+        jpcg_gear::optimize_joint(&catalog, &request, &p)
     })
     .await
     .map_err(|e| e.to_string());
     progress.done.store(true, Ordering::Relaxed);
     let _ = monitor.join();
+    {
+        use tauri::Manager;
+        let state = app.state::<crate::OptimizeState>();
+        if let Ok(mut guard) = state.progress.lock() {
+            *guard = None;
+        }
+    }
     result?
+}
+
+/// 取消当前正在进行的配装调优（静态模式的 optimize_joint 会尽快退出）。
+#[tauri::command]
+pub fn cancel_gear_optimize(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(feature = "static")]
+    {
+        use tauri::Manager;
+        let state = app.state::<crate::OptimizeState>();
+        if let Ok(guard) = state.progress.lock()
+            && let Some(progress) = guard.as_ref()
+        {
+            progress.cancel();
+        }
+    }
+    let _ = app;
+    Ok(())
 }
 
 #[cfg(feature = "dynamic")]

@@ -1,8 +1,15 @@
 mod commands;
 
+/// 运行中的调优进度（供「停止」按钮置 cancel）。
+#[derive(Default)]
+pub struct OptimizeState {
+    pub progress: std::sync::Mutex<Option<std::sync::Arc<jpcg_gear::OptimizeProgress>>>,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(OptimizeState::default())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::calculate::calculate_damage,
@@ -12,6 +19,8 @@ pub fn run() {
             commands::gear::export_gear,
             commands::gear::import_gear,
             commands::gear::optimize_gear,
+            commands::gear::cancel_gear_optimize,
+            commands::compute::list_compute_backends,
             commands::config::save_config_cmd,
             commands::config::load_config_cmd,
             commands::config::list_professions_cmd,
