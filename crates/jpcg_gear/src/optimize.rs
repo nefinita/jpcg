@@ -715,6 +715,9 @@ fn score(
 
 /// 全量联合穷举：装备候选 × 附魔/五彩石（每个槽位必须选一个，不含「无」），多核并行。
 /// 不抽样、不使用预算；返回 `complete = true` 表示整个空间遍历完毕。
+pub static PROF_COMPOSE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static PROF_MC: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub fn optimize_joint(
     catalog: &Catalog,
     req: &OptimizeRequest,
@@ -846,11 +849,16 @@ pub fn optimize_joint(
                 .map_init(
                     || template.clone(),
                     |tpl, f| -> Result<Option<(Composed, jpcg_compute::CandidateMc, f64)>, String> {
+                        let t_compose = std::time::Instant::now();
                         let loadout = decode_loadout(f, &candidates, &axes, &req.loadout);
                         let Ok(composed) = catalog.compose_validated(&loadout, rules.as_ref())
                         else {
                             return Ok(None);
                         };
+                        PROF_COMPOSE.fetch_add(
+                            t_compose.elapsed().as_nanos() as u64,
+                            Ordering::Relaxed,
+                        );
                         let armor2 = armor2_count(catalog, &composed);
                         if !(req.constraints.allow_cross_source_2plus2 || armor2 <= 1) {
                             return Ok(None);
@@ -858,8 +866,10 @@ pub fn optimize_joint(
                         if !req.constraints.satisfied(&composed)? {
                             return Ok(None);
                         }
+                        let t_mc = std::time::Instant::now();
                         tpl.set_player(crate::player(&composed));
                         let mc = tpl.mc_input()?;
+                        PROF_MC.fetch_add(t_mc.elapsed().as_nanos() as u64, Ordering::Relaxed);
                         Ok(Some((
                             composed,
                             jpcg_compute::CandidateMc {
@@ -903,6 +913,14 @@ pub fn optimize_joint(
                 }
             }
             progress.visited.fetch_add(end - flat, Ordering::Relaxed);
+            if flat % (chunk * 8) == 0 {
+                eprintln!(
+                    "[prof] visited={} compose={:.2}ms mc={:.2}ms",
+                    flat,
+                    PROF_COMPOSE.load(Ordering::Relaxed) as f64 / 1e6,
+                    PROF_MC.load(Ordering::Relaxed) as f64 / 1e6
+                );
+            }
             flat = end;
         }
         result.best = best;
