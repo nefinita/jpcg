@@ -830,6 +830,8 @@ pub fn optimize_joint(
         };
         let samples = multi.samples.max(1);
         let seed = multi.seed.unwrap_or(0);
+        // 与玩家无关的时间轴部分只构建一次；每个线程克隆一份模板，逐候选只替换 player。
+        let template = jpcg_combo::timeline_host::TimelineTemplate::new(multi.clone())?;
         let mut best = result.best.clone();
         let mut pareto = result.pareto.clone();
         let chunk: u64 = 32768;
@@ -841,8 +843,9 @@ pub fn optimize_joint(
             let end = (flat + chunk).min(total);
             let jobs: Vec<(Composed, jpcg_compute::CandidateMc, f64)> = (flat..end)
                 .into_par_iter()
-                .map(
-                    |f| -> Result<Option<(Composed, jpcg_compute::CandidateMc, f64)>, String> {
+                .map_init(
+                    || template.clone(),
+                    |tpl, f| -> Result<Option<(Composed, jpcg_compute::CandidateMc, f64)>, String> {
                         let loadout = decode_loadout(f, &candidates, &axes, &req.loadout);
                         let Ok(composed) = catalog.compose_validated(&loadout, rules.as_ref())
                         else {
@@ -855,9 +858,8 @@ pub fn optimize_joint(
                         if !req.constraints.satisfied(&composed)? {
                             return Ok(None);
                         }
-                        let mut r = multi.clone();
-                        r.player = crate::player(&composed);
-                        let mc = jpcg_combo::timeline_host::timeline_mc_input(r)?;
+                        tpl.set_player(crate::player(&composed));
+                        let mc = tpl.mc_input()?;
                         Ok(Some((
                             composed,
                             jpcg_compute::CandidateMc {

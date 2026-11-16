@@ -320,15 +320,42 @@ pub struct TimelineMcInput {
     pub total_damage: f64,
 }
 
+/// 与玩家无关的时间轴模板：构建一次，之后只替换 player 复用（批量 MC 用）。
+#[derive(Clone)]
+pub struct TimelineTemplate {
+    input: timeline::TimelineInput,
+}
+
+impl TimelineTemplate {
+    pub fn new(req: TimelineRequestDTO) -> Result<Self, String> {
+        Ok(Self {
+            input: build_timeline_input(req)?,
+        })
+    }
+
+    /// 替换候选玩家（配装合成出的 player 面板）。
+    pub fn set_player(&mut self, player: jpcg_api::PlayerConfigDTO) {
+        self.input.player = jpcg_core::type_set::player::PlayerConfig::from(player);
+    }
+
+    /// 用当前玩家跑确定性 MC 输入（窗口内 McEvent + hp0 + 总伤）。
+    pub fn mc_input(&self) -> Result<TimelineMcInput, String> {
+        mc_input_from_input(&self.input)
+    }
+}
+
 /// 时间轴 → 批量 MC 输入（供 CPU/wgpu 后端跑精确 50k MC）。
 pub fn timeline_mc_input(req: TimelineRequestDTO) -> Result<TimelineMcInput, String> {
-    let input = build_timeline_input(req)?;
+    mc_input_from_input(&build_timeline_input(req)?)
+}
+
+fn mc_input_from_input(input: &timeline::TimelineInput) -> Result<TimelineMcInput, String> {
     let hp0 = if input.hostile.max_hp > 0 {
         input.hostile.max_hp as f64
     } else {
         input.hostile.target_hp as f64
     };
-    let result = timeline::simulate(&input);
+    let result = timeline::simulate(input);
     let mut timed: Vec<(f32, crate::kill_mc::McEvent)> = Vec::new();
     for e in &result.visible_events {
         let (time, dice) = match &e.kind {
