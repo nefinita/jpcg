@@ -1595,49 +1595,52 @@ impl<'a> Sim<'a> {
                     })
                     .collect();
                 damage_events.sort_by(|a, b| a.0.total_cmp(&b.0));
-                let n = self.input.samples.max(1) as usize;
-                let mut rng = match self.input.seed {
-                    Some(seed) => StdRng::seed_from_u64(seed),
-                    None => StdRng::from_os_rng(),
-                };
-                let mut kills_at = vec![0u64; steps.len()];
-                for _ in 0..n {
-                    let mut cur = hp0;
-                    let mut killed: Option<(f32, usize, bool)> = None;
-                    for (t, dice, owner, is_dot) in &damage_events {
-                        cur = (cur - dice.roll(&mut rng) as f64).max(0.0);
-                        let extra = jpcg_core::engine::atkcal::lost_hp_append_damage(
-                            dice.lost_hp_factor,
-                            hp0,
-                            cur,
-                        );
-                        cur = (cur - extra).max(0.0);
-                        if cur <= 0.0 {
-                            killed = Some((*t, *owner, *is_dot));
-                            break;
-                        }
-                    }
-                    if let Some((kt, owner, is_dot)) = killed {
-                        let idx = if is_dot {
-                            // DOT 跳：归到「它发生时已经执行完的最后一个窗口动作」
-                            let mut idx = window_first;
-                            for i in window_first..=window_last {
-                                if steps[i].time.is_some_and(|tm| tm <= kt + 1e-4) {
-                                    idx = i;
-                                }
+                // 用共享 MC 内核（f32 HP + 计数哈希，AVX-512/标量）：每个事件的击杀数，
+                // 再按「事件 → 动作 step」的归属累加成击杀曲线。
+                let mut mc_events: Vec<crate::kill_mc::McEvent> =
+                    Vec::with_capacity(damage_events.len());
+                let mut ev_steps: Vec<usize> = Vec::with_capacity(damage_events.len());
+                for (t, dice, owner, is_dot) in &damage_events {
+                    let step = if *is_dot {
+                        // DOT 跳：归到「它发生时已经执行完的最后一个窗口动作」
+                        let mut idx = window_first;
+                        for i in window_first..=window_last {
+                            if steps[i].time.is_some_and(|tm| tm <= *t + 1e-4) {
+                                idx = i;
                             }
-                            idx
-                        } else {
-                            owner.clamp(window_first, window_last)
-                        };
-                        kills_at[idx] += 1;
-                    }
+                        }
+                        idx
+                    } else {
+                        (*owner).clamp(window_first, window_last)
+                    };
+                    let (g, h, rate) = if dice.fixed {
+                        (dice.q, dice.q, 1.0_f32)
+                    } else {
+                        (dice.g, dice.h, dice.rate)
+                    };
+                    mc_events.push(crate::kill_mc::McEvent {
+                        g,
+                        h,
+                        rate,
+                        lost: dice.lost_hp_factor,
+                    });
+                    ev_steps.push(step);
+                }
+                let samples = self.input.samples.max(1);
+                let seed = match self.input.seed {
+                    Some(seed) => seed,
+                    None => rand::random::<u64>(),
+                };
+                let counts = crate::kill_mc::kill_counts(&mc_events, hp0, samples, seed);
+                let mut kills_at = vec![0u64; steps.len()];
+                for (step, count) in ev_steps.iter().zip(counts.iter()) {
+                    kills_at[*step] += *count;
                 }
                 // 曲线只覆盖窗口内的动作 step。
                 let mut acc = 0u64;
                 for i in window_first..=window_last {
                     acc += kills_at[i];
-                    kill_prob_curve.push((i + 1, acc as f64 / n as f64));
+                    kill_prob_curve.push((i + 1, acc as f64 / samples as f64));
                 }
                 final_kill_prob = kill_prob_curve.last().map(|(_, p)| *p).unwrap_or(0.0);
             }
