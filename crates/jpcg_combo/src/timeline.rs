@@ -12,8 +12,7 @@
 //   - 旧 engine.rs（按步累加）保持不动，作为兼容层。
 // ============================================================================
 
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use std::collections::HashMap;
 
 use jpcg_core::engine::atkcal::JpcgConfig;

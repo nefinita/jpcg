@@ -898,3 +898,17 @@ pub struct CombatBundleDTO {
     pub skills: Vec<SkillPoolItemDTO>,
     pub combat: CombatDataDTO,
 }
+
+/// 计算后端描述（CPU 或 wgpu 适配器），供前端列举与选择。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputeBackendDTO {
+    /// 稳定标识：`cpu` / `wgpu:<adapter_index>`
+    pub id: String,
+    /// `cpu` | `wgpu`
+    pub kind: String,
+    /// 展示名，如 `AVX-512 · AMD Ryzen Threadripper 9970X (64 线程)`
+    pub label: String,
+    /// 补充信息（后端/设备类型/厂商等）
+    pub detail: String,
+    pub available: bool,
+}

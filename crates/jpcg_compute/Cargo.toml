@@ -1,0 +1,18 @@
+[package]
+name = "jpcg_compute"
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+edition.workspace = true
+
+# 计算后端层：CPU（f32+计数哈希 MC，x86 自动 AVX-512）与 wgpu（Metal/Vulkan/DX12）。
+# 供配装调优的「全量精确 MC」选择计算平台。
+
+[dependencies]
+jpcg_api.workspace = true
+jpcg_combo.workspace = true
+pollster = "0.4"
+wgpu = "30"
+
+[lints]
+workspace = true
