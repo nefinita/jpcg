@@ -852,6 +852,15 @@ pub fn optimize_joint(
                         if !(req.constraints.allow_cross_source_2plus2 || armor2 <= 1) {
                             return Ok(None);
                         }
+                        if f < 2 {
+                            eprintln!(
+                                "[debug] f={} jiasu={} sets={:?} satisfied={:?}",
+                                f,
+                                composed.stats.jiasu,
+                                composed.set_counts,
+                                req.constraints.satisfied(&composed)
+                            );
+                        }
                         if !req.constraints.satisfied(&composed)? {
                             return Ok(None);
                         }
