@@ -110,10 +110,11 @@ pub struct CandidateMc {
     pub hp0: f64,
 }
 
-/// CPU 后端：逐候选跑 50k MC，返回击杀数（总样本中的命中数）。
+/// CPU 后端：并行逐候选跑 50k MC，返回击杀数（总样本中的命中数）。
 pub fn run_cpu(candidates: &[CandidateMc], samples: u32, seed: u64) -> Vec<u64> {
+    use rayon::prelude::*;
     candidates
-        .iter()
+        .par_iter()
         .map(|c| {
             kill_mc::kill_counts(&c.events, c.hp0, samples, seed)
                 .iter()

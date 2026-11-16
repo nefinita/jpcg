@@ -2453,6 +2453,7 @@ dependencies = [
  "jpcg_api",
  "jpcg_combo",
  "pollster",
+ "rayon",
  "wgpu",
 ]
 

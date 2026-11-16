@@ -12,6 +12,7 @@ edition.workspace = true
 jpcg_api.workspace = true
 jpcg_combo.workspace = true
 pollster = "0.4"
+rayon.workspace = true
 wgpu = "30"
 
 [lints]
