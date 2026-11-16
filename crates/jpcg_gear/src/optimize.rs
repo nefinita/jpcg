@@ -872,6 +872,12 @@ pub fn optimize_joint(
                 .into_iter()
                 .flatten()
                 .collect();
+            if flat == 0 {
+                eprintln!(
+                    "[debug] constraints: stats={:?} required_sets={:?}",
+                    req.constraints.stats, req.constraints.required_sets
+                );
+            }
             if flat < 3 * chunk {
                 eprintln!(
                     "[debug] chunk {}: enumerated {}, feasible {}",
