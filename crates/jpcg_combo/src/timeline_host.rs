@@ -328,9 +328,11 @@ pub struct TimelineTemplate {
 
 impl TimelineTemplate {
     pub fn new(req: TimelineRequestDTO) -> Result<Self, String> {
-        Ok(Self {
-            input: build_timeline_input(req)?,
-        })
+        let mut input = build_timeline_input(req)?;
+        // 批量路径只算确定性部分（伤害骰/总伤），MC 由 CPU/wgpu 后端统一跑，避免重复 50k 采样。
+        input.samples = 0;
+        input.seed = None;
+        Ok(Self { input })
     }
 
     /// 替换候选玩家（配装合成出的 player 面板）。
