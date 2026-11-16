@@ -872,6 +872,14 @@ pub fn optimize_joint(
                 .into_iter()
                 .flatten()
                 .collect();
+            if flat < 3 * chunk {
+                eprintln!(
+                    "[debug] chunk {}: enumerated {}, feasible {}",
+                    flat / chunk,
+                    end - flat,
+                    jobs.len()
+                );
+            }
             if !jobs.is_empty() {
                 progress
                     .evaluated
