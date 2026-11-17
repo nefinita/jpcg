@@ -940,8 +940,8 @@ fn joint_search_matches_reference_with_arena_haste_and_mandatory_decorations() {
 }
 
 #[test]
-fn joint_score_cache_keeps_defense_pareto_and_avoids_duplicate_mc() {
-    if !runtime_child("joint_score_cache_keeps_defense_pareto_and_avoids_duplicate_mc") {
+fn joint_damage_search_locks_defense_and_scores_every_retained_candidate() {
+    if !runtime_child("joint_damage_search_locks_defense_and_scores_every_retained_candidate") {
         return;
     }
     let mut c = catalog();
@@ -949,6 +949,7 @@ fn joint_score_cache_keeps_defense_pareto_and_avoids_duplicate_mc() {
     c.wucai.clear();
     r.loadout.wucai = None;
     r.loadout.enchants.clear();
+    r.constraints.stats.clear();
     r.constraints.locked = r.loadout.choices.clone();
     c.enchants = vec![
         EnchantDef {
@@ -985,10 +986,28 @@ fn joint_score_cache_keeps_defense_pareto_and_avoids_duplicate_mc() {
     };
     let result = optimize_joint(&c, &r, &OptimizeProgress::new()).unwrap();
     assert!(result.complete);
-    assert_eq!(result.progress.evaluated, 2);
-    assert_eq!(result.mc_evaluations, 0); // 两种防御变化都复用已经计算的基线评分。
-    assert_eq!(result.pareto.len(), 2);
+    assert_eq!(result.progress.combinations, 1);
+    assert_eq!(result.progress.evaluated, 1);
+    assert_eq!(result.mc_evaluations, 1);
+    assert_eq!(result.pareto.len(), 1);
+    assert_eq!(
+        result.best.as_ref().unwrap().composed.loadout.enchants[&Slot::Yi],
+        "defense"
+    );
     assert!(result.best.unwrap().score <= 1.0);
+    // 生存属性成为硬约束时不能折叠，两个保留候选都必须独立评分。
+    r.constraints.stats.insert(
+        "huajin".into(),
+        Bounds {
+            min: Some(0),
+            max: None,
+        },
+    );
+    let constrained = optimize_joint(&c, &r, &OptimizeProgress::new()).unwrap();
+    assert_eq!(constrained.progress.combinations, 2);
+    assert_eq!(constrained.progress.evaluated, 2);
+    assert_eq!(constrained.mc_evaluations, 2);
+    assert_eq!(constrained.pareto.len(), 1);
 }
 
 #[test]

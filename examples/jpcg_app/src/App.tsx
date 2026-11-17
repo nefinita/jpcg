@@ -218,7 +218,7 @@ export default function App() {
     const arenaSet = catalog.sets.find((x) => x.source === "mingjian" && x.kind === "armor");
     const requiredSets: Record<string, number> = opts.arena4 && arenaSet ? { [arenaSet.id]: 4 } : {};
     const stats: Record<string, { min?: number; max?: number }> = opts.hasteMin != null ? { jiasu: { min: opts.hasteMin } } : {};
-    // 联合穷举按相同进攻输入复用时间轴及精确 MC，防御方案仍分别参与约束/Pareto。
+    // 伤害专用联合穷举固定纯防御附魔；其余候选全部独立执行精确 MC。
     const metric: GearTimelineMetric = opts.metric;
     const samples = metric === "kill_probability" ? 50000 : 0;
     const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);

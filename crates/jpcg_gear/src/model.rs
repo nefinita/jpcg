@@ -393,13 +393,13 @@ pub struct OptimizeResult {
     pub best: Option<Candidate>,
     pub baseline: Candidate,
     pub delta: Option<f64>,
-    /// 目标值 vs 气血/御劲/化劲三维生存偏序，无杜撰的生存权重。
+    /// 有界搜索为目标值 vs 气血/御劲/化劲三维生存偏序；伤害专用联合搜索只含最佳项。
     pub pareto: Vec<Candidate>,
     pub progress: Progress,
     pub complete: bool,
     pub stop_reason: String,
     pub warnings: Vec<String>,
-    /// 实际批量 MC 评分数（不含基线）；缓存命中不重复计数。
+    /// 实际批量 MC 评分数（不含基线）。
     #[serde(default)]
     pub mc_evaluations: u64,
 }

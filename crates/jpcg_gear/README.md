@@ -117,8 +117,8 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 
 - `gear-opt joint --request request.json --seconds 10`：短轮执行后正常取消并输出部分结果；`complete=false`、`stop_reason=cancelled`，不能作为全量最优证明。省略 `--seconds` 才执行完整空间；SIGINT/SIGTERM（Unix）或控制台 Ctrl-C（Windows）触发正常取消。
 - 可穿的 `cross_school` 模板纳入候选，外门派的 `Choice.school` 显式保留；外门派装备不计本门派套装。
-- `Candidate.score` 始终为目标本身，击杀率为 0..=1；同分时比较独立的 `tie_break_damage`。结果的 `mc_evaluations` 是实际批量 MC 数，不含基线，缓存命中不重复计数。
-- 联合路径按进攻面板和装备 CD 有界缓存，逐个保留防御约束/生存比较；有界预取重叠准备与评分。模板在每个候选前恢复 CD，再应用本次装备调整。
+- `Candidate.score` 始终为目标本身，击杀率为 0..=1；同分时比较独立的 `tie_break_damage`。结果的 `mc_evaluations` 是实际批量 MC 数，不含基线。
+- 伤害专用联合路径固定不影响伤害且不受硬约束的纯生存附魔/五彩石，优先使用用户当前选项；其余候选全部独立评分，不按进攻面板缓存去重。`pareto` 仅保留伤害最佳项。两个无缓存准备 worker 与评分重叠，消费端按批次序号归并；模板在每个候选前恢复 CD，再应用本次装备调整。
 - 动态壳使用 JSON 方法 `optimize_joint_start`（返回 `job_id`）、`optimize_joint_poll`（进度及一次性结果/错误）、`optimize_joint_cancel`、`optimize_joint_release`，与静态壳共用联合引擎。`compute_backends` 返回实际平台清单。调用方退出时须 release，完整领取结果后会话自动移除；取消和错误不会冒充100%完成。原 `optimize` 方法保留预算语义。
 - GPU批次按设备限制切片，每片独立绑定；事件缓冲区使用实际步长，支持超过64个事件，单个候选仍受设备存储限制。工作组归约保持相同采样序列与 HP 状态，设备缓冲区按容量复用。
 

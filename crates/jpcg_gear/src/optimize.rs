@@ -1,9 +1,8 @@
 use crate::model::*;
 use rayon::prelude::*;
-use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 fn canonical_choice(choice: &Choice, school: &str, own: &str) -> Choice {
     let mut c = choice.clone();
@@ -46,15 +45,7 @@ fn rank(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
 fn better(a: &Candidate, b: &Candidate) -> bool {
     rank(a, b).is_gt()
 }
-fn merge_candidate(best: &mut Option<Candidate>, pareto: &mut Vec<Candidate>, c: Candidate) {
-    if best.as_ref().is_none_or(|b| better(&c, b)) {
-        *best = Some(c.clone());
-    }
-    if !pareto.iter().any(|p| dominates(p, &c)) {
-        pareto.retain(|p| !dominates(&c, p));
-        pareto.push(c);
-    }
-}
+// 伤害专用联合搜索只维护全局最佳，不再构造生存 Pareto。
 fn collect_warnings(result: &mut OptimizeResult) {
     result.warnings = result.baseline.composed.warnings.clone();
     if let Some(best) = &result.best {
@@ -853,12 +844,41 @@ struct JointSpace {
     combinations: u64,
 }
 
+fn affects_damage(stats: &Stats) -> bool {
+    [
+        stats.zhushuxing,
+        stats.liliang,
+        stats.shenfa,
+        stats.gengu,
+        stats.yuanqi,
+        stats.gongji,
+        stats.huixin,
+        stats.huixiao,
+        stats.pofang,
+        stats.jiasu,
+        stats.wuqi_shanghai,
+    ]
+    .into_iter()
+    .any(|value| value != 0)
+}
+
+fn has_survival_constraint(req: &OptimizeRequest) -> bool {
+    ["tizhi", "qixue", "qixue_additional", "yujin", "huajin"]
+        .into_iter()
+        .any(|name| req.constraints.stats.contains_key(name))
+}
+
 /// 生产搜索与完整筛选基准共用同一份候选空间，避免装饰/档位口径漂移。
-fn joint_space(catalog: &Catalog, req: &OptimizeRequest) -> Result<JointSpace, String> {
+/// 伤害专用搜索把纯生存装饰固定到用户当前选项，不再枚举等价进攻输入。
+fn joint_space(
+    catalog: &Catalog,
+    req: &OptimizeRequest,
+    damage_only: bool,
+) -> Result<JointSpace, String> {
     let (candidates, mut combinations) = build_candidates(catalog, req)?;
     let mut search_base = req.loadout.clone();
-    // 与 optimize_parallel 的 decoration_axes 不同：每个槽位必须选一个附魔（不含 None），
-    // 五彩石只要目录里有就必装，保证输出不会出现「无附魔」。
+    let fold_survival = damage_only && !has_survival_constraint(req);
+    // 每个槽位必须选一个附魔，五彩石只要目录里有就必装。
     let mut axes: Vec<DecorationAxis> = Vec::new();
     for slot in Slot::ALL {
         let mut options: Vec<Option<String>> = catalog
@@ -867,14 +887,29 @@ fn joint_space(catalog: &Catalog, req: &OptimizeRequest) -> Result<JointSpace, S
             .filter(|e| e.slot == slot)
             .map(|e| Some(e.id.clone()))
             .collect();
-        // 只有一个附魔的槽位同样必装，不依赖基线是否已经选择它。
-        if options.len() == 1
-            && let Some(id) = &options[0]
-        {
-            search_base.enchants.insert(slot, id.clone());
-        }
-        if options.len() > 1 {
-            options.sort();
+        options.sort();
+        let defensive = fold_survival
+            && options.iter().all(|id| {
+                id.as_ref().is_none_or(|id| {
+                    catalog
+                        .enchants
+                        .iter()
+                        .find(|e| e.slot == slot && e.id == *id)
+                        .is_none_or(|e| !affects_damage(&e.stats))
+                })
+            });
+        if defensive || options.len() == 1 {
+            let selected = req
+                .loadout
+                .enchants
+                .get(&slot)
+                .filter(|current| options.contains(&Some((*current).clone())))
+                .cloned()
+                .or_else(|| options.first().cloned().flatten());
+            if let Some(id) = selected {
+                search_base.enchants.insert(slot, id);
+            }
+        } else if options.len() > 1 {
             axes.push((Some(slot), options));
         }
     }
@@ -882,7 +917,28 @@ fn joint_space(catalog: &Catalog, req: &OptimizeRequest) -> Result<JointSpace, S
         let mut options: Vec<Option<String>> =
             catalog.wucai.iter().map(|w| Some(w.id.clone())).collect();
         options.sort();
-        axes.push((None, options));
+        let defensive = fold_survival
+            && options.iter().all(|id| {
+                id.as_ref().is_none_or(|id| {
+                    catalog
+                        .wucai
+                        .iter()
+                        .find(|w| w.id == *id)
+                        .is_none_or(|w| !affects_damage(&w.stats))
+                })
+            });
+        if defensive {
+            let selected = req
+                .loadout
+                .wucai
+                .as_ref()
+                .filter(|current| options.contains(&Some((*current).clone())))
+                .cloned()
+                .or_else(|| options.first().cloned().flatten());
+            search_base.wucai = selected;
+        } else {
+            axes.push((None, options));
+        }
     }
     for (_, options) in &axes {
         combinations = combinations
@@ -897,38 +953,9 @@ fn joint_space(catalog: &Catalog, req: &OptimizeRequest) -> Result<JointSpace, S
     })
 }
 
-#[derive(Hash, PartialEq, Eq)]
-struct CombatKey {
-    stats: [u32; 7],
-    converted: Option<u32>,
-    cooldowns: Vec<(u32, u64)>,
-}
-impl CombatKey {
-    fn new(c: &Composed) -> Self {
-        let p = player(c);
-        Self {
-            stats: [
-                p.jichu_shuxing,
-                p.jichu_gongji,
-                p.huixin_dengji,
-                p.huixin_xiaoguo,
-                p.pofang_dengji,
-                p.wuqi_shanghai,
-                p.jiasu_dengji,
-            ],
-            converted: p.zhuanhua_gongji,
-            cooldowns: c
-                .cooldowns
-                .iter()
-                .map(|cd| (cd.skill_id, cd.seconds.to_bits()))
-                .collect(),
-        }
-    }
-}
-type ScoreCell = Arc<OnceLock<Score>>;
 struct ScoringBatch {
-    metas: Vec<(Composed, ScoreCell)>,
-    pending: Vec<(ScoreCell, jpcg_compute::CandidateMc, f64)>,
+    metas: Vec<Composed>,
+    pending: Vec<(jpcg_compute::CandidateMc, f64)>,
     leaves: u64,
 }
 struct StopWorker(Arc<std::sync::atomic::AtomicBool>);
@@ -946,12 +973,11 @@ fn prepare_scoring_batch(
     axes: &[DecorationAxis],
     base: &Loadout,
     indices: Vec<u64>,
-    cache: &mut HashMap<CombatKey, ScoreCell>,
     template: &jpcg_combo::timeline_host::TimelineTemplate,
     progress: &OptimizeProgress,
 ) -> Result<ScoringBatch, String> {
     let leaves = indices.len() as u64;
-    let composed = indices
+    let metas = indices
         .into_par_iter()
         .map(|flat| -> Result<Option<Composed>, String> {
             if progress.cancel.load(Ordering::Relaxed) {
@@ -968,34 +994,19 @@ fn prepare_scoring_batch(
             }
             Ok(Some(c))
         })
-        .collect::<Result<Vec<_>, String>>()?;
-    let mut metas = Vec::new();
-    let mut unique = Vec::new();
-    for c in composed.into_iter().flatten() {
-        let key = CombatKey::new(&c);
-        let cell = if let Some(cell) = cache.get(&key) {
-            Arc::clone(cell)
-        } else {
-            // 有界缓存；旧cell仍由在途批次持有，清理不会让已发批次丢失结果。
-            if cache.len() >= 100_000 {
-                cache.clear();
-            }
-            let cell = Arc::new(OnceLock::new());
-            cache.insert(key, Arc::clone(&cell));
-            unique.push((player(&c), cooldown_adjustments(&c), Arc::clone(&cell)));
-            cell
-        };
-        metas.push((c, cell));
-    }
-    let pending = unique
-        .into_par_iter()
+        .collect::<Result<Vec<_>, String>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    // 防御装饰已固定在用户配置，保留的每个候选都独立评分，不做进攻缓存去重。
+    let pending = metas
+        .par_iter()
         .map_init(
             || template.clone(),
-            |tpl, (p, cds, cell)| {
-                tpl.set_loadout(p, &cds)?;
+            |tpl, c| {
+                tpl.set_loadout(player(c), &cooldown_adjustments(c))?;
                 let mc = tpl.mc_input()?;
                 Ok((
-                    cell,
                     jpcg_compute::CandidateMc {
                         events: mc.events,
                         hp0: mc.hp0,
@@ -1063,7 +1074,7 @@ pub fn optimize_joint(
         axes,
         base: search_base,
         combinations,
-    } = joint_space(catalog, req)?;
+    } = joint_space(catalog, req, kill_mode)?;
     let total = combinations;
     progress.total.store(total, Ordering::Relaxed);
     progress.visited.store(0, Ordering::Relaxed);
@@ -1146,25 +1157,18 @@ pub fn optimize_joint(
         // 与玩家无关的时间轴部分只构建一次；每个线程克隆一份模板，逐候选只替换 player。
         let template = jpcg_combo::timeline_host::TimelineTemplate::new(multi.clone())?;
         let initial_best = result.best.clone();
-        let initial_pareto = result.pareto.clone();
-        let mut cache = HashMap::new();
-        let baseline_cell = Arc::new(OnceLock::new());
-        let _ = baseline_cell.set(Score {
-            value: baseline.score,
-            damage: baseline.tie_break_damage,
-        });
-        cache.insert(CombatKey::new(&baseline.composed), baseline_cell);
-        // 单批预取的有界队列：CPU准备下一批，与当前GPU/CPU评分重叠。
-        let (best, pareto) = std::thread::scope(|scope| -> Result<_, String> {
-            let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        // 搜索游标轻量串行分发；两个无缓存准备 worker 与 CPU/GPU 评分并行。
+        // 消费端按序号归并，worker 完成先后不影响最佳方案的确定性。
+        let best = std::thread::scope(|scope| -> Result<_, String> {
+            const PREPARE_WORKERS: usize = 2;
+            let (raw_tx, raw_rx) = std::sync::mpsc::sync_channel(PREPARE_WORKERS * 2);
+            let raw_rx = Arc::new(Mutex::new(raw_rx));
+            let (tx, rx) = std::sync::mpsc::sync_channel(PREPARE_WORKERS * 2);
             let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
             let worker_stop = Arc::clone(&stop);
             let _stop_worker = StopWorker(stop);
-            let candidates_ref = &candidates;
-            let axes_ref = &axes;
-            let base_ref = &search_base;
-            let rules_ref = rules.as_ref();
             scope.spawn(move || {
+                let mut sequence = 0usize;
                 loop {
                     if progress.cancel.load(Ordering::Relaxed)
                         || worker_stop.load(Ordering::Relaxed)
@@ -1172,46 +1176,63 @@ pub fn optimize_joint(
                         break;
                     }
                     let batch = search.next_batch(32768, progress);
-                    if batch.is_empty() {
+                    if batch.is_empty() || raw_tx.send((sequence, batch)).is_err() {
                         break;
                     }
-                    let prepared = prepare_scoring_batch(
-                        catalog,
-                        req,
-                        rules_ref,
-                        candidates_ref,
-                        axes_ref,
-                        base_ref,
-                        batch,
-                        &mut cache,
-                        &template,
-                        progress,
-                    );
-                    let failed = prepared.is_err();
-                    if tx.send(prepared).is_err() || failed {
-                        break;
-                    }
+                    sequence += 1;
                 }
             });
+            for _ in 0..PREPARE_WORKERS {
+                let raw_rx = Arc::clone(&raw_rx);
+                let tx = tx.clone();
+                let template = &template;
+                let candidates = &candidates;
+                let axes = &axes;
+                let base = &search_base;
+                let rules = rules.as_ref();
+                scope.spawn(move || {
+                    loop {
+                        let received = raw_rx
+                            .lock()
+                            .map_err(|_| "候选队列锁污染".to_string())
+                            .and_then(|rx| rx.recv().map_err(|_| "候选队列已关闭".into()));
+                        let Ok((sequence, batch)) = received else {
+                            break;
+                        };
+                        let prepared = prepare_scoring_batch(
+                            catalog, req, rules, candidates, axes, base, batch, template, progress,
+                        );
+                        let failed = prepared.is_err();
+                        if tx.send((sequence, prepared)).is_err() || failed {
+                            break;
+                        }
+                    }
+                });
+            }
+            drop(tx);
             let mut best = initial_best;
-            let mut pareto = initial_pareto;
-            for batch in &rx {
-                let batch = batch?;
-                if progress.cancel.load(Ordering::Relaxed) {
-                    break;
-                }
-                let (pending_meta, inputs): (Vec<_>, Vec<_>) = batch
-                    .pending
-                    .into_iter()
-                    .map(|(cell, mc, damage)| ((cell, damage), mc))
-                    .unzip();
-                if !inputs.is_empty() {
-                    let kills = if let Some(gpu) = &gpu {
+            let mut next_sequence = 0usize;
+            let mut queued = BTreeMap::new();
+            for (sequence, batch) in &rx {
+                queued.insert(sequence, batch);
+                while let Some(batch) = queued.remove(&next_sequence) {
+                    next_sequence += 1;
+                    let batch = batch?;
+                    if progress.cancel.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let count = batch.metas.len() as u64;
+                    let (inputs, damages): (Vec<_>, Vec<_>) = batch.pending.into_iter().unzip();
+                    let kills = if inputs.is_empty() {
+                        Vec::new()
+                    } else if let Some(gpu) = &gpu {
                         gpu.run(&inputs, samples, seed)?
                     } else {
                         jpcg_compute::run_cpu(&inputs, samples, seed)
                     };
-                    for ((cell, damage), kill) in pending_meta.into_iter().zip(kills) {
+                    for (composed, (damage, kill)) in
+                        batch.metas.into_iter().zip(damages.into_iter().zip(kills))
+                    {
                         let value = Score {
                             value: kill as f64 / samples as f64,
                             damage,
@@ -1219,35 +1240,22 @@ pub fn optimize_joint(
                         if !value.is_finite() {
                             return Err("目标值必须有限".into());
                         }
-                        cell.set(value).map_err(|_| "重复写入评分缓存")?;
+                        let candidate = candidate(composed, value);
+                        if best.as_ref().is_none_or(|b| better(&candidate, b)) {
+                            best = Some(candidate);
+                        }
                     }
                     progress
                         .mc_evaluations
                         .fetch_add(inputs.len() as u64, Ordering::Relaxed);
+                    progress.evaluated.fetch_add(count, Ordering::Relaxed);
+                    progress.visited.fetch_add(batch.leaves, Ordering::Relaxed);
                 }
-                let count = batch.metas.len() as u64;
-                let mut states = std::collections::HashSet::new();
-                for (composed, cell) in batch.metas {
-                    let value = cell.get().copied().ok_or("在途评分尚未完成")?;
-                    // 同一批中目标与三维生存完全相同，只需物化第一个等价代表。
-                    if !states.insert((
-                        value.value.to_bits(),
-                        value.damage.to_bits(),
-                        effective_qixue(&composed),
-                        composed.stats.yujin,
-                        composed.stats.huajin,
-                    )) {
-                        continue;
-                    }
-                    merge_candidate(&mut best, &mut pareto, candidate(composed, value));
-                }
-                progress.evaluated.fetch_add(count, Ordering::Relaxed);
-                progress.visited.fetch_add(batch.leaves, Ordering::Relaxed);
             }
-            Ok((best, pareto))
+            Ok(best)
         })?;
         result.best = best;
-        result.pareto = pareto;
+        result.pareto = result.best.iter().cloned().collect();
         result.delta = result
             .best
             .as_ref()
@@ -1266,6 +1274,11 @@ pub fn optimize_joint(
         };
         result.mc_evaluations = progress.mc_evaluations.load(Ordering::Relaxed);
         collect_warnings(&mut result);
+        if !has_survival_constraint(req) {
+            result
+                .warnings
+                .push("伤害专用搜索：纯生存附魔固定为当前配置，未生成生存 Pareto".into());
+        }
         return Ok(result);
     }
 
@@ -1898,7 +1911,7 @@ mod current_config_filter {
             axes,
             base,
             combinations: total,
-        } = joint_space(&catalog, &req).unwrap();
+        } = joint_space(&catalog, &req, false).unwrap();
         let decoration_count: u64 = axes
             .iter()
             .map(|(_, options)| options.len() as u64)
@@ -2112,19 +2125,45 @@ mod audit_regressions {
         assert!(high.score <= 1.0);
     }
     #[test]
-    fn defense_changes_reuse_combat_key_without_dropping_survival_candidates() {
-        let (catalog, req) = fixture();
-        let a = catalog.compose(&req.loadout).unwrap();
-        let mut b = a.clone();
-        b.stats.huajin += 100;
-        b.stats.qixue += 1000;
-        assert!(CombatKey::new(&a) == CombatKey::new(&b));
-        let mut best = None;
-        let mut pareto = Vec::new();
-        merge_candidate(&mut best, &mut pareto, candidate(a, Score::plain(0.5)));
-        merge_candidate(&mut best, &mut pareto, candidate(b, Score::plain(0.5)));
-        assert_eq!(pareto.len(), 1);
-        assert!(pareto[0].composed.stats.huajin > best.unwrap().composed.stats.huajin);
+    fn damage_only_locks_defensive_enchant_to_user_choice_but_respects_constraints() {
+        let (mut catalog, mut req) = fixture();
+        req.constraints.stats.clear();
+        for (id, huajin) in [("def-a", 10), ("def-b", 20)] {
+            catalog.enchants.push(EnchantDef {
+                slot: Slot::Tou,
+                id: id.into(),
+                name: id.into(),
+                stats: Stats {
+                    huajin,
+                    ..Default::default()
+                },
+            });
+        }
+        req.loadout.enchants.insert(Slot::Tou, "def-b".into());
+        let full = joint_space(&catalog, &req, false).unwrap();
+        assert_eq!(
+            full.axes
+                .iter()
+                .filter(|(slot, _)| *slot == Some(Slot::Tou))
+                .count(),
+            1
+        );
+        let damage = joint_space(&catalog, &req, true).unwrap();
+        assert!(!damage.axes.iter().any(|(slot, _)| *slot == Some(Slot::Tou)));
+        assert_eq!(damage.base.enchants[&Slot::Tou], "def-b");
+        assert_eq!(damage.combinations * 2, full.combinations);
+        assert_eq!(damage.axes.len() + 1, full.axes.len());
+        req.constraints.stats.insert(
+            "huajin".into(),
+            Bounds {
+                min: Some(1),
+                max: None,
+            },
+        );
+        assert_eq!(joint_space(&catalog, &req, true).unwrap().axes.len(), 2);
+        catalog.enchants[0].stats.huixin = 1;
+        req.constraints.stats.clear();
+        assert_eq!(joint_space(&catalog, &req, true).unwrap().axes.len(), 2);
     }
     #[test]
     fn early_cancellation_is_not_reset_and_errors_mark_done() {
