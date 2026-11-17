@@ -377,7 +377,10 @@ pub struct OptimizeRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Candidate {
     pub composed: Composed,
+    /// 目标本身的数值；击杀率始终在 0..=1，不能混入总伤。
     pub score: f64,
+    #[serde(default)]
+    pub tie_break_damage: f64,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Progress {
@@ -385,7 +388,7 @@ pub struct Progress {
     pub evaluated: u64,
     pub combinations: u64,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OptimizeResult {
     pub best: Option<Candidate>,
     pub baseline: Candidate,
@@ -396,6 +399,9 @@ pub struct OptimizeResult {
     pub complete: bool,
     pub stop_reason: String,
     pub warnings: Vec<String>,
+    /// 实际批量 MC 评分数（不含基线）；缓存命中不重复计数。
+    #[serde(default)]
+    pub mc_evaluations: u64,
 }
 
 /// 桌面合成响应：保留完整配装元数据，伤害属性转换复用 player() 唯一实现。
@@ -403,4 +409,43 @@ pub struct OptimizeResult {
 pub struct Composition {
     pub composed: Composed,
     pub player: jpcg_api::PlayerConfigDTO,
+}
+
+/// 模型层进度，使 dynamic 壳无需链接计算引擎也可管理取消状态。
+#[derive(Default)]
+pub struct OptimizeProgress {
+    pub visited: std::sync::atomic::AtomicU64,
+    pub evaluated: std::sync::atomic::AtomicU64,
+    pub total: std::sync::atomic::AtomicU64,
+    pub cancel: std::sync::atomic::AtomicBool,
+    pub done: std::sync::atomic::AtomicBool,
+    pub mc_evaluations: std::sync::atomic::AtomicU64,
+}
+impl OptimizeProgress {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn percent(&self) -> u64 {
+        use std::sync::atomic::Ordering;
+        let total = self.total.load(Ordering::Relaxed).max(1);
+        (self.visited.load(Ordering::Relaxed).saturating_mul(100) / total).min(100)
+    }
+    pub fn cancel(&self) {
+        self.cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OptimizeJobStatus {
+    pub progress: Progress,
+    pub done: bool,
+    pub result: Option<OptimizeResult>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OptimizeJobId {
+    pub job_id: u64,
 }

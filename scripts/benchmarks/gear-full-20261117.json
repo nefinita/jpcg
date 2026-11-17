@@ -1,0 +1,343 @@
+{
+  "loadout": {
+    "school": "mowen",
+    "revision": "live-50-20261106",
+    "value_set": "live-50",
+    "base": {
+      "zhushuxing": 0,
+      "tizhi": 18,
+      "liliang": 17,
+      "shenfa": 18,
+      "gengu": 18,
+      "yuanqi": 17,
+      "gongji": 0,
+      "qixue": 0,
+      "qixue_additional": 0,
+      "huixin": 0,
+      "huixiao": 0,
+      "pofang": 0,
+      "jiasu": 0,
+      "yujin": 0,
+      "huajin": 0,
+      "wuqi_shanghai": 0
+    },
+    "attribute_rules": "profession-toml",
+    "choices": [
+      {
+        "slot": "tou",
+        "source": "weiwang",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "yi",
+        "source": "mingjian",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "yao",
+        "source": "mingjian",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "shou",
+        "source": "mingjian",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "ku",
+        "source": "mingjian",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "xie",
+        "source": "mingjian",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "wuqi",
+        "source": "mingjian",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "anqi",
+        "source": "mingjian",
+        "tier": "upgraded",
+        "variant": 0
+      },
+      {
+        "slot": "xianglian",
+        "source": "weiwang",
+        "tier": "upgraded",
+        "variant": 1
+      },
+      {
+        "slot": "yaozhui",
+        "source": "weiwang",
+        "tier": "upgraded",
+        "variant": 1
+      },
+      {
+        "slot": "jie1",
+        "source": "weiwang",
+        "tier": "upgraded",
+        "variant": 1
+      },
+      {
+        "slot": "jie2",
+        "source": "weiwang",
+        "tier": "upgraded",
+        "variant": 2
+      }
+    ],
+    "wucai": "五彩石-根骨会效攻击",
+    "enchants": {
+      "tou": "加速-jiasu-90",
+      "yi": "御劲-yujin-90",
+      "yao": "御劲-yujin-90",
+      "shou": "全破防-pofang-90",
+      "xie": "全攻击-gongji-90",
+      "wuqi": "全攻击-gongji-90",
+      "anqi": "破防-pofang-126",
+      "yaozhui": "misc-huajin-126",
+      "jie1": "根骨-gengu-126",
+      "jie2": "全攻击-gongji-126"
+    }
+  },
+  "config": {
+    "player": {
+      "jichu_shuxing": 0,
+      "jichu_gongji": 0,
+      "huixin_dengji": 0,
+      "huixin_xiaoguo": 0,
+      "pofang_dengji": 0,
+      "wuqi_shanghai": 0,
+      "jcsx": "根骨",
+      "jiasu_dengji": 0
+    },
+    "hostile": {
+      "waigong_fangyu": 659,
+      "neigong_fangyu": 974,
+      "yujin_dengji": 246,
+      "huajin_dengji": 4457,
+      "jianshang_bili": 0,
+      "target_hp": 73014,
+      "max_hp": 73014,
+      "current_hp": 73014
+    },
+    "xinfa_config": {
+      "profession": "mowen",
+      "xinfa_name": "莫问",
+      "xinfa_nom": "根骨",
+      "atk_up": 0.72,
+      "pofang_up": 0,
+      "huixin_up": 0.28
+    },
+    "buff": {
+      "base_atk_pct": 10,
+      "huixin_pct": 8,
+      "huixiao_pct": 0,
+      "pofang_pct": 3,
+      "wushi_fangyu_pct": 0,
+      "shanghai_pct": 15,
+      "mode_is_point": false
+    },
+    "coefficient": {
+      "pofang_xishu": 10378.17,
+      "huixin_xishu": 9512.91,
+      "huixiao_xishu": 3504.6,
+      "yujin_xishu": 19025.82,
+      "yuhui_xishu": 9422.82,
+      "huajin_xishu": 5148,
+      "fangyu_xishu": 10802.88,
+      "pvp_global_jianshang": 0.9
+    },
+    "value_set": "live-50"
+  },
+  "objective": {
+    "kind": "timeline",
+    "request": {
+      "skills": [],
+      "actions": [
+        {
+          "kind": "cast",
+          "skill_id": 14069,
+          "sub_id": 0,
+          "skill_name": "高山流水",
+          "overrides": null
+        },
+        {
+          "kind": "cast",
+          "skill_id": 14066,
+          "sub_id": 14312,
+          "skill_name": "角",
+          "overrides": null
+        },
+        {
+          "kind": "cast",
+          "skill_id": 14065,
+          "sub_id": 14311,
+          "skill_name": "商",
+          "overrides": null
+        },
+        {
+          "kind": "flag",
+          "flag": "start"
+        },
+        {
+          "kind": "cast",
+          "skill_id": 14298,
+          "sub_id": 18860,
+          "skill_name": "变宫",
+          "overrides": null
+        },
+        {
+          "kind": "cast",
+          "skill_id": 29071,
+          "sub_id": 29077,
+          "skill_name": "不愧君",
+          "overrides": null
+        },
+        {
+          "kind": "cast",
+          "skill_id": 14299,
+          "sub_id": 18859,
+          "skill_name": "变徵",
+          "overrides": null
+        },
+        {
+          "kind": "cast",
+          "skill_id": 14299,
+          "sub_id": 18859,
+          "skill_name": "变徵",
+          "overrides": null
+        },
+        {
+          "kind": "cast",
+          "skill_id": 14068,
+          "sub_id": 14100,
+          "skill_name": "羽",
+          "overrides": null
+        },
+        {
+          "kind": "cast",
+          "skill_id": 14068,
+          "sub_id": 14100,
+          "skill_name": "羽",
+          "overrides": null
+        },
+        {
+          "kind": "flag",
+          "flag": "end"
+        }
+      ],
+      "window": 300,
+      "player": {
+        "jichu_shuxing": 0,
+        "jichu_gongji": 0,
+        "huixin_dengji": 0,
+        "huixin_xiaoguo": 0,
+        "pofang_dengji": 0,
+        "wuqi_shanghai": 0,
+        "jcsx": "根骨",
+        "jiasu_dengji": 0
+      },
+      "hostile": {
+        "waigong_fangyu": 659,
+        "neigong_fangyu": 974,
+        "yujin_dengji": 246,
+        "huajin_dengji": 4457,
+        "jianshang_bili": 0,
+        "target_hp": 73014,
+        "max_hp": 73014,
+        "current_hp": 73014
+      },
+      "xinfa": {
+        "profession": "mowen",
+        "xinfa_name": "莫问",
+        "xinfa_nom": "根骨",
+        "atk_up": 0.72,
+        "pofang_up": 0,
+        "huixin_up": 0.28
+      },
+      "buff": {
+        "base_atk_pct": 10,
+        "huixin_pct": 8,
+        "huixiao_pct": 0,
+        "pofang_pct": 3,
+        "wushi_fangyu_pct": 0,
+        "shanghai_pct": 15,
+        "mode_is_point": false
+      },
+      "coeff": {
+        "pofang_xishu": 10378.17,
+        "huixin_xishu": 9512.91,
+        "huixiao_xishu": 3504.6,
+        "yujin_xishu": 19025.82,
+        "yuhui_xishu": 9422.82,
+        "huajin_xishu": 5148,
+        "fangyu_xishu": 10802.88,
+        "pvp_global_jianshang": 0.9
+      },
+      "value_set": "live-50",
+      "miji": [
+        "yu_dmg3",
+        "yu_dmg4",
+        "yu_crit3",
+        "yu_crit4",
+        "zheng_crit4",
+        "zheng_dmg4",
+        "shang_crit4",
+        "shang_dmg5",
+        "shang_dmg4",
+        "shang_dmg3",
+        "qingxiao_cd",
+        "gong_cast1",
+        "gong_cast2",
+        "gong_crit4",
+        "gong_dmg4"
+      ],
+      "qixue": [
+        "dongtian",
+        "shuqu",
+        "dongquan",
+        "dongquan-gong",
+        "bukuijun"
+      ],
+      "initial_instrument": "qin",
+      "initial_qifeng": "gaoshan",
+      "samples": 50000,
+      "seed": 12345
+    },
+    "metric": "kill_probability"
+  },
+  "constraints": {
+    "sources": [
+      "mingjian",
+      "weiwang",
+      "baowu"
+    ],
+    "allow_upgraded": true,
+    "locked": [],
+    "banned": [],
+    "required_sources": {},
+    "banned_sources": {},
+    "stats": {
+      "jiasu": {
+        "min": 928
+      }
+    },
+    "allow_cross_source_2plus2": true,
+    "required_sets": {
+      "jingji-armor": 4
+    }
+  },
+  "max_combinations": 1000000,
+  "compute": "cpu"
+}

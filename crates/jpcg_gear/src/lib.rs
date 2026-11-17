@@ -6,14 +6,14 @@ mod catalog;
 pub mod ffi;
 #[cfg(feature = "engine")]
 pub mod host;
+#[cfg(feature = "engine")]
+mod joint_search;
 pub mod model;
 #[cfg(feature = "engine")]
 pub mod optimize;
 pub use model::*;
 #[cfg(feature = "engine")]
-pub use optimize::{
-    OptimizeProgress, optimize, optimize_joint, optimize_parallel, optimize_with, player,
-};
+pub use optimize::{optimize, optimize_joint, optimize_parallel, optimize_with, player};
 use serde::{Deserialize, Serialize};
 
 /// JSON 调用不读取任意路径，宿主显式加载并传入目录。版本由模板 schema 管理。

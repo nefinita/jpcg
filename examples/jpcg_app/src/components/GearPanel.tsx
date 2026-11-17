@@ -81,7 +81,8 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
           {optResult.result.complete ? "已遍历全部组合"
             : optResult.result.stop_reason === "budget_exhausted" ? "预算内最优"
             : optResult.result.stop_reason === "cancelled" ? "已取消" : optResult.result.stop_reason}
-          {" · "}评估 {optResult.result.progress.evaluated} / {optResult.result.progress.combinations}
+          {" · "}已评分 {optResult.result.progress.evaluated} · 候选空间 {optResult.result.progress.combinations}
+          {optResult.result.mc_evaluations != null && <> · 实际 MC {optResult.result.mc_evaluations}</>}
         </span>
       </div>
       {optResult.result.best && <div className={styles.optResultSlots}>

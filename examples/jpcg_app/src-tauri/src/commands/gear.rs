@@ -36,24 +36,20 @@ pub async fn import_gear(toml: String) -> Result<Composition, String> {
         .await
         .map_err(|e| e.to_string())?
 }
-#[cfg(feature = "static")]
 #[tauri::command]
 pub async fn optimize_gear(
     app: tauri::AppHandle,
     request: jpcg_gear::OptimizeRequest,
 ) -> Result<jpcg_gear::OptimizeResult, String> {
-    use std::sync::Arc;
-    use std::sync::atomic::Ordering;
-    use tauri::Emitter;
+    use std::sync::{Arc, atomic::Ordering};
+    use tauri::{Emitter, Manager};
     let progress = Arc::new(jpcg_gear::OptimizeProgress::new());
-    // 记录当前调优进度，供前端「停止」按钮取消。
     {
-        use tauri::Manager;
         let state = app.state::<crate::OptimizeState>();
-        let mut guard = state
-            .progress
-            .lock()
-            .map_err(|_| "调优状态锁污染".to_string())?;
+        let mut guard = state.progress.lock().map_err(|_| "调优状态锁污染")?;
+        if guard.is_some() {
+            return Err("已有调优任务正在运行".into());
+        }
         *guard = Some(Arc::clone(&progress));
     }
     let monitor = {
@@ -61,28 +57,26 @@ pub async fn optimize_gear(
         let app = app.clone();
         std::thread::spawn(move || {
             let mut last = u64::MAX;
-            while !progress.done.load(Ordering::Relaxed) {
+            loop {
                 let pct = progress.percent();
                 if pct != last {
                     last = pct;
                     let _ = app.emit("gear-optimize-progress", pct);
                 }
+                if progress.done.load(Ordering::Relaxed) {
+                    break;
+                }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
-            let _ = app.emit("gear-optimize-progress", 100u64);
         })
     };
     let p = Arc::clone(&progress);
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let catalog = jpcg_gear::host::catalog()?;
-        jpcg_gear::optimize_joint(&catalog, &request, &p)
-    })
-    .await
-    .map_err(|e| e.to_string());
+    let result = tauri::async_runtime::spawn_blocking(move || optimize_impl(request, p))
+        .await
+        .map_err(|e| e.to_string());
     progress.done.store(true, Ordering::Relaxed);
     let _ = monitor.join();
     {
-        use tauri::Manager;
         let state = app.state::<crate::OptimizeState>();
         if let Ok(mut guard) = state.progress.lock() {
             *guard = None;
@@ -91,29 +85,62 @@ pub async fn optimize_gear(
     result?
 }
 
-/// 取消当前正在进行的配装调优（静态模式的 optimize_joint 会尽快退出）。
-#[tauri::command]
-pub fn cancel_gear_optimize(app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(feature = "static")]
-    {
-        use tauri::Manager;
-        let state = app.state::<crate::OptimizeState>();
-        if let Ok(guard) = state.progress.lock()
-            && let Some(progress) = guard.as_ref()
-        {
-            progress.cancel();
-        }
-    }
-    let _ = app;
-    Ok(())
+#[cfg(feature = "static")]
+fn optimize_impl(
+    request: jpcg_gear::OptimizeRequest,
+    progress: std::sync::Arc<jpcg_gear::OptimizeProgress>,
+) -> Result<jpcg_gear::OptimizeResult, String> {
+    let catalog = jpcg_gear::host::catalog()?;
+    jpcg_gear::optimize_joint(&catalog, &request, &progress)
 }
 
 #[cfg(feature = "dynamic")]
-#[tauri::command]
-pub async fn optimize_gear(
+fn optimize_impl(
     request: jpcg_gear::OptimizeRequest,
+    progress: std::sync::Arc<jpcg_gear::OptimizeProgress>,
 ) -> Result<jpcg_gear::OptimizeResult, String> {
-    tauri::async_runtime::spawn_blocking(move || call("optimize", &request))
-        .await
-        .map_err(|e| e.to_string())?
+    use std::sync::atomic::Ordering;
+    let id: jpcg_gear::OptimizeJobId = call("optimize_joint_start", &request)?;
+    struct ReleaseJob(jpcg_gear::OptimizeJobId);
+    impl Drop for ReleaseJob {
+        fn drop(&mut self) {
+            let _ = call::<_, serde_json::Value>("optimize_joint_release", &self.0);
+        }
+    }
+    let release = ReleaseJob(id);
+    let mut cancellation_sent = false;
+    loop {
+        if progress.cancel.load(Ordering::Relaxed) && !cancellation_sent {
+            let _: serde_json::Value = call("optimize_joint_cancel", &release.0)?;
+            cancellation_sent = true;
+        }
+        let status: jpcg_gear::OptimizeJobStatus = call("optimize_joint_poll", &release.0)?;
+        progress
+            .total
+            .store(status.progress.combinations, Ordering::Relaxed);
+        progress
+            .visited
+            .store(status.progress.visited, Ordering::Relaxed);
+        progress
+            .evaluated
+            .store(status.progress.evaluated, Ordering::Relaxed);
+        if status.done {
+            if let Some(error) = status.error {
+                return Err(error);
+            }
+            return status.result.ok_or("联合搜索未返回结果".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+#[tauri::command]
+pub fn cancel_gear_optimize(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let state = app.state::<crate::OptimizeState>();
+    let guard = state.progress.lock().map_err(|_| "调优状态锁污染")?;
+    if let Some(progress) = guard.as_ref() {
+        progress.cancel();
+    }
+    Ok(())
 }

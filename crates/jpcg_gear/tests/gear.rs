@@ -769,3 +769,291 @@ fn allow_upgraded_searches_upgraded_tiers_only() {
         );
     }
 }
+
+#[test]
+fn joint_search_matches_reference_with_arena_haste_and_mandatory_decorations() {
+    if !runtime_child("joint_search_matches_reference_with_arena_haste_and_mandatory_decorations") {
+        return;
+    }
+    let mut c = catalog();
+    let mut r = request();
+    r.loadout.base.zhushuxing = 0;
+    r.loadout.base.huixin = 0;
+    r.config.hostile.neigong_fangyu = 0;
+    r.config.hostile.huajin_dengji = 0;
+    r.config.hostile.yujin_dengji = 0;
+    r.loadout.enchants.clear();
+    r.loadout.wucai = None;
+    c.wucai = vec![WucaiDef {
+        id: "haste-stone".into(),
+        name: "加速石".into(),
+        stats: Stats {
+            jiasu: 7,
+            ..Default::default()
+        },
+    }];
+    c.enchants = vec![
+        EnchantDef {
+            slot: Slot::Tou,
+            id: "slow".into(),
+            name: "慢".into(),
+            stats: Stats::default(),
+        },
+        EnchantDef {
+            slot: Slot::Tou,
+            id: "fast".into(),
+            name: "快".into(),
+            stats: Stats {
+                jiasu: 11,
+                ..Default::default()
+            },
+        },
+        EnchantDef {
+            slot: Slot::Yi,
+            id: "fixed".into(),
+            name: "固定".into(),
+            stats: Stats {
+                jiasu: 13,
+                ..Default::default()
+            },
+        },
+    ];
+    r.constraints.locked = r.loadout.choices.clone();
+    r.constraints
+        .required_sets
+        .insert("sample-weiwang".into(), 4);
+    let haste = c.compose(&r.loadout).unwrap().stats.jiasu + 31;
+    r.constraints.stats.insert(
+        "jiasu".into(),
+        Bounds {
+            min: Some(haste),
+            max: Some(haste),
+        },
+    );
+    let bundle = jpcg_combo::timeline_host::load_combat_bundle("mowen".into()).unwrap();
+    let skill = bundle.skills.iter().find(|s| s.skill_name == "宫").unwrap();
+    let action = serde_json::json!({"kind":"cast","skill_id":skill.skill_id,"sub_id":skill.sub_id,"skill_name":skill.skill_name});
+    let mut timeline: jpcg_api::TimelineRequestDTO = serde_json::from_value(serde_json::json!({
+        "skills": bundle.skills, "actions": [action.clone(),action], "window": 30.0,
+        "player": player(&c.compose(&r.loadout).unwrap()), "hostile": r.config.hostile,
+        "xinfa": r.config.xinfa_config, "buff": r.config.buff, "coeff": r.config.coefficient,
+        "value_set": r.config.value_set, "samples": 50_000
+    }))
+    .unwrap();
+    let prepared =
+        jpcg_combo::timeline_host::prepare_timeline_from_store(timeline.clone()).unwrap();
+    let mc = jpcg_combo::timeline_host::TimelineTemplate::new(prepared)
+        .unwrap()
+        .mc_input()
+        .unwrap();
+    r.config.hostile.target_hp = (mc
+        .events
+        .iter()
+        .map(|e| u64::from(e.g) + u64::from(e.h))
+        .sum::<u64>()
+        / 2) as u32;
+    timeline.hostile = r.config.hostile.clone();
+    let expected = r.objective.clone();
+    for objective in [
+        expected,
+        Objective::Timeline {
+            request: timeline,
+            metric: TimelineMetric::KillProbability,
+        },
+    ] {
+        r.objective = objective;
+        let mut reference = r.clone();
+        if let Objective::Timeline { request, .. } = &mut reference.objective {
+            request.seed = Some(0);
+        }
+        let brute = optimize(&c, &reference, |_| true).unwrap();
+        let progress = OptimizeProgress::new();
+        let joint = optimize_joint(&c, &r, &progress).unwrap();
+        if matches!(r.objective, Objective::Timeline { .. })
+            && std::env::var_os("JPCG_TEST_CPU_ONLY").is_none()
+        {
+            assert!(
+                joint.best.as_ref().unwrap().score > 0.0
+                    && joint.best.as_ref().unwrap().score < 1.0
+            );
+            for backend in jpcg_compute::list_backends()
+                .into_iter()
+                .filter(|b| b.kind == "wgpu")
+                .filter(|b| {
+                    std::env::var("JPCG_TEST_WGPU_INDEX")
+                        .map_or(true, |index| b.id == format!("wgpu:{index}"))
+                })
+            {
+                let mut gpu_req = r.clone();
+                gpu_req.compute = Some(backend.id.clone());
+                let gpu = optimize_joint(&c, &gpu_req, &OptimizeProgress::new()).unwrap();
+                assert_eq!(
+                    gpu.best.as_ref().unwrap().score,
+                    joint.best.as_ref().unwrap().score,
+                    "{}",
+                    backend.label
+                );
+                assert_eq!(gpu.progress.evaluated, joint.progress.evaluated);
+                eprintln!(
+                    "Joint search CPU/{} parity passed: {}",
+                    backend.id, backend.label
+                );
+            }
+        }
+        assert!(joint.complete);
+        assert_eq!(joint.progress.visited, joint.progress.combinations);
+        assert_eq!(joint.progress.evaluated, 1);
+        assert!(progress.done.load(std::sync::atomic::Ordering::Relaxed));
+        assert_eq!(joint.baseline.score, brute.baseline.score);
+        let best = joint.best.unwrap();
+        assert_eq!(best.score, brute.best.unwrap().score);
+        assert_eq!(best.composed.stats.jiasu, haste);
+        assert_eq!(best.composed.loadout.enchants[&Slot::Yi], "fixed");
+        assert_eq!(best.composed.loadout.enchants[&Slot::Tou], "fast");
+        assert_eq!(best.composed.set_counts["sample-weiwang"], 5);
+    }
+    // 零收益装饰与基线同分时，也必须返回佩戴了必选附魔/五彩石的方案。
+    r.objective = request().objective;
+    r.constraints.stats.clear();
+    for enchant in &mut c.enchants {
+        enchant.stats = Stats::default();
+    }
+    for stone in &mut c.wucai {
+        stone.stats = Stats::default();
+    }
+    let tied = optimize_joint(&c, &r, &OptimizeProgress::new())
+        .unwrap()
+        .best
+        .unwrap();
+    assert_eq!(tied.composed.loadout.enchants[&Slot::Yi], "fixed");
+    assert!(tied.composed.loadout.wucai.is_some());
+    // 四件套在当前锁定装备下不可达，应完整结束且无需任何评分。
+    r.constraints.required_sets.clear();
+    r.constraints
+        .required_sets
+        .insert("sample-mingjian".into(), 4);
+    let joint = optimize_joint(&c, &r, &OptimizeProgress::new()).unwrap();
+    assert!(joint.complete);
+    assert!(joint.best.is_none());
+    assert_eq!(joint.progress.evaluated, 0);
+    assert_eq!(joint.progress.visited, joint.progress.combinations);
+}
+
+#[test]
+fn joint_score_cache_keeps_defense_pareto_and_avoids_duplicate_mc() {
+    if !runtime_child("joint_score_cache_keeps_defense_pareto_and_avoids_duplicate_mc") {
+        return;
+    }
+    let mut c = catalog();
+    let mut r = request();
+    c.wucai.clear();
+    r.loadout.wucai = None;
+    r.loadout.enchants.clear();
+    r.constraints.locked = r.loadout.choices.clone();
+    c.enchants = vec![
+        EnchantDef {
+            slot: Slot::Yi,
+            id: "life".into(),
+            name: "life".into(),
+            stats: Stats {
+                qixue: 100,
+                ..Default::default()
+            },
+        },
+        EnchantDef {
+            slot: Slot::Yi,
+            id: "defense".into(),
+            name: "defense".into(),
+            stats: Stats {
+                huajin: 100,
+                ..Default::default()
+            },
+        },
+    ];
+    let bundle = jpcg_combo::timeline_host::load_combat_bundle("mowen".into()).unwrap();
+    let sk = bundle.skills.iter().find(|s| s.skill_name == "宫").unwrap();
+    let timeline = serde_json::from_value(serde_json::json!({
+        "skills": bundle.skills,
+        "actions":[{"kind":"cast","skill_id":sk.skill_id,"sub_id":sk.sub_id,"skill_name":sk.skill_name}],
+        "player":player(&c.compose(&r.loadout).unwrap()),"hostile":r.config.hostile,
+        "xinfa":r.config.xinfa_config,"buff":r.config.buff,"coeff":r.config.coefficient,
+        "value_set":r.config.value_set,"samples":257,"seed":0
+    })).unwrap();
+    r.objective = Objective::Timeline {
+        request: timeline,
+        metric: TimelineMetric::KillProbability,
+    };
+    let result = optimize_joint(&c, &r, &OptimizeProgress::new()).unwrap();
+    assert!(result.complete);
+    assert_eq!(result.progress.evaluated, 2);
+    assert_eq!(result.mc_evaluations, 0); // 两种防御变化都复用已经计算的基线评分。
+    assert_eq!(result.pareto.len(), 2);
+    assert!(result.best.unwrap().score <= 1.0);
+}
+
+#[test]
+fn joint_json_session_matches_direct_engine_and_cli_stdout_is_clean() {
+    if !runtime_child("joint_json_session_matches_direct_engine_and_cli_stdout_is_clean") {
+        return;
+    }
+    let mut c = catalog();
+    c.wucai.clear();
+    let mut r = request();
+    r.constraints.locked = r.loadout.choices.clone();
+    let expected = optimize_joint(&c, &r, &OptimizeProgress::new()).unwrap();
+    let input = serde_json::to_string(&r).unwrap();
+    let id: OptimizeJobId =
+        serde_json::from_value(host::dispatch(&c, "optimize_joint_start", &input).unwrap())
+            .unwrap();
+    let input = serde_json::to_string(&id).unwrap();
+    let started = std::time::Instant::now();
+    loop {
+        let status: OptimizeJobStatus =
+            serde_json::from_value(host::dispatch(&c, "optimize_joint_poll", &input).unwrap())
+                .unwrap();
+        if status.done {
+            assert!(status.error.is_none());
+            assert_eq!(
+                serde_json::to_value(status.result.unwrap()).unwrap(),
+                serde_json::to_value(&expected).unwrap()
+            );
+            break;
+        }
+        assert!(started.elapsed().as_secs() < 10);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let bundle = jpcg_combo::timeline_host::load_combat_bundle("mowen".into()).unwrap();
+    let skill = bundle.skills.iter().find(|s| s.skill_name == "宫").unwrap();
+    let timeline=serde_json::from_value(serde_json::json!({
+        "skills":bundle.skills,"actions":[{"kind":"cast","skill_id":skill.skill_id,"sub_id":skill.sub_id,"skill_name":skill.skill_name}],
+        "player":r.config.player,"hostile":r.config.hostile,"xinfa":r.config.xinfa_config,
+        "buff":r.config.buff,"coeff":r.config.coefficient,"value_set":r.config.value_set,"samples":17,"seed":0
+    })).unwrap();
+    r.objective = Objective::Timeline {
+        request: timeline,
+        metric: TimelineMetric::KillProbability,
+    };
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), serde_json::to_string(&r).unwrap()).unwrap();
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_gear-opt"))
+        .args([
+            "--catalog",
+            dir().to_str().unwrap(),
+            "joint",
+            "--request",
+            file.path().to_str().unwrap(),
+            "--seconds",
+            "0",
+        ])
+        .env("JPCG_DATA_DIR", dir().parent().unwrap())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["complete"], false);
+    assert_eq!(result["stop_reason"], "cancelled");
+}

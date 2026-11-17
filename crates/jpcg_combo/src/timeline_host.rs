@@ -309,8 +309,37 @@ pub fn build_timeline_input(req: TimelineRequestDTO) -> Result<timeline::Timelin
 
 /// 时间轴模拟（DTO 请求 → 结果 DTO）
 pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
-    let input = build_timeline_input(req)?;
+    calculate_timeline_with_cooldowns(req, &[])
+}
+
+/// 装备 CD 调整在 overlay/秘籍/奇穴之后应用，供基线和批量搜索共用。
+pub fn calculate_timeline_with_cooldowns(
+    req: TimelineRequestDTO,
+    adjustments: &[(u32, f32)],
+) -> Result<TimelineResultDTO, String> {
+    let mut input = build_timeline_input(req)?;
+    apply_cooldowns(&mut input, adjustments)?;
     Ok(TimelineResultDTO::from(timeline::simulate(&input)))
+}
+
+fn apply_cooldowns(
+    input: &mut timeline::TimelineInput,
+    adjustments: &[(u32, f32)],
+) -> Result<(), String> {
+    for &(skill_id, seconds) in adjustments {
+        if !seconds.is_finite() || seconds < 0.0 {
+            return Err("装备CD调整必须为有限非负秒数".into());
+        }
+        for skill in &mut input.skills {
+            if skill.skill.skill_id == skill_id {
+                skill.skill.cooldown = (skill.skill.cooldown - seconds).max(0.0);
+                if skill.skill.recharge > 0.0 {
+                    skill.skill.recharge = (skill.skill.recharge - seconds).max(0.0);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// 批量 MC 输入：窗口内伤害事件（按结算时刻排序，与引擎内 MC 同序）+ 初始血量 + 确定性总伤。
@@ -324,6 +353,7 @@ pub struct TimelineMcInput {
 #[derive(Clone)]
 pub struct TimelineTemplate {
     input: timeline::TimelineInput,
+    cooldown_bases: Vec<(f32, f32)>,
 }
 
 impl TimelineTemplate {
@@ -332,12 +362,35 @@ impl TimelineTemplate {
         // 批量路径只算确定性部分（伤害骰/总伤），MC 由 CPU/wgpu 后端统一跑，避免重复 50k 采样。
         input.samples = 0;
         input.seed = None;
-        Ok(Self { input })
+        let cooldown_bases = input
+            .skills
+            .iter()
+            .map(|s| (s.skill.cooldown, s.skill.recharge))
+            .collect();
+        Ok(Self {
+            input,
+            cooldown_bases,
+        })
     }
 
     /// 替换候选玩家（配装合成出的 player 面板）。
     pub fn set_player(&mut self, player: jpcg_api::PlayerConfigDTO) {
         self.input.player = jpcg_core::type_set::player::PlayerConfig::from(player);
+    }
+
+    /// 每个候选先恢复模板 CD，防止上一个候选的套装效果泄漏。
+    pub fn set_loadout(
+        &mut self,
+        player: jpcg_api::PlayerConfigDTO,
+        adjustments: &[(u32, f32)],
+    ) -> Result<(), String> {
+        self.set_player(player);
+        for (skill, &(cooldown, recharge)) in self.input.skills.iter_mut().zip(&self.cooldown_bases)
+        {
+            skill.skill.cooldown = cooldown;
+            skill.skill.recharge = recharge;
+        }
+        apply_cooldowns(&mut self.input, adjustments)
     }
 
     /// 用当前玩家跑确定性 MC 输入（窗口内 McEvent + hp0 + 总伤）。
@@ -696,5 +749,43 @@ mod tests {
         let back: TimelineRequestDTO = serde_json::from_str(&json).unwrap();
         let result = calculate_timeline(back).unwrap();
         assert!(result.total_damage > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod equipment_cooldown_tests {
+    use super::*;
+    fn input() -> timeline::TimelineInput {
+        let req: TimelineRequestDTO = serde_json::from_value(serde_json::json!({
+            "skills":[{"skill_id":1,"cooldown":30.0,"charges":2,"recharge":30.0}],
+            "player":{},"hostile":{},"xinfa":{},"buff":{},"coeff":{}
+        }))
+        .unwrap();
+        build_timeline_input(req).unwrap()
+    }
+    #[test]
+    fn equipment_reduction_applies_to_prepared_skills_and_resets_between_candidates() {
+        let input = input();
+        let bases = input
+            .skills
+            .iter()
+            .map(|s| (s.skill.cooldown, s.skill.recharge))
+            .collect();
+        let mut template = TimelineTemplate {
+            input,
+            cooldown_bases: bases,
+        };
+        template
+            .set_loadout(Default::default(), &[(1, 15.0)])
+            .unwrap();
+        assert_eq!(template.input.skills[0].skill.cooldown, 15.0);
+        assert_eq!(template.input.skills[0].skill.recharge, 15.0);
+        template.set_loadout(Default::default(), &[]).unwrap();
+        assert_eq!(template.input.skills[0].skill.cooldown, 30.0);
+        assert_eq!(template.input.skills[0].skill.recharge, 30.0);
+        template
+            .set_loadout(Default::default(), &[(1, 100.0)])
+            .unwrap();
+        assert_eq!(template.input.skills[0].skill.cooldown, 0.0);
     }
 }

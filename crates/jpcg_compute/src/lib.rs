@@ -9,7 +9,7 @@
 use jpcg_api::ComputeBackendDTO;
 use jpcg_combo::kill_mc::{self, McEvent};
 
-/// 每候选最多伤害事件数（GPU 缓冲区步长）。
+/// 历史推荐事件步长；run 使用实际事件数，不将它作为上限。
 pub const MAX_EVENTS: usize = 64;
 /// 固定 MC 样本数（与计算器显示一致）。
 pub const SAMPLES: u32 = 50_000;
@@ -51,17 +51,14 @@ fn cpu_model() -> String {
 fn cpu_isa() -> &'static str {
     #[cfg(target_arch = "x86_64")]
     {
-        if std::is_x86_feature_detected!("avx512f") {
+        if kill_mc::avx512_available() {
             return "AVX-512";
         }
-        if std::is_x86_feature_detected!("avx2") {
-            return "AVX2";
-        }
-        return "SSE";
+        return "标量 (x86-64)";
     }
     #[cfg(target_arch = "aarch64")]
     {
-        return "NEON";
+        return "标量 (aarch64)";
     }
     #[allow(unreachable_code)]
     "标量"
@@ -135,6 +132,9 @@ pub fn run_batch(
         let gpu = WgpuCompute::new(index)?;
         return gpu.run(candidates, samples, seed);
     }
+    if backend != "cpu" {
+        return Err(format!("非法后端 id: {backend}"));
+    }
     Ok(run_cpu(candidates, samples, seed))
 }
 
@@ -145,7 +145,8 @@ struct Params { samples: u32, seed: u32, events: u32, max_events: u32 };
 @group(0) @binding(1) var<storage, read> dice: array<Dice>;
 @group(0) @binding(2) var<storage, read> counts: array<u32>;
 @group(0) @binding(3) var<storage, read> hp0s: array<f32>;
-@group(0) @binding(4) var<storage, read_write> out: array<atomic<u32>>;
+@group(0) @binding(4) var<storage, read_write> out: array<u32>;
+var<workgroup> partial: array<u32, 256>;
 
 fn mix32(x0: u32) -> u32 {
   var x = x0;
@@ -182,10 +183,16 @@ fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) lid
     }
     s = s + 256u;
   }
-  if (lid.x == 0u) { atomicStore(&out[cand], 0u); }
+  partial[lid.x] = kills;
   workgroupBarrier();
-  atomicAdd(&out[cand], kills);
-  workgroupBarrier();
+  var stride = 128u;
+  loop {
+    if (lid.x < stride) { partial[lid.x] = partial[lid.x] + partial[lid.x + stride]; }
+    workgroupBarrier();
+    if (stride == 1u) { break; }
+    stride = stride / 2u;
+  }
+  if (lid.x == 0u) { out[cand] = partial[0]; }
 }
 "#;
 
@@ -195,6 +202,18 @@ pub struct WgpuCompute {
     queue: wgpu::Queue,
     pipeline: wgpu::ComputePipeline,
     bgl: wgpu::BindGroupLayout,
+    scratch: std::sync::Mutex<Option<GpuScratch>>,
+}
+
+struct GpuScratch {
+    dice: wgpu::Buffer,
+    counts: wgpu::Buffer,
+    hp: wgpu::Buffer,
+    params: wgpu::Buffer,
+    output: wgpu::Buffer,
+    staging: wgpu::Buffer,
+    dice_capacity: u64,
+    candidate_capacity: u64,
 }
 
 impl WgpuCompute {
@@ -226,133 +245,161 @@ impl WgpuCompute {
             queue,
             pipeline,
             bgl,
+            scratch: std::sync::Mutex::new(None),
         })
     }
 
-    /// 批量跑 MC；返回每候选击杀数（总样本中的命中数）。
+    /// 按设备缓冲区/dispatch 限制切片，每片独立绑定，候选索引不会重复归零覆盖。
     pub fn run(
         &self,
         candidates: &[CandidateMc],
         samples: u32,
         seed: u64,
     ) -> Result<Vec<u64>, String> {
-        use wgpu::util::DeviceExt;
+        let mut result = Vec::with_capacity(candidates.len());
+        let limits = self.device.limits();
+        let binding_limit = limits
+            .max_storage_buffer_binding_size
+            .min(limits.max_buffer_size);
+        let mut offset = 0;
+        while offset < candidates.len() {
+            let end = (offset + limits.max_compute_workgroups_per_dimension as usize)
+                .min(candidates.len());
+            let events = candidates[offset..end]
+                .iter()
+                .map(|c| c.events.len())
+                .max()
+                .unwrap_or(0)
+                .max(1);
+            let stride = u64::try_from(events)
+                .map_err(|_| "事件数溢出")?
+                .checked_mul(16)
+                .ok_or("事件缓冲区大小溢出")?;
+            let capacity = (binding_limit / stride).min(binding_limit / 4) as usize;
+            if capacity == 0 {
+                return Err("单个候选事件数超过GPU缓冲区限制".into());
+            }
+            let len = (end - offset).min(capacity);
+            result.extend(self.run_slice(
+                &candidates[offset..offset + len],
+                samples,
+                seed,
+                events,
+            )?);
+            offset += len;
+        }
+        Ok(result)
+    }
+
+    fn run_slice(
+        &self,
+        candidates: &[CandidateMc],
+        samples: u32,
+        seed: u64,
+        max_events: usize,
+    ) -> Result<Vec<u64>, String> {
         let n = candidates.len();
-        if n == 0 {
-            return Ok(Vec::new());
-        }
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        struct Dice {
-            g: u32,
-            h: u32,
-            rate: f32,
-            lost: f32,
-        }
-        let mut dice_bytes: Vec<u8> = Vec::with_capacity(n * MAX_EVENTS * 16);
-        let mut counts: Vec<u32> = Vec::with_capacity(n);
-        let mut hp0s: Vec<f32> = Vec::with_capacity(n);
+        let event_stride = u32::try_from(max_events).map_err(|_| "事件数超过u32")?;
+        let mut dice = Vec::with_capacity(n * max_events * 16);
+        let mut counts = Vec::with_capacity(n);
+        let mut hp = Vec::with_capacity(n);
         for c in candidates {
-            if c.events.len() > MAX_EVENTS {
-                return Err(format!(
-                    "候选事件数 {} 超过上限 {MAX_EVENTS}",
-                    c.events.len()
-                ));
-            }
-            let mut d = vec![
-                Dice {
-                    g: 0,
-                    h: 0,
-                    rate: 2.0,
-                    lost: 0.0
-                };
-                MAX_EVENTS
-            ];
-            for (i, e) in c.events.iter().enumerate() {
-                d[i] = Dice {
-                    g: e.g,
-                    h: e.h,
-                    rate: e.rate,
-                    lost: e.lost,
-                };
-            }
-            for x in &d {
-                dice_bytes.extend_from_slice(&x.g.to_le_bytes());
-                dice_bytes.extend_from_slice(&x.h.to_le_bytes());
-                dice_bytes.extend_from_slice(&x.rate.to_le_bytes());
-                dice_bytes.extend_from_slice(&x.lost.to_le_bytes());
-            }
             counts.push(c.events.len() as u32);
-            hp0s.push(c.hp0 as f32);
+            hp.push(c.hp0 as f32);
+            for e in &c.events {
+                dice.extend_from_slice(&e.g.to_le_bytes());
+                dice.extend_from_slice(&e.h.to_le_bytes());
+                dice.extend_from_slice(&e.rate.to_le_bytes());
+                dice.extend_from_slice(&e.lost.to_le_bytes());
+            }
+            dice.resize(dice.len() + (max_events - c.events.len()) * 16, 0);
         }
-        let seed32 = (seed as u32) ^ ((seed >> 32) as u32);
-        let params: [u32; 4] = [samples, seed32, 0, MAX_EVENTS as u32];
-        let params_bytes: Vec<u8> = params.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let dice_buf = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("dice"),
-                contents: &dice_bytes,
-                usage: wgpu::BufferUsages::STORAGE,
+        let mut scratch = self.scratch.lock().map_err(|_| "GPU缓冲区锁污染")?;
+        let dice_size = dice.len() as u64;
+        let candidate_size = (n * 4) as u64;
+        if scratch
+            .as_ref()
+            .is_none_or(|s| s.dice_capacity < dice_size || s.candidate_capacity < candidate_size)
+        {
+            let make = |label: &'static str, size: u64, usage| {
+                self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size,
+                    usage,
+                    mapped_at_creation: false,
+                })
+            };
+            *scratch = Some(GpuScratch {
+                dice: make(
+                    "dice",
+                    dice_size,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                ),
+                counts: make(
+                    "counts",
+                    candidate_size,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                ),
+                hp: make(
+                    "hp",
+                    candidate_size,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                ),
+                params: make(
+                    "params",
+                    16,
+                    wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                ),
+                output: make(
+                    "out",
+                    candidate_size,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                ),
+                staging: make(
+                    "staging",
+                    candidate_size,
+                    wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                ),
+                dice_capacity: dice_size,
+                candidate_capacity: candidate_size,
             });
-        let counts_bytes = bytemuck_u32(&counts);
-        let hp0_bytes = bytemuck_f32(&hp0s);
-        let counts_buf = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("counts"),
-                contents: &counts_bytes,
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-        let hp0_buf = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("hp0s"),
-                contents: &hp0_bytes,
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-        let params_buf = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("params"),
-                contents: &params_bytes,
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-        let out_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("out"),
-            size: (n as u64) * 4,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let stage = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("stage"),
-            size: (n as u64) * 4,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        }
+        let buffers = scratch.as_ref().ok_or("GPU缓冲区未初始化")?;
+        self.queue.write_buffer(&buffers.dice, 0, &dice);
+        self.queue
+            .write_buffer(&buffers.counts, 0, &bytemuck_u32(&counts));
+        self.queue.write_buffer(&buffers.hp, 0, &bytemuck_f32(&hp));
+        let params = [
+            samples,
+            (seed as u32) ^ ((seed >> 32) as u32),
+            n as u32,
+            event_stride,
+        ];
+        self.queue
+            .write_buffer(&buffers.params, 0, &bytemuck_u32(&params));
         let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.bgl,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: params_buf.as_entire_binding(),
+                    resource: buffers.params.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: dice_buf.as_entire_binding(),
+                    resource: buffers.dice.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: counts_buf.as_entire_binding(),
+                    resource: buffers.counts.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: hp0_buf.as_entire_binding(),
+                    resource: buffers.hp.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: out_buf.as_entire_binding(),
+                    resource: buffers.output.as_entire_binding(),
                 },
             ],
         });
@@ -366,17 +413,11 @@ impl WgpuCompute {
             });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bind, &[]);
-            // 单次 dispatch 的 workgroup 上限 65535，按批切片。
-            let mut start: u32 = 0;
-            while (start as usize) < n {
-                let len = ((n - start as usize).min(65_535)) as u32;
-                pass.dispatch_workgroups(len, 1, 1);
-                start += len;
-            }
+            pass.dispatch_workgroups(n as u32, 1, 1);
         }
-        encoder.copy_buffer_to_buffer(&out_buf, 0, &stage, 0, (n as u64) * 4);
+        encoder.copy_buffer_to_buffer(&buffers.output, 0, &buffers.staging, 0, candidate_size);
         self.queue.submit(Some(encoder.finish()));
-        let slice = stage.slice(..);
+        let slice = buffers.staging.slice(0..candidate_size);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |r| {
             let _ = tx.send(r);
@@ -388,13 +429,13 @@ impl WgpuCompute {
             .map_err(|e| e.to_string())?
             .map_err(|e| format!("{e:?}"))?;
         let data = slice.get_mapped_range().map_err(|e| format!("{e:?}"))?;
-        let out: Vec<u64> = data
+        let result = data
             .chunks_exact(4)
             .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]) as u64)
             .collect();
         drop(data);
-        stage.unmap();
-        Ok(out)
+        buffers.staging.unmap();
+        Ok(result)
     }
 }
 
@@ -434,16 +475,90 @@ mod tests {
 
     #[test]
     fn cpu_matches_wgpu_when_available() {
+        if std::env::var_os("JPCG_TEST_CPU_ONLY").is_some() {
+            return;
+        }
+        let selected = std::env::var("JPCG_TEST_WGPU_INDEX")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok());
         let cands = sample();
-        let cpu = run_cpu(&cands, 4000, 12345);
+        let samples = 50_000;
+        let seed = 0x1234_5678_9abc_def0;
+        let cpu = run_cpu(&cands, samples, seed);
+        assert!(cpu.iter().any(|&count| count > 0 && count < samples as u64));
         // 找一个非 CPU 适配器（无 GPU 时自动跳过）
         let adapters = wgpu_adapters();
-        let idx = adapters
+        let mut tested = 0;
+        for (idx, adapter) in adapters.iter().enumerate() {
+            let info = adapter.get_info();
+            if selected.is_some_and(|selected| selected != idx) {
+                continue;
+            }
+            if info.device_type == wgpu::DeviceType::Cpu {
+                continue;
+            }
+            let gpu = WgpuCompute::new(idx).expect("wgpu context");
+            let got = gpu.run(&cands, samples, seed).expect("wgpu run");
+            assert_eq!(cpu, got, "wgpu:{idx}: {} ({:?})", info.name, info.backend);
+            eprintln!(
+                "CPU/wgpu:{idx} parity passed: {} ({:?})",
+                info.name, info.backend
+            );
+            tested += 1;
+        }
+        eprintln!("GPU adapters tested: {tested}");
+    }
+}
+
+#[cfg(test)]
+mod batch_boundary_tests {
+    use super::*;
+    fn gpu() -> Option<WgpuCompute> {
+        if std::env::var_os("JPCG_TEST_CPU_ONLY").is_some() {
+            return None;
+        }
+        if let Ok(index) = std::env::var("JPCG_TEST_WGPU_INDEX") {
+            return Some(WgpuCompute::new(index.parse().expect("GPU index")).expect("GPU context"));
+        }
+        let adapters = wgpu_adapters();
+        let index = adapters
             .iter()
-            .position(|a| a.get_info().device_type != wgpu::DeviceType::Cpu);
-        let Some(idx) = idx else { return };
-        let gpu = WgpuCompute::new(idx).expect("wgpu context");
-        let got = gpu.run(&cands, 4000, 12345).expect("wgpu run");
-        assert_eq!(cpu, got);
+            .position(|a| a.get_info().device_type != wgpu::DeviceType::Cpu)?;
+        Some(WgpuCompute::new(index).expect("GPU context"))
+    }
+    #[test]
+    fn gpu_handles_dispatch_tail_and_more_than_64_events() {
+        let Some(gpu) = gpu() else {
+            return;
+        };
+        let candidates: Vec<_> = (0..65_536)
+            .map(|i| CandidateMc {
+                events: vec![McEvent {
+                    g: 100,
+                    h: 100,
+                    rate: 1.0,
+                    lost: 0.0,
+                }],
+                hp0: if i == 65_535 { 50.0 } else { 200.0 },
+            })
+            .collect();
+        let got = gpu.run(&candidates, 1, 123).unwrap();
+        assert_eq!(got.last(), Some(&1));
+        assert!(got[..65_535].iter().all(|v| *v == 0));
+        let long = vec![CandidateMc {
+            events: vec![
+                McEvent {
+                    g: 1,
+                    h: 1,
+                    rate: 0.5,
+                    lost: 0.0
+                };
+                65
+            ],
+            hp0: 65.0,
+        }];
+        assert_eq!(gpu.run(&long, 17, 456).unwrap(), run_cpu(&long, 17, 456));
+        // 再次缩小输入，验证复用缓冲区不会读到上一批尾部。
+        assert_eq!(gpu.run(&candidates[..1], 1, 123).unwrap(), vec![0]);
     }
 }

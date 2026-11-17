@@ -67,7 +67,7 @@ export interface GearOptimizeRequest {
   /** 计算平台 id（cpu / wgpu:<n>；空 = CPU）。 */
   compute?: string | null;
 }
-export interface GearCandidate { composed: GearComposed; score: number }
+export interface GearCandidate { composed: GearComposed; score: number; tie_break_damage?: number }
 export interface GearProgress { visited: number; evaluated: number; combinations: number }
 export interface GearOptimizeResult {
   best: GearCandidate | null;
@@ -78,4 +78,5 @@ export interface GearOptimizeResult {
   complete: boolean;
   stop_reason: string;
   warnings: string[];
+  mc_evaluations?: number;
 }

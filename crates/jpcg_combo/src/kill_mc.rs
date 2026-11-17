@@ -66,6 +66,9 @@ pub fn kill_counts_scalar(events: &[McEvent], hp0: f32, samples: u32, seed: u32)
 }
 
 /// AVX-512 实现（16 样本一条向量；运行时检测后调用）。
+///
+/// # Safety
+/// 调用前必须确认 `avx512_available()` 为 true，满足 f/dq/vl/bw 全部子集。
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx512f,avx512dq,avx512vl,avx512bw")]
 pub unsafe fn kill_counts_avx512(
@@ -173,6 +176,21 @@ pub unsafe fn kill_counts_avx512(
     out
 }
 
+/// 必须覆盖 target_feature 声明的完整指令子集。
+pub fn avx512_available() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        std::is_x86_feature_detected!("avx512f")
+            && std::is_x86_feature_detected!("avx512dq")
+            && std::is_x86_feature_detected!("avx512vl")
+            && std::is_x86_feature_detected!("avx512bw")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
+}
+
 /// 击杀计数入口：x86 上优先 AVX-512，否则标量。
 pub fn kill_counts(events: &[McEvent], hp0: f64, samples: u32, seed: u64) -> Vec<u64> {
     let hp0 = hp0 as f32;
@@ -182,8 +200,8 @@ pub fn kill_counts(events: &[McEvent], hp0: f64, samples: u32, seed: u64) -> Vec
     }
     #[cfg(target_arch = "x86_64")]
     {
-        if std::is_x86_feature_detected!("avx512f") {
-            // SAFETY: 已用 is_x86_feature_detected! 确认 avx512f 可用。
+        if avx512_available() {
+            // SAFETY: 已确认 target_feature 声明的全部 AVX-512 子集可用。
             return unsafe { kill_counts_avx512(events, hp0, samples, seed) };
         }
     }
@@ -216,7 +234,7 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn avx512_matches_scalar_scalar_only_when_16_aligned() {
-        if !std::is_x86_feature_detected!("avx512f") {
+        if !avx512_available() {
             return;
         }
         let ev = events();
@@ -229,7 +247,7 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn avx512_handles_tail() {
-        if !std::is_x86_feature_detected!("avx512f") {
+        if !avx512_available() {
             return;
         }
         let ev = events();

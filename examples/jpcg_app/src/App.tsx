@@ -218,8 +218,7 @@ export default function App() {
     const arenaSet = catalog.sets.find((x) => x.source === "mingjian" && x.kind === "armor");
     const requiredSets: Record<string, number> = opts.arena4 && arenaSet ? { [arenaSet.id]: 4 } : {};
     const stats: Record<string, { min?: number; max?: number }> = opts.hasteMin != null ? { jiasu: { min: opts.hasteMin } } : {};
-    // 全量穷举对击杀率目标用「总伤+方差」近似做搜索、Pareto 候选再 50k MC 复核；
-    // 采样调优则直接逐候选跑 50k MC。
+    // 联合穷举按相同进攻输入复用时间轴及精确 MC，防御方案仍分别参与约束/Pareto。
     const metric: GearTimelineMetric = opts.metric;
     const samples = metric === "kill_probability" ? 50000 : 0;
     const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
@@ -253,7 +252,7 @@ export default function App() {
     anchor.download = `jpcg-exhaustive-request-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    addToast("已导出全量穷举请求（含当前约束；击杀率目标会先用总伤+方差近似搜索，再 MC 复核 Pareto）", "success");
+    addToast("已导出全量穷举请求（含当前约束；击杀率目标使用所选后端精确 MC）", "success");
   }, [buildOptimizeRequest, addToast]);
 
   const handleOptimize = useCallback(async (opts: OptimizeOptions) => {
