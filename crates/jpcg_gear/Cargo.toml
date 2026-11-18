@@ -14,7 +14,7 @@ required-features = ["engine"]
 
 [features]
 default = ["engine"]
-engine = ["dep:jpcg_core", "dep:jpcg_combo", "dep:clap"]
+engine = ["dep:jpcg_core", "dep:jpcg_combo", "dep:jpcg_compute", "dep:clap", "dep:libc"]
 
 [dependencies]
 serde.workspace = true
@@ -24,7 +24,9 @@ clap = { workspace = true, optional = true }
 jpcg_api.workspace = true
 jpcg_core = { workspace = true, optional = true }
 jpcg_combo = { workspace = true, optional = true }
+jpcg_compute = { workspace = true, optional = true }
 rayon.workspace = true
+libc = { workspace = true, optional = true }
 
 [lints]
 workspace = true

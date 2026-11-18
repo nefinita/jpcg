@@ -408,7 +408,7 @@ impl Catalog {
             warnings.push("仅合成样例数据，不代表游戏装备或推荐配装".into());
         }
         if !cooldowns.is_empty() {
-            warnings.push("4件套CD仅返回元数据，当前计算引擎未应用".into());
+            warnings.push("4件套CD由时间轴目标应用；纯技能/旧连招目标不应用时序调整".into());
         }
         let panel = match loadout.attribute_rules.as_deref() {
             Some(_) => {

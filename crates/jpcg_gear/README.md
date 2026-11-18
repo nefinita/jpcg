@@ -49,7 +49,7 @@ let player_dto = jpcg_gear::player(&composed);
 let response = jpcg_gear::call(&catalog, json_request);
 ```
 
-`Loadout` 的 `school/revision/value_set/base/choices` 全部随 TOML 保存；`base` 必须是**裸装基础值**，合成时不读取计算配置已有的 player 点数，避免装备重复相加。导出用 `toml::to_string_pretty(&composed.loadout)`，重新解析即可复现。`Composed` 返回 profile、完整 stats、各套装阈值及档位、未应用 CD 元数据与 warnings。player 转换传递伤害属性与加速等级；气血/御劲/化劲保留在 Composed 中供驾驶台展示或约束。启用 #98 历史规则时还返回派生 panel，并传递已转换的心法额外攻击，详见下方说明。
+`Loadout` 的 `school/revision/value_set/base/choices` 全部随 TOML 保存；`base` 必须是**裸装基础值**，合成时不读取计算配置已有的 player 点数，避免装备重复相加。导出用 `toml::to_string_pretty(&composed.loadout)`，重新解析即可复现。`Composed` 返回 profile、完整 stats、各套装阈值及档位、CD 元数据与 warnings（时间轴目标应用 CD）。player 转换传递伤害属性与加速等级；气血/御劲/化劲保留在 Composed 中供驾驶台展示或约束。启用 #98 历史规则时还返回派生 panel，并传递已转换的心法额外攻击，详见下方说明。
 
 防具仅头/衣/腰/手/鞋计数，裤子/武器/暗器不能声明防具套装。2 件奖励一次、4 件另附 CD，两者同时生效；跨来源 2+2 可叠；饰品 2/3 件奖励同时生效。
 
@@ -71,12 +71,16 @@ JSON 输入为以下之一，拒绝多余字段：
 
 - `expected`：明确的非零正技能权重，评分是指定技能 q 的加权和。调用现有 `JpcgConfig::q_cal`，一次加载技能并缓存相同属性/CD评估；重名技能报错，不把技能池隐式当作连招。配置中 player 被合成属性替换，其余沿用当前计算链。
 - `kill_probability`：完整 steps 快照、samples（1..50000）、固定 seed，直接调用现有 combo host；不修改时序/加速/采样算法。出现 4 件 CD 时默认报错；只有显式 `allow_unapplied_cd=true` 才允许做“仅属性、固定技能序列”的击杀率计算，并返回 warning。
-- 加速只合成、约束、导出；当前目标不重排技能时序，不宣称有加速收益。4 件 CD 只输出 `skill_id/seconds`，待 #92 的引擎能力和正式规则到位后接入。
+- 时间轴目标将合成加速和套装 CD 应用于时序；纯技能权重目标不重排时序。旧连招目标仍需显式确认未应用 CD。套装规则以目录中的 `skill_id/seconds` 为准。
 - 固定槽位与候选排序的**有界穷举**，非 DP/全规模高效求解器。每个完整组合都算预算，违反属性约束的组合不调用目标函数。预算内可行基线预先加入，保证有限搜索不会劣于一个符合新约束的基线。
 - `complete=true` 表示全部候选组合遍历完，才能称为全局最优；`complete=false` 明确表示预算耗尽或取消。Pareto 仅针对已评估方案，以目标值和气血/御劲/化劲三个独立数值比较，不编造统一生存权重；击杀目标时第一维是击杀率。
 - `optimize_with` 可注入评分器做精确小空间对照，`optimize` 绑定现有引擎。两者的进度回调收到 visited/evaluated/combinations；返回 false 在组合间取消，无法中断一次同步 combo 采样。
 
-全候选约 1 亿组合，当前有界穷举不满足该空间 <1 秒的最终性能验收；需要后续 DP/分支定界或其他近似算法，并公开最优性/误差语义。样例限制为威望基础档、16 个组合，用于功能回归，不能代替真实场景或全规模性能证据。正式装备/套装数据、混档规则确认、真实基准、配装器 UI、动态桥接和 CD 时序接入仍是后续依赖。
+`optimize_joint` 是独立的全量联合搜索入口，不使用上述预算。它优先遍历套装防具，在完整面板合成前按套装剩余可达件数、跨来源 2+2 和加速上下界剪枝；装备、镶嵌、裸装、附魔、五彩石及混档套装奖励均计入加速范围。其余属性约束仍由完整合成器检查。可行候选流式分批交给 CPU（x86 自动 AVX-512）或 wgpu 做精确 MC，不预扫描或保存全空间。`visited` 包含整支剪掉的叶子数，`evaluated` 记录实际评分数；剪枝不会消耗有界搜索的预算或改变其行为。
+
+候选准备的合成样例基准可运行 `cargo test -p jpcg_gear --release --lib joint_prefilter_benchmark -- --ignored --nocapture`。它对拍旧的逐叶合成筛选和新剪枝，不包含时间轴/MC，不能代替实际配装的端到端性能验收。全规模搜索仍可能有大量可行候选，GPU/AVX-512 不保证任意空间在 1 秒内完成。
+
+使用已确认的真实配置完整跑 CPU / 单卡 GPU，见[全量测速方法](../../docs/gear-full-benchmark.md)。脚本逐轮保存输入、进度、结果与端到端耗时，不含编译时间。
 
 ## 验证
 
@@ -107,3 +111,15 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 ## #98 原始属性换算
 
 `Loadout.attribute_rules="profession-toml"` 显式从当前职业的 `data/shuxing/{职业ID}.toml` 读取 `[attributes]`。当前版本按50级对齐，但不自动填入未验证系数；职业版本、规则和所选值集等级必须一致。所有转换比例由文件提供，无四心法或130级常数白名单。`Stats` 新增五维及额外气血，输入必须为转换前原始点数；`Composed.panel` 返回派生面板与规则版本，旧手填继续保留原语义。历史130级规则ID需重新选择，不能使用缓存结果混算。录入示例、阶段、兼容与验证边界见 [属性引擎说明](../../docs/attribute-engine.md)。
+
+
+## 联合搜索修复后的接口
+
+- `gear-opt joint --request request.json --seconds 10`：短轮执行后正常取消并输出部分结果；`complete=false`、`stop_reason=cancelled`，不能作为全量最优证明。省略 `--seconds` 才执行完整空间；SIGINT/SIGTERM（Unix）或控制台 Ctrl-C（Windows）触发正常取消。
+- 可穿的 `cross_school` 模板纳入候选，外门派的 `Choice.school` 显式保留；外门派装备不计本门派套装。
+- `Candidate.score` 始终为目标本身，击杀率为 0..=1；同分时比较独立的 `tie_break_damage`。结果的 `mc_evaluations` 是实际批量 MC 数，不含基线。
+- 伤害专用联合路径固定不影响伤害且不受硬约束的纯生存附魔/五彩石，优先使用用户当前选项；其余候选全部独立评分，不按进攻面板缓存去重。`pareto` 仅保留伤害最佳项。两个无缓存准备 worker 与评分重叠，消费端按批次序号归并；模板在每个候选前恢复 CD，再应用本次装备调整。
+- 动态壳使用 JSON 方法 `optimize_joint_start`（返回 `job_id`）、`optimize_joint_poll`（进度及一次性结果/错误）、`optimize_joint_cancel`、`optimize_joint_release`，与静态壳共用联合引擎。`compute_backends` 返回实际平台清单。调用方退出时须 release，完整领取结果后会话自动移除；取消和错误不会冒充100%完成。原 `optimize` 方法保留预算语义。
+- GPU批次按设备限制切片，每片独立绑定；事件缓冲区使用实际步长，支持超过64个事件，单个候选仍受设备存储限制。工作组归约保持相同采样序列与 HP 状态，设备缓冲区按容量复用。
+
+本节实现已在ws通过相关Rust回归、静态/动态构建检查、model-only动态库会话、单张R9700 Vulkan数值/边界对拍和串行十秒测速；Mac待测。旧全量筛选计数属于修复前的本门派空间，新空间当前仅完成缩小真实配置空间的CPU/GPU结果一致性验证和短轮测速，不宣称已经完整搜索或证明全局最优。

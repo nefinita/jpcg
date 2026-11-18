@@ -146,8 +146,8 @@ fn validate_selection(
     Ok(())
 }
 
-/// 时间轴模拟（DTO 请求 → 结果 DTO）
-pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+/// 组装时间轴输入（DTO → 引擎输入），供模拟与批量 MC 共用。
+pub fn build_timeline_input(req: TimelineRequestDTO) -> Result<timeline::TimelineInput, String> {
     let (player, hostile, xinfa, buff, coeff) = super::host::into_core(
         req.player,
         req.hostile,
@@ -287,7 +287,7 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         .collect();
     let window = if req.window > 0.0 { req.window } else { 300.0 };
 
-    let result = timeline::simulate(&TimelineInput {
+    Ok(TimelineInput {
         player,
         hostile,
         xinfa,
@@ -304,20 +304,152 @@ pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, 
         window,
         samples: req.samples,
         seed: req.seed,
-    });
+    })
+}
 
-    Ok(TimelineResultDTO::from(result))
+/// 时间轴模拟（DTO 请求 → 结果 DTO）
+pub fn calculate_timeline(req: TimelineRequestDTO) -> Result<TimelineResultDTO, String> {
+    calculate_timeline_with_cooldowns(req, &[])
+}
+
+/// 装备 CD 调整在 overlay/秘籍/奇穴之后应用，供基线和批量搜索共用。
+pub fn calculate_timeline_with_cooldowns(
+    req: TimelineRequestDTO,
+    adjustments: &[(u32, f32)],
+) -> Result<TimelineResultDTO, String> {
+    let mut input = build_timeline_input(req)?;
+    apply_cooldowns(&mut input, adjustments)?;
+    Ok(TimelineResultDTO::from(timeline::simulate(&input)))
+}
+
+fn apply_cooldowns(
+    input: &mut timeline::TimelineInput,
+    adjustments: &[(u32, f32)],
+) -> Result<(), String> {
+    for &(skill_id, seconds) in adjustments {
+        if !seconds.is_finite() || seconds < 0.0 {
+            return Err("装备CD调整必须为有限非负秒数".into());
+        }
+        for skill in &mut input.skills {
+            if skill.skill.skill_id == skill_id {
+                skill.skill.cooldown = (skill.skill.cooldown - seconds).max(0.0);
+                if skill.skill.recharge > 0.0 {
+                    skill.skill.recharge = (skill.skill.recharge - seconds).max(0.0);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// 批量 MC 输入：窗口内伤害事件（按结算时刻排序，与引擎内 MC 同序）+ 初始血量 + 确定性总伤。
+pub struct TimelineMcInput {
+    pub events: Vec<crate::kill_mc::McEvent>,
+    pub hp0: f64,
+    pub total_damage: f64,
+}
+
+/// 与玩家无关的时间轴模板：构建一次，之后只替换 player 复用（批量 MC 用）。
+#[derive(Clone)]
+pub struct TimelineTemplate {
+    input: timeline::TimelineInput,
+    cooldown_bases: Vec<(f32, f32)>,
+}
+
+impl TimelineTemplate {
+    pub fn new(req: TimelineRequestDTO) -> Result<Self, String> {
+        let mut input = build_timeline_input(req)?;
+        // 批量路径只算确定性部分（伤害骰/总伤），MC 由 CPU/wgpu 后端统一跑，避免重复 50k 采样。
+        input.samples = 0;
+        input.seed = None;
+        let cooldown_bases = input
+            .skills
+            .iter()
+            .map(|s| (s.skill.cooldown, s.skill.recharge))
+            .collect();
+        Ok(Self {
+            input,
+            cooldown_bases,
+        })
+    }
+
+    /// 替换候选玩家（配装合成出的 player 面板）。
+    pub fn set_player(&mut self, player: jpcg_api::PlayerConfigDTO) {
+        self.input.player = jpcg_core::type_set::player::PlayerConfig::from(player);
+    }
+
+    /// 每个候选先恢复模板 CD，防止上一个候选的套装效果泄漏。
+    pub fn set_loadout(
+        &mut self,
+        player: jpcg_api::PlayerConfigDTO,
+        adjustments: &[(u32, f32)],
+    ) -> Result<(), String> {
+        self.set_player(player);
+        for (skill, &(cooldown, recharge)) in self.input.skills.iter_mut().zip(&self.cooldown_bases)
+        {
+            skill.skill.cooldown = cooldown;
+            skill.skill.recharge = recharge;
+        }
+        apply_cooldowns(&mut self.input, adjustments)
+    }
+
+    /// 用当前玩家跑确定性 MC 输入（窗口内 McEvent + hp0 + 总伤）。
+    pub fn mc_input(&self) -> Result<TimelineMcInput, String> {
+        mc_input_from_input(&self.input)
+    }
+}
+
+/// 时间轴 → 批量 MC 输入（供 CPU/wgpu 后端跑精确 50k MC）。
+pub fn timeline_mc_input(req: TimelineRequestDTO) -> Result<TimelineMcInput, String> {
+    mc_input_from_input(&build_timeline_input(req)?)
+}
+
+fn mc_input_from_input(input: &timeline::TimelineInput) -> Result<TimelineMcInput, String> {
+    let hp0 = if input.hostile.max_hp > 0 {
+        input.hostile.max_hp as f64
+    } else {
+        input.hostile.target_hp as f64
+    };
+    let result = timeline::simulate(input);
+    let mut timed: Vec<(f32, crate::kill_mc::McEvent)> = Vec::new();
+    for e in &result.visible_events {
+        let (time, dice) = match &e.kind {
+            TimelineEventKind::Cast { hit_time, dice, .. } => (*hit_time, *dice),
+            TimelineEventKind::ChannelTick { dice, .. } => (e.time, *dice),
+            TimelineEventKind::DotTick { dice, .. } => (e.time, *dice),
+            _ => continue,
+        };
+        let (g, h, rate) = if dice.fixed {
+            (dice.q, dice.q, 1.0_f32)
+        } else {
+            (dice.g, dice.h, dice.rate)
+        };
+        timed.push((
+            time,
+            crate::kill_mc::McEvent {
+                g,
+                h,
+                rate,
+                lost: dice.lost_hp_factor,
+            },
+        ));
+    }
+    timed.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Ok(TimelineMcInput {
+        events: timed.into_iter().map(|(_, ev)| ev).collect(),
+        hp0,
+        total_damage: result.total_damage,
+    })
 }
 
 impl From<timeline::TimelineResult> for TimelineResultDTO {
     fn from(r: timeline::TimelineResult) -> Self {
-        // 伤害日志按实际命中排序，起手另存 start_time；窗口外命中不进入日志。
+        // 伤害日志按实际命中排序，起手另存 start_time；只展示测量窗口内的事件。
         let settlement = |e: &TimelineEvent| match e.kind {
             TimelineEventKind::Cast { hit_time, .. } => hit_time,
             _ => e.time,
         };
-        let mut events = r.events;
-        events.retain(|e| settlement(e) <= r.window);
+        let mut events = r.visible_events;
         events.sort_by(|a, b| settlement(a).total_cmp(&settlement(b)));
         let mut cumulative = 0.0;
         let events = events
@@ -341,6 +473,7 @@ impl From<timeline::TimelineResult> for TimelineResultDTO {
                 legal: step.legal,
                 instrument: step.instrument,
                 qifeng: step.qifeng,
+                skill_name: step.skill_name,
                 skipped_reason: step.skipped_reason,
                 required_instrument: step.required_instrument,
                 required_qifeng: step.required_qifeng,
@@ -360,6 +493,7 @@ impl From<timeline::TimelineResult> for TimelineResultDTO {
             events,
             steps,
             total_damage: r.total_damage,
+            damage_variance: r.damage_variance,
             window_dps: r.window_dps,
             skipped_actions: r.skipped_actions,
             final_instrument: r.final_instrument,
@@ -615,5 +749,43 @@ mod tests {
         let back: TimelineRequestDTO = serde_json::from_str(&json).unwrap();
         let result = calculate_timeline(back).unwrap();
         assert!(result.total_damage > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod equipment_cooldown_tests {
+    use super::*;
+    fn input() -> timeline::TimelineInput {
+        let req: TimelineRequestDTO = serde_json::from_value(serde_json::json!({
+            "skills":[{"skill_id":1,"cooldown":30.0,"charges":2,"recharge":30.0}],
+            "player":{},"hostile":{},"xinfa":{},"buff":{},"coeff":{}
+        }))
+        .unwrap();
+        build_timeline_input(req).unwrap()
+    }
+    #[test]
+    fn equipment_reduction_applies_to_prepared_skills_and_resets_between_candidates() {
+        let input = input();
+        let bases = input
+            .skills
+            .iter()
+            .map(|s| (s.skill.cooldown, s.skill.recharge))
+            .collect();
+        let mut template = TimelineTemplate {
+            input,
+            cooldown_bases: bases,
+        };
+        template
+            .set_loadout(Default::default(), &[(1, 15.0)])
+            .unwrap();
+        assert_eq!(template.input.skills[0].skill.cooldown, 15.0);
+        assert_eq!(template.input.skills[0].skill.recharge, 15.0);
+        template.set_loadout(Default::default(), &[]).unwrap();
+        assert_eq!(template.input.skills[0].skill.cooldown, 30.0);
+        assert_eq!(template.input.skills[0].skill.recharge, 30.0);
+        template
+            .set_loadout(Default::default(), &[(1, 100.0)])
+            .unwrap();
+        assert_eq!(template.input.skills[0].skill.cooldown, 0.0);
     }
 }

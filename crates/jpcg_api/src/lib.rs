@@ -623,6 +623,9 @@ pub struct MijiDefDTO {
     pub name: String,
     pub skill_id: u32,
     pub sub_id: u32,
+    /// 共享作用技能列表 `[[skill_id, sub_id], ...]`（非空时优先于 skill_id/sub_id）。
+    #[serde(default)]
+    pub applies_to: Vec<(u32, u32)>,
     pub modifiers: Vec<SkillModifierDTO>,
     /// 后端生成的效果文案（前端只渲染，不翻译 modifiers）
     #[serde(default)]
@@ -834,6 +837,9 @@ pub struct TimelineResultDTO {
     /// 每个动作的结算结果（与请求 actions 一一对应；前端直接渲染，不再推导）
     pub steps: Vec<TimelineStepDTO>,
     pub total_damage: f64,
+    /// 窗口内总伤害方差（独立会心近似；供确定性击杀率近似）
+    #[serde(default)]
+    pub damage_variance: f64,
     pub window_dps: f64,
     pub skipped_actions: u32,
     /// 序列执行完后的器形 / 曲风（后端算好，前端直接显示）
@@ -845,7 +851,7 @@ pub struct TimelineResultDTO {
     /// 累计击杀概率曲线：(动作序号 1..=n, 概率 0..1)
     #[serde(default)]
     pub kill_prob_curve: Vec<(usize, f64)>,
-    /// 击杀率测量窗口起止时刻（flag 解析后的结果；None = 未提供该 flag）
+    /// 有效测量窗口起止（缺省已折算：开始=0，结束=最后一个动作 / 最后一次施放的 DOT 尾）
     #[serde(default)]
     pub kill_start: Option<f32>,
     #[serde(default)]
@@ -863,6 +869,9 @@ pub struct TimelineStepDTO {
     pub legal: bool,
     pub instrument: String,
     pub qifeng: String,
+    /// 本动作对应的技能名（计算开始/结束、器形切换为说明文字）
+    #[serde(default)]
+    pub skill_name: Option<String>,
     pub skipped_reason: String,
     #[serde(default)]
     pub required_instrument: Option<String>,
@@ -888,4 +897,18 @@ pub struct TimelineStepSwitchDTO {
 pub struct CombatBundleDTO {
     pub skills: Vec<SkillPoolItemDTO>,
     pub combat: CombatDataDTO,
+}
+
+/// 计算后端描述（CPU 或 wgpu 适配器），供前端列举与选择。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputeBackendDTO {
+    /// 稳定标识：`cpu` / `wgpu:<adapter_index>`
+    pub id: String,
+    /// `cpu` | `wgpu`
+    pub kind: String,
+    /// 展示名，如 `AVX-512 · AMD Ryzen Threadripper 9970X (64 线程)`
+    pub label: String,
+    /// 补充信息（后端/设备类型/厂商等）
+    pub detail: String,
+    pub available: bool,
 }

@@ -191,7 +191,21 @@ fn cumulative_uses_only_hits_inside_window_in_hit_order() {
         }
     }
     assert!(result.events.windows(2).all(|w| w[0].time <= w[1].time));
-    assert_eq!(sum, result.total_damage);
+    // 总伤只统计测量窗口内的伤害；窗口外事件仍在 events 里（供展示/调试）。
+    let kill_start = result.kill_start.unwrap_or(0.0);
+    let kill_end = result.kill_end.unwrap_or(0.0);
+    let window_sum: f64 = result
+        .events
+        .iter()
+        .filter(|e| e.time >= kill_start - 1e-4 && e.time <= kill_end + 1e-4)
+        .map(|e| match e.kind {
+            TimelineEventKindDTO::Cast { damage, .. }
+            | TimelineEventKindDTO::DotTick { damage, .. }
+            | TimelineEventKindDTO::ChannelTick { damage, .. } => damage as f64,
+            _ => 0.0,
+        })
+        .sum();
+    assert_eq!(window_sum, result.total_damage);
 }
 
 #[test]
@@ -233,4 +247,76 @@ fn step_reduction_gain_and_ignore_mitigation_have_effect_without_leaking() {
         baseline * 2.0,
         "技能增益不能覆盖全局伤害 buff"
     );
+}
+
+#[test]
+fn kill_curve_only_covers_flag_window() {
+    // 步骤：cast / 开始 / cast / 结束 / cast
+    // 曲线只应覆盖 [开始 flag, 结束 flag] 之间的步骤（1-based 2..4），窗口外不出点。
+    let mut req = request();
+    // 需要目标血量才会跑击杀率 MC（full_hp 非空）。
+    req.hostile.target_hp = 1_000_000;
+    // 步骤：cast / 开始 / cast / cast / 结束 / cast
+    req.actions = vec![cast(), flag("start"), cast(), cast(), flag("end"), cast()];
+    let result = calculate_timeline(req).expect("timeline");
+    assert!(result.kill_prob_curve.len() >= 2, "曲线不应为空");
+    // 窗口内的动作 step：第 3、4 步（1-based）。
+    assert_eq!(result.kill_prob_curve.first().unwrap().0, 3);
+    assert_eq!(result.kill_prob_curve.last().unwrap().0, 4);
+}
+
+#[test]
+fn end_flag_excludes_cast_at_same_time() {
+    // 结束标记下方的第二招（同一 GCD 起点）不应计入窗口。
+    let mut one = request();
+    one.hostile.target_hp = 0;
+    let single = calculate_timeline(one).expect("single").total_damage;
+
+    let mut req = request();
+    req.actions = vec![cast(), flag("end"), cast()];
+    req.hostile.target_hp = single as u32 + 10;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(
+        result.total_damage, single,
+        "结束标记后的第二招不应计入总伤"
+    );
+    assert_eq!(result.final_kill_prob, 0.0, "只有第一招伤害，打不死目标");
+}
+
+#[test]
+fn end_flag_keeps_previous_cast_at_same_time() {
+    // 上一招 2s 读条，命中与下一招起点同为 2s；结束标记在两者之间，上一招的合法命中必须保留。
+    let mut one = request();
+    one.skills[0].cast_time = 2.0;
+    one.hostile.target_hp = 0;
+    let single = calculate_timeline(one).expect("single").total_damage;
+    assert!(single > 0.0);
+
+    let mut req = request();
+    req.skills[0].cast_time = 2.0;
+    req.actions = vec![cast(), flag("end"), cast()];
+    req.hostile.target_hp = single as u32 + 10;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(result.total_damage, single, "上一招的命中必须保留");
+    assert_eq!(result.final_kill_prob, 0.0);
+}
+
+#[test]
+fn end_flag_before_first_instant_cast_excludes_it() {
+    let mut req = request();
+    req.actions = vec![flag("end"), cast()];
+    req.hostile.target_hp = 1;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(result.total_damage, 0.0, "结束标记之后的瞬发不应计入");
+    assert_eq!(result.final_kill_prob, 0.0);
+}
+
+#[test]
+fn adjacent_start_end_is_empty_window() {
+    let mut req = request();
+    req.actions = vec![flag("start"), flag("end"), cast()];
+    req.hostile.target_hp = 1;
+    let result = calculate_timeline(req).expect("timeline");
+    assert_eq!(result.total_damage, 0.0);
+    assert_eq!(result.final_kill_prob, 0.0);
 }

@@ -112,14 +112,29 @@ pub struct MijiDef {
     pub skill_id: u32,
     /// 所属子技能 id（0 = 不限）
     pub sub_id: u32,
+    /// 共享作用的技能列表 `[[skill_id, sub_id], ...]`（sub_id=0 不限）。
+    /// 非空时优先于 skill_id/sub_id，用于「基础技能 + 变体（变宫/变徵）」共享秘籍。
+    pub applies_to: Vec<(u32, u32)>,
     /// 修正项列表
     pub modifiers: Vec<SkillModifier>,
 }
 
 impl MijiDef {
+    /// 是否作用于给定 (skill_id, sub_id)。
+    /// `applies_to` 非空时按共享列表匹配（基础技能 + 变体），否则回退 skill_id/sub_id。
+    pub fn targets_skill(&self, skill_id: u32, sub_id: u32) -> bool {
+        if !self.applies_to.is_empty() {
+            return self
+                .applies_to
+                .iter()
+                .any(|(id, sub)| *id == skill_id && (*sub == 0 || *sub == sub_id));
+        }
+        self.skill_id == skill_id && (self.sub_id == 0 || self.sub_id == sub_id)
+    }
+
     /// 是否作用于给定技能
     pub fn targets(&self, skill: &Skilltype) -> bool {
-        self.skill_id == skill.skill_id && (self.sub_id == 0 || self.sub_id == skill.sub_id)
+        self.targets_skill(skill.skill_id, skill.sub_id)
     }
 }
 
@@ -239,12 +254,38 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn miji_applies_to_shares_between_base_and_variant() {
+        let shared = MijiDef {
+            id: "m".into(),
+            skill_id: 100,
+            sub_id: 1,
+            applies_to: vec![(100, 1), (200, 2)],
+            modifiers: vec![],
+            ..Default::default()
+        };
+        assert!(shared.targets_skill(100, 1), "基础技能命中");
+        assert!(shared.targets_skill(200, 2), "变体命中");
+        assert!(!shared.targets_skill(100, 2), "同 id 不同 sub 不命中");
+        let plain = MijiDef {
+            skill_id: 100,
+            sub_id: 0,
+            ..Default::default()
+        };
+        assert!(
+            plain.targets_skill(100, 9),
+            "空 applies_to 回退 skill_id/sub_id"
+        );
+        assert!(!plain.targets_skill(101, 0));
+    }
+
     fn miji_modifiers_apply_without_adding_new_skill() {
         let miji = MijiDef {
             id: "m1".into(),
             name: "秘籍".into(),
             skill_id: 100,
             sub_id: 0,
+            applies_to: Vec::new(),
             modifiers: vec![
                 SkillModifier::BaseDamageAdd(20),
                 SkillModifier::CastTimeMul(-10.0),

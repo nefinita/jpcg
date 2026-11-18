@@ -14,7 +14,7 @@ qifeng = ["yangchun", "gaoshan", "pingsha"]
 
 [meta]
 profession = "mowen"
-version = "2026-11-05"
+version = "2026-11-12"
 note = "由游戏内 tooltip 截图整理；曲/气/影 与形态切换技能已补 id，九衢闻曲与太常律 主技能 id 仍缺"
 
 # ----------------------------------------------------------------------------
@@ -336,7 +336,7 @@ name = "洞天"
 slot = 1
 replaces_skill_id = 14299
 replaces_sub_id = 18859
-replacement = { skill_name = "洞天", skill_id = 14299, sub_id = 18859, base_damage1 = 4851, base_damage2 = 4851, atk_xishu = 0.0, dot_flag = 1, dot_interval = 0.5, dot_duration = 1.5, cast_time = 0.0, gcd_kind = 0 }
+replacement = { skill_name = "洞天", skill_id = 14299, sub_id = 18859, base_damage1 = 4608, base_damage2 = 4608, atk_xishu = 0.0, dot_flag = 1, dot_interval = 0.5, dot_duration = 1.5, cast_time = 0.0, gcd_kind = 0 }
 hooks = [{ accelerate_dot = { targets = [[14065, 14311], [14066, 14312]] } }]
 
 # 超然：孤影化双 调息 150 → 60 秒，且受加速率影响（cd_haste 暂未建模单技能加成）
@@ -604,6 +604,7 @@ id = "gong_cast1"
 name = "《音·宫》经脉图残页"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ cast_time_add = -0.125 }]
 
 [[miji]]
@@ -611,6 +612,7 @@ id = "gong_cast2"
 name = "《音·宫》经脉图断篇"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ cast_time_add = -0.125 }]
 
 [[miji]]
@@ -618,6 +620,7 @@ id = "gong_dmg3"
 name = "《音·宫》参悟残页"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ hit_up_add = 3 }]
 
 [[miji]]
@@ -625,6 +628,7 @@ id = "gong_dmg4"
 name = "《音·宫》参悟断篇"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ hit_up_add = 4 }]
 
 [[miji]]
@@ -632,6 +636,7 @@ id = "gong_crit2"
 name = "《音·宫》秘决残页"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ huixin_up_add = 2 }]
 
 [[miji]]
@@ -639,6 +644,7 @@ id = "gong_crit3"
 name = "《音·宫》秘决断篇"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ huixin_up_add = 3 }]
 
 [[miji]]
@@ -646,6 +652,7 @@ id = "gong_crit4"
 name = "《音·宫》秘决绝章"
 skill_id = 14064
 sub_id = 14474
+applies_to = [[14064, 14474], [14298, 18860]]
 modifiers = [{ huixin_up_add = 4 }]
 
 [[miji]]
@@ -695,6 +702,7 @@ id = "zheng_dmg3"
 name = "《音·徵》参悟残页"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ hit_up_add = 3 }]
 
 [[miji]]
@@ -702,6 +710,7 @@ id = "zheng_dmg4"
 name = "《音·徵》参悟断篇"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ hit_up_add = 4 }]
 
 [[miji]]
@@ -709,6 +718,7 @@ id = "zheng_crit2"
 name = "《音·徵》秘决残页"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ huixin_up_add = 2 }]
 
 [[miji]]
@@ -716,6 +726,7 @@ id = "zheng_crit3"
 name = "《音·徵》秘决断篇"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ huixin_up_add = 3 }]
 
 [[miji]]
@@ -723,6 +734,7 @@ id = "zheng_crit4"
 name = "《音·徵》秘决绝章"
 skill_id = 14067
 sub_id = 14227
+applies_to = [[14067, 14227], [14299, 18859]]
 modifiers = [{ huixin_up_add = 4 }]
 
 [[miji]]
@@ -781,7 +793,7 @@ modifiers = [{ cooldown_add = -4.0 }]
 # 奇穴替换型（第 2 层剩余）：把默认技能替换为独立条目
 # ----------------------------------------------------------------------------
 
-# 洞天：变徵 → 1.5 秒内 3 次 4851 点固定伤害（消耗 3 点曲风，暂未建模消耗）
+# 洞天：变徵 → 1.5 秒内 3 次 4608 点固定伤害（消耗 3 点曲风，暂未建模消耗）
 
 [[qixue]]
 id = "jingyi"

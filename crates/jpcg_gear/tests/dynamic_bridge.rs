@@ -47,3 +47,56 @@ fn desktop_bridge_child() {
             .is_err()
     );
 }
+
+#[test]
+fn desktop_joint_cancel_subprocess() {
+    if std::env::var_os("JPCG_GEAR_BRIDGE_CHILD").is_some() {
+        return;
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "desktop_joint_cancel_child"])
+        .env("JPCG_DATA_DIR", root.join("data"))
+        .env(
+            "JPCG_GEAR_LIB",
+            root.join("target/debug").join(format!(
+                "{}jpcg_gear{}",
+                std::env::consts::DLL_PREFIX,
+                std::env::consts::DLL_SUFFIX
+            )),
+        )
+        .env("JPCG_GEAR_BRIDGE_CHILD", "1")
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+#[test]
+fn desktop_joint_cancel_child() {
+    if std::env::var_os("JPCG_GEAR_BRIDGE_CHILD").is_none() {
+        return;
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let request: jpcg_gear::OptimizeRequest = toml::from_str(
+        &std::fs::read_to_string(root.join("data/gear/sample-request.toml")).unwrap(),
+    )
+    .unwrap();
+    let id: jpcg_gear::OptimizeJobId = gear_bridge::call("optimize_joint_start", &request).unwrap();
+    let _: serde_json::Value = gear_bridge::call("optimize_joint_cancel", &id).unwrap();
+    let started = std::time::Instant::now();
+    loop {
+        let status: jpcg_gear::OptimizeJobStatus =
+            gear_bridge::call("optimize_joint_poll", &id).unwrap();
+        if status.done {
+            assert!(status.error.is_none(), "{:?}", status.error);
+            let result = status.result.unwrap();
+            assert!(!result.complete);
+            assert_eq!(result.stop_reason, "cancelled");
+            break;
+        }
+        assert!(started.elapsed().as_secs() < 15, "cancel did not finish");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        gear_bridge::call::<_, jpcg_gear::OptimizeJobStatus>("optimize_joint_poll", &id).is_err()
+    );
+}
