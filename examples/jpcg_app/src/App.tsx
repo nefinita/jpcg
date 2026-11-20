@@ -112,7 +112,9 @@ export default function App() {
   const professionRules = loadout?.attribute_rules === PROFESSION_ATTRIBUTE_RULES;
   const rulesCurrent = !professionRules || (validatedRules?.inputKey === desiredGearKey
     && validatedRules.catalog === catalog && validatedRules.composition === cockpit.calculation?.composition);
-  const compatible = contextReady && !!catalog && !!loadout && loadout.school === formData.xinfa && loadout.revision === catalog.version.revision
+  // 真实目录的旧配装必须先由后端补齐规则；迁移返回前不能把旧模式送入合成。
+  const awaitingLoadoutPreparation = !!catalog && !catalog.version.sample && !!loadout && !loadout.attribute_rules;
+  const compatible = contextReady && !awaitingLoadoutPreparation && !!catalog && !!loadout && loadout.school === formData.xinfa && loadout.revision === catalog.version.revision
     && loadout.value_set === catalog.version.value_set && formData.value_set === loadout.value_set;
   const stale = !!cockpit.calculation && (gearMode
     ? !acceptedAttributeMode || !rulesCurrent || cockpit.calculation.mode !== "gear" || cockpit.calculation.inputKey !== desiredGearKey
@@ -220,7 +222,10 @@ export default function App() {
 
   /** 组装调优请求：app 调优与「导出全量穷举请求」共用同一份口径。 */
   const buildOptimizeRequest = useCallback(async (opts: OptimizeOptions): Promise<GearOptimizeRequest | null> => {
-    if (!catalog || !loadout || !compatible || !rulesCurrent) { addToast("配装模板或职业规则尚未就绪", "warning"); return null; }
+    const calculation = cockpit.calculation;
+    if (!catalog || !loadout || !compatible || !rulesCurrent || calculation?.mode !== "gear" || calculation.inputKey !== desiredGearKey) {
+      addToast("配装、属性计算或职业规则尚未就绪", "warning"); return null;
+    }
     if (!comboDraft.sequence.length) { addToast("请先在排轴器编辑连招", "warning"); return null; }
     const targetHp = Number(formData.hostile?.target_hp) || 0;
     if (opts.metric === "kill_probability" && targetHp <= 0) { addToast("击杀率目标需要先设置目标血量", "warning"); return null; }
@@ -230,17 +235,17 @@ export default function App() {
     // 伤害专用联合穷举固定纯防御附魔；其余候选全部独立执行精确 MC。
     const metric: GearTimelineMetric = opts.metric;
     const samples = metric === "kill_probability" ? 50000 : 0;
-    const bundle = await api.loadCombatBundle(formData.xinfa_config.profession);
-    const request = buildTimelineRequest(formData, bundle, comboDraft.sequence, comboDraft.miji ?? [], comboDraft.qixue ?? [], samples, samples > 0 ? 12345 : null);
+    const bundle = await api.loadCombatBundle(calculation.form.xinfa_config.profession);
+    const request = buildTimelineRequest(calculation.form, bundle, comboDraft.sequence, comboDraft.miji ?? [], comboDraft.qixue ?? [], samples, samples > 0 ? 12345 : null);
     return {
       loadout,
-      config: toCalculateRequest(formData),
+      config: toCalculateRequest(calculation.form),
       objective: { kind: "timeline", request, metric },
       constraints: { sources: ["mingjian", "weiwang", "baowu"], allow_upgraded: true, locked: [], banned: [], required_sources: {}, banned_sources: {}, stats, allow_cross_source_2plus2: true, required_sets: requiredSets },
       max_combinations: 1_000_000,
       compute: opts.compute,
     };
-  }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, addToast]);
+  }, [catalog, loadout, compatible, rulesCurrent, cockpit.calculation, desiredGearKey, comboDraft, formData, addToast]);
 
   const handleCancelOptimize = useCallback(async () => {
     optimizeCancelled.current = true;

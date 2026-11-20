@@ -125,6 +125,20 @@ it("真实目录的旧配装由后端修复，前端只保存返回 DTO", async 
   expect(vi.mocked(api.composeGear).mock.lastCall?.[0]).toEqual(migrated);
 });
 
+it("真实目录的旧配装在后端迁移返回前不抢先合成", async () => {
+  const legacy = fixture.cases[0].composed.loadout;
+  const migrated = { ...legacy, attribute_rules: PROFESSION_ATTRIBUTE_RULES };
+  let resolvePrepare!: (value: GearLoadout) => void;
+  vi.mocked(api.gearCatalog).mockResolvedValue({ ...fixture.catalog,
+    version: { ...fixture.catalog.version, sample: false } });
+  vi.mocked(api.prepareGearLoadout).mockReturnValue(new Promise((resolve) => { resolvePrepare = resolve; }));
+  await render(); await wait();
+  expect(api.prepareGearLoadout).toHaveBeenCalledWith("mowen", legacy);
+  expect(api.composeGear).not.toHaveBeenCalled();
+  await act(async () => resolvePrepare(migrated)); await wait();
+  expect(vi.mocked(api.composeGear).mock.lastCall?.[0]).toEqual(migrated);
+});
+
 it("合成样例的旧配装不在前端隐式迁移", async () => {
   await render(); await wait();
   expect(api.prepareGearLoadout).not.toHaveBeenCalled();
@@ -452,7 +466,9 @@ it.each([false, true])("调优期间锁定整个编辑区，完成或失败后�
   });
   await click("自动调优");
   expect(api.optimizeGear).toHaveBeenCalledTimes(1);
-  const objective=vi.mocked(api.optimizeGear).mock.lastCall![0].objective;
+  const request = vi.mocked(api.optimizeGear).mock.lastCall![0];
+  expect(request.config.xinfa_config.xinfa_nom).toBe(fixture.cases[0].player.jcsx);
+  const objective=request.objective;
   expect(objective.kind).toBe("timeline");
   if (objective.kind === "timeline") {
     expect(objective.request.actions).toEqual(vi.mocked(api.calculateTimeline).mock.lastCall![0].actions);
