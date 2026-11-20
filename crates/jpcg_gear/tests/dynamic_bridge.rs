@@ -59,8 +59,11 @@ fn desktop_bridge_child() {
         gear_bridge::call("import", &serde_json::json!({"toml":exported})).unwrap();
     assert_eq!(composition.composed.stats, imported.composed.stats);
     assert!(
-        gear_bridge::call::<_, serde_json::Value>("catalog", &serde_json::json!({"path":"/tmp"}))
-            .is_err()
+        gear_bridge::call::<_, serde_json::Value>(
+            "catalog",
+            &serde_json::json!({"profession":"mowen","path":"/tmp"}),
+        )
+        .is_err()
     );
 }
 

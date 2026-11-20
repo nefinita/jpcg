@@ -36,9 +36,9 @@ def call(method, request):
 
 assert call(None, {})["status"] == "error"
 if case == "missing":
-    assert call("catalog", {})["status"] == "error"
+    assert call("catalog", {"profession": "mowen"})["status"] == "error"
 else:
-    catalog = call("catalog", {})["result"]
+    catalog = call("catalog", {"profession": "mowen"})["result"]
     assert catalog["version"]["sample"] is True
     loadout = tomllib.loads((fixture_root / "gear/sample-loadout.toml").read_text())
     composition = call("compose", loadout)["result"]
@@ -46,7 +46,7 @@ else:
     assert composition["player"]["jichu_gongji"] == composition["composed"]["stats"]["gongji"]
     text = call("export", loadout)["result"]
     assert call("import", {"toml": text})["result"] == composition
-    assert call("catalog", {"path": str(root)})["status"] == "error"
+    assert call("catalog", {"profession": "mowen", "path": str(root)})["status"] == "error"
     loadout["revision"] = "old"
     assert call("compose", loadout)["status"] == "error"
     assert call("import", {"toml": "bad"})["status"] == "error"
