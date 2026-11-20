@@ -16,7 +16,7 @@ const kindLabel = (kind: TimelineEventDTO["kind"]) => {
     case "dot_tick": return "持续";
     case "channel_tick": return "引导";
     case "form_switch": return "器形";
-    case "qifeng_switch": return "曲风";
+    case "qifeng_switch": return "形态";
     case "buff_gain": return "增益";
   }
 };
@@ -32,7 +32,11 @@ const kindClass = (kind: TimelineEventDTO["kind"]) => {
   }
 };
 
-const kindDetail = (kind: TimelineEventDTO["kind"]) => {
+const kindDetail = (
+  kind: TimelineEventDTO["kind"],
+  formName: (id: string) => string,
+  qifengName: (id: string) => string,
+) => {
   switch (kind.kind) {
     case "cast":
       return `${kind.start_time != null ? `起手 ${kind.start_time.toFixed(2)}s · ` : ""}${kind.gcd_secs != null && kind.gcd_secs > 0
@@ -40,8 +44,8 @@ const kindDetail = (kind: TimelineEventDTO["kind"]) => {
         : "不占 GCD"}`;
     case "dot_tick": return `第 ${kind.index} 跳${kind.advanced ? "（提前）" : ""}`;
     case "channel_tick": return `第 ${kind.index} 段`;
-    case "form_switch": return `${kind.from} → ${kind.to}`;
-    case "qifeng_switch": return `${kind.from} → ${kind.to}`;
+    case "form_switch": return `${formName(kind.from)} → ${formName(kind.to)}`;
+    case "qifeng_switch": return `${qifengName(kind.from)} → ${qifengName(kind.to)}`;
     case "buff_gain": return `${kind.buff_id} ×${kind.stacks}`;
   }
 };
@@ -55,16 +59,19 @@ const kindName = (kind: TimelineEventDTO["kind"]) => {
     case "dot_tick": return kind.skill_name;
     case "channel_tick": return kind.skill_name;
     case "form_switch": return "器形切换";
-    case "qifeng_switch": return "曲风切换";
+    case "qifeng_switch": return "形态切换";
     case "buff_gain": return "增益";
   }
 };
 
-export function TimelineDamageLog({ events }: {
+export function TimelineDamageLog({ events, formName = (id) => id, qifengName = (id) => id }: {
   events: TimelineEventDTO[];
   /** 窗口已由后端按动作归属筛选；保留参数兼容调用方，不再按时间二次裁剪。 */
   killStart?: number | null;
   killEnd?: number | null;
+  /** 职业数据提供的器形／形态显示名；缺省仅用于独立组件预览。 */
+  formName?: (id: string) => string;
+  qifengName?: (id: string) => string;
 }) {
   // 后端提供可见事件和累计伤害，前端只渲染。
   const rows = events.map((event, index) => {
@@ -103,7 +110,7 @@ export function TimelineDamageLog({ events }: {
                 </td>
                 <td>
                   <div className={styles.skillName}>{kindName(event.kind)}</div>
-                  <div className={styles.skillDetail}>{kindDetail(event.kind)}</div>
+                  <div className={styles.skillDetail}>{kindDetail(event.kind, formName, qifengName)}</div>
                 </td>
                 <td className={styles.num}>{damage > 0 ? damage.toLocaleString() : "—"}</td>
                 <td className={styles.cum}>{sum.toLocaleString()}</td>

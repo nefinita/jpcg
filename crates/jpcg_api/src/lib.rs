@@ -466,7 +466,7 @@ pub struct HostEventsTable {
 use serde::{Deserialize, Serialize};
 
 // ============ #92 时序引擎 / 战斗数据 DTO ============
-// 与 `data/combat/{门派}.toml`、`jpcg_combo::timeline` 一一对应；
+// 与 `data/{门派}/combat.toml`、`jpcg_combo::timeline` 一一对应；
 // 前端（TS）与后端（Rust）共用这一份契约，避免两套类型。
 
 /// 技能唯一键（skill_id, sub_id）；JSON 中表现为 [id, sub] 数组
@@ -669,6 +669,9 @@ pub struct CombatMetaDTO {
     pub profession: String,
     pub version: String,
     pub note: String,
+    /// 形态 id → 显示名；由职业 combat 数据下发
+    #[serde(default)]
+    pub qifeng_names: std::collections::BTreeMap<String, String>,
     /// 面板规则：每个技能最多装备的秘籍数
     #[serde(default = "default_miji_cap")]
     pub miji_per_skill_cap: u8,
@@ -692,7 +695,7 @@ pub fn default_mixed_slot_from() -> u8 {
     7
 }
 
-/// `data/combat/{门派}.toml` 的完整 DTO
+/// `data/{门派}/combat.toml` 的完整 DTO
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CombatDataDTO {

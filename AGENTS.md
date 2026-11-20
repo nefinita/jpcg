@@ -93,12 +93,15 @@ JPCG_DATA_DIR=./data python3 examples/python_demo/jpcg_demo.py
 
 ## 路径与兼容细节
 
+- 正式数据布局为 `data/<profession>/{shuxing.toml, combat.toml, gear/}`；`data/values/` 全职业共享，模板集中在 `data/_template/`。新增职业只新增自己的目录，不复制其他职业数值冒充真实数据。
+- 旧 `data/{shuxing,combat,gear}/` 仅保留读取兼容；每个数据根内新布局优先，技能编辑只保存到新布局。当前仓库只有莫问真实职业数据。
 - 数据根读取顺序：`JPCG_DATA_DIR` → macOS bundle 用户数据目录 → bundle Resources → exe 同目录 `data/`。高优先级数据损坏时应报错，不能静默回退到旧数据。
-- `JPCG_DATA_DIR` 可指向数据根或 `shuxing/`；`combat/`、`gear/`、`values/` 按同级数据根解析。
+- `JPCG_DATA_DIR` 可指向数据根或旧 `shuxing/`；职业目录、旧 `combat/`、`gear/` 与共享 `values/` 按同级数据根解析。
+- 职业目录选择、配装目录加载、默认配装生成、真实目录旧配装修复和属性规则校验都由 Rust host 完成。前端只传职业 ID／用户输入、保存并展示后端 DTO，不复制业务或计算规则。
 - `saved_config.toml` 读写自 CWD，不是 exe 目录。
 - `toml_input()` 自动追加 `.toml`，调用方不要重复扩展名。
 - `player.jcsx` 是 `String`，前端清理数字字段时不得把它强制转成数字。
-- `tauri.conf.json` 的 `frontendDist` 与 updater `externalBin` 会在 app 编译时校验；优先用 make 目标保证前端 dist 和 updater sidecar 的构建顺序。
+- `tauri.conf.json` 的 `frontendDist` 与 updater `externalBin` 会在 app 编译时校验；优先用 make 目标保证前端 dist 和 updater sidecar 的构建顺序。static/dynamic app 均经 `cargo tauri build`，默认 release 产物在 `target/release/bundle/`，不要把临时构建产物放到源码目录或 `dev` 分支。
 
 ## 分支、版本与发布
 
@@ -117,7 +120,7 @@ JPCG_DATA_DIR=./data python3 examples/python_demo/jpcg_demo.py
 - `crates/jpcg_gear/README.md`：配装目录、优化、CLI/FFI 与联合搜索。
 - `docs/gear-full-benchmark.md`：完整穷举测速方法；`docs/gear-exhaustive-audit-2026-11-17.md` 是带日期的修复前审查快照。
 - `server_manifest.md`：更新服务器 URL、清单和 stage 布局。
-- `PLAN.md`：尚未完成的路线，不当作已实现能力。当前保留 JPCG 命名，仓库公开；数据授权仍需跟进，场景扩展与曲风泛化不要顺手实现。
+- `PLAN.md`：尚未完成的路线，不当作已实现能力。当前保留 JPCG 命名，仓库公开；数据授权仍需跟进。连招界面的器形／形态名称和面板规则由 combat 数据下发，内部 qifeng 结算模型保持兼容；场景扩展与资源引擎泛化不要顺手实现。
 - `CHANGELOG.md` 与 `changes/`：历史证据，不是长期 Agent 指令；`.github/` 模板继续用于 Issue/PR。
 
 核心引擎本身场景无关，PVE 主要是目标预设与数据模板；门派差异应落在 TOML，而不是 profession/xinfa 名称的条件分支。

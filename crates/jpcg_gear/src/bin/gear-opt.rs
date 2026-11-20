@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(about = "JPCG 配装模板校验/合成/有界优化；样例数据不代表游戏装备")]
 struct Args {
-    #[arg(long, default_value = "data/gear")]
+    #[arg(long, default_value = "data/mowen/gear")]
     catalog: PathBuf,
     #[command(subcommand)]
     command: Command,

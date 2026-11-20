@@ -451,9 +451,17 @@ mod ffi_bridge_tests {
     use super::*;
 
     fn workspace_dylib() -> Option<PathBuf> {
-        // 测试 CWD 为 src-tauri 目录；dylib 在 workspace target/debug 下
-        for rel in ["../../target/debug", "../../../target/debug"] {
-            let p = std::path::Path::new(rel).join(CORE_LIB_NAME);
+        // 测试 CWD 为 src-tauri 目录；动态库与当前测试使用同一构建 profile。
+        let profile = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
+        for rel in [
+            format!("../../target/{profile}"),
+            format!("../../../target/{profile}"),
+        ] {
+            let p = std::path::Path::new(&rel).join(CORE_LIB_NAME);
             if p.exists() {
                 return Some(p);
             }

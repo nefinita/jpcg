@@ -41,9 +41,12 @@ fn load() -> Result<&'static Gear, String> {
         #[cfg(test)]
         if let Some(root) = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .ancestors()
-            .find(|p| p.join("data/gear").is_dir())
+            .find(|p| p.join("data/mowen/gear").is_dir())
         {
-            paths.push(root.join("target/debug").join(&name));
+            paths.extend([
+                root.join("target/debug").join(&name),
+                root.join("target/release").join(&name),
+            ]);
         }
         let path = paths
             .into_iter()

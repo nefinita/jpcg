@@ -20,7 +20,43 @@ fn group_key(filename: &str) -> Option<String> {
 }
 
 pub fn list_available_professions() -> Vec<XinfaSummary> {
-    list_from_dirs(&super::paths::data_dirs())
+    list_from_sources(super::paths::profession_files(), &super::paths::data_dirs())
+}
+
+fn list_from_sources(
+    canonical_files: Vec<(String, PathBuf)>,
+    legacy_dirs: &[PathBuf],
+) -> Vec<XinfaSummary> {
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    // 正式布局按职业 ID 去重；同职业的高优先级文件屏蔽所有低优先级版本。
+    for (key, path) in canonical_files {
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let Ok(cfg) = toml::from_str::<TomlConfig>(&content) else {
+            continue;
+        };
+        let version = cfg.version.unwrap_or_default();
+        out.push(XinfaSummary {
+            value: key,
+            label: cfg.xinfa.xinfa_name,
+            nom: cfg.xinfa.xinfa_nom,
+            version_label: version.label(),
+            version,
+        });
+    }
+    // 旧布局仅补充尚未由正式布局提供的职业，保留历史多版本选择逻辑。
+    out.extend(
+        list_from_dirs(legacy_dirs)
+            .into_iter()
+            .filter(|summary| seen.insert(summary.value.clone())),
+    );
+    out.sort_by(|a, b| a.value.cmp(&b.value));
+    out
 }
 
 /// 显式目录列表版（便于测试多目录合并）：同文件名先出现者优先，跨目录并集。
@@ -128,5 +164,47 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&resources);
         let _ = std::fs::remove_dir_all(&user);
+    }
+
+    #[test]
+    fn canonical_professions_override_legacy_and_form_a_union() {
+        let root = tmp("canonical-union");
+        let legacy = root.join("shuxing");
+        std::fs::create_dir_all(root.join("mowen")).unwrap();
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(
+            root.join("mowen/shuxing.toml"),
+            "[xinfa]\nxinfa_name = \"莫问新布局\"\nxinfa_nom = \"gengu\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            legacy.join("mowen.toml"),
+            "[xinfa]\nxinfa_name = \"莫问旧布局\"\nxinfa_nom = \"gengu\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            legacy.join("badao.toml"),
+            "[xinfa]\nxinfa_name = \"刀宗旧布局\"\nxinfa_nom = \"liliang\"\n",
+        )
+        .unwrap();
+
+        let list = list_from_sources(
+            vec![("mowen".into(), root.join("mowen/shuxing.toml"))],
+            &[legacy],
+        );
+        assert_eq!(
+            list.iter()
+                .map(|item| item.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["badao", "mowen"]
+        );
+        assert_eq!(
+            list.iter()
+                .find(|item| item.value == "mowen")
+                .unwrap()
+                .label,
+            "莫问新布局"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

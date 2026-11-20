@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""把 data/skill-shots/mowen-final.json 的整数倍率写回 data/shuxing/mowen.toml。
+"""把 data/skill-shots/mowen-final.json 的整数倍率写回 data/mowen/shuxing.toml。
 
 倍率口径：ratio_int = int(攻击加成 * 160 / 攻击力)；写 atk_xishu = ratio_int / 160，
 base_min/base_max 写回 base_damage1/base_damage2。按 (skill_id, sub_id) 精确匹配。
@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 JSON_PATH = ROOT / "data/skill-shots/mowen-final.json"
-TOML_PATH = ROOT / "data/shuxing/mowen.toml"
+TOML_PATH = ROOT / "data/mowen/shuxing.toml"
 BASE = 160
 
 

@@ -11,7 +11,7 @@ import tomllib
 
 root = Path(__file__).resolve().parents[1]
 binary = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / "target/release/gear-opt"
-request = tomllib.loads((root / "data/gear/sample-request.toml").read_text())
+request = tomllib.loads((root / "data/mowen/gear/sample-request.toml").read_text())
 environment = dict(os.environ, JPCG_DATA_DIR=str(root / "data"))
 measurements = {}
 for objective in ["expected", "kill_probability"]:
@@ -28,7 +28,7 @@ for objective in ["expected", "kill_probability"]:
     for _ in range(5):
         start = time.perf_counter()
         result = subprocess.run(
-            [str(binary), "--catalog", str(root / "data/gear"), "api"],
+            [str(binary), "--catalog", str(root / "data/mowen/gear"), "api"],
             input=json.dumps({"method": "optimize", "request": request}),
             text=True, capture_output=True, env=environment, check=True,
         )

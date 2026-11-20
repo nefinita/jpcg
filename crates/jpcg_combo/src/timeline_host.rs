@@ -2,7 +2,7 @@
 // timeline_host — 时序计算宿主入口（DTO ↔ timeline 引擎）
 //
 // 对外：
-//   - load_combat(profession)                 读 `data/combat/{门派}.toml`
+//   - load_combat(profession)                 读 `data/{门派}/combat.toml`
 //   - load_combat_with_skills(profession)     技能池（已套 overlay）+ combat
 //   - calculate_timeline(TimelineRequestDTO)  DTO 请求 → 时间轴模拟结果 DTO
 // ============================================================================

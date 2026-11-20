@@ -16,7 +16,7 @@ beforeEach(() => {
   vi.mocked(api.loadCombatBundle).mockResolvedValue({
     skills: [skill, { ...skill, skill_name: "测试技·二", sub_id: 1 }],
     combat: {
-      meta: { profession: "mowen", version: "test", note: "" },
+      meta: { profession: "mowen", version: "test", note: "", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
       form: [],
       qifeng: [],
       skill_combat: [],
@@ -65,7 +65,7 @@ it("时间轴预览下发勾选的秘籍与奇穴", async () => {
   vi.mocked(api.loadCombatBundle).mockResolvedValue({
     skills: [skill],
     combat: {
-      meta: { profession: "mowen", version: "test", note: "" },
+      meta: { profession: "mowen", version: "test", note: "", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
       form: [],
       qifeng: [],
       skill_combat: [{ skill_id: 1, sub_id: 0, miji_ids: ["mj_gong"] }],
@@ -106,7 +106,7 @@ it("混选奇穴最多选 3 个，第 4 个无效", async () => {
   vi.mocked(api.loadCombatBundle).mockResolvedValue({
     skills: [skill],
     combat: {
-      meta: { profession: "mowen", version: "test", note: "" },
+      meta: { profession: "mowen", version: "test", note: "", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
       form: [],
       qifeng: [],
       skill_combat: [{ skill_id: 1, sub_id: 0, miji_ids: ["mj_gong"] }],
@@ -132,7 +132,7 @@ it("未激活奇穴的门控技能不出现在技能目录", async () => {
   vi.mocked(api.loadCombatBundle).mockResolvedValue({
     skills: [skill, gated],
     combat: {
-      meta: { profession: "mowen", version: "test", note: "" },
+      meta: { profession: "mowen", version: "test", note: "", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
       form: [],
       qifeng: [],
       skill_combat: [{ skill_id: 99, sub_id: 0, jihuoqixue: "qx_gate" }],
@@ -152,7 +152,7 @@ it("秘籍与奇穴选择写入草稿并可在重挂载后恢复", async () => {
   vi.mocked(api.loadCombatBundle).mockResolvedValue({
     skills: [skill],
     combat: {
-      meta: { profession: "mowen", version: "test", note: "" },
+      meta: { profession: "mowen", version: "test", note: "", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
       form: [],
       qifeng: [],
       skill_combat: [{ skill_id: 1, sub_id: 0, miji_ids: ["mj_gong"] }],
@@ -227,6 +227,46 @@ it("固定槽切换会移除整个奇穴组，技能入口是可聚焦原生按�
  await click("冻泉"); await click("凌冬");
  const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data;
  expect(saved.qixue).toEqual(["lingdong"]);
+});
+
+it("器形、形态、技能过滤与秘籍槽位均读取后端职业数据", async () => {
+  const shieldSkill = { ...skill, skill_name: "盾技", skill_id: 2 };
+  vi.mocked(api.loadCombatBundle).mockResolvedValue({
+    skills: [skill, shieldSkill],
+    combat: {
+      meta: {
+        profession: "other", version: "test", note: "",
+        qifeng_names: { feng: "风" },
+        miji_per_skill_cap: 2, mixed_qixue_cap: 2, mixed_slot_from: 5,
+      },
+      form: [
+        { id: "shuangchi", name: "双持", initial: true },
+        { id: "dun", name: "盾", initial: false },
+      ],
+      qifeng: ["feng"],
+      skill_combat: [
+        { skill_id: 1, sub_id: 0, requires_instrument: "shuangchi", requires_qifeng: "feng", miji_ids: ["mj"] },
+        { skill_id: 2, sub_id: 0, requires_instrument: "dun" },
+      ],
+      buff: [],
+      miji: [{ id: "mj", name: "通用秘籍", skill_id: 1, sub_id: 0, effects: ["伤害+1%"] }],
+      qixue: [],
+    },
+  } as never);
+  await mount("other");
+  const axis = host.querySelector('[data-testid="axis-bar"]')?.textContent?.replace(/\s/g, "");
+  expect(axis).toContain("器形双持");
+  expect(axis).toContain("形态风");
+  expect(axis).not.toContain("阳春白雪");
+  await click("盾");
+  expect([...host.querySelectorAll("[data-skill-card]")].map((el) => el.getAttribute("data-skill-name"))).toEqual(["盾技"]);
+  await click("双持");
+  expect([...host.querySelectorAll("[data-skill-card]")].map((el) => el.getAttribute("data-skill-name"))).toEqual(["测试技·一"]);
+  expect(host.querySelector('[data-skill-card]')?.parentElement?.title).toContain("需风");
+  await click("0/2");
+  const config = host.querySelector('[data-testid="miji-config"]');
+  expect(config?.textContent).toContain("空槽 2");
+  expect(config?.textContent).not.toContain("空槽 3");
 });
 
 it("预设往返保留测量标记和单步覆盖，计算请求只覆盖指定动作", async () => {

@@ -34,13 +34,16 @@
 #   `tauri build`/打包阶段才需要）。因此所有会编译 app 的目标（build-static /
 #   build-dynamic / clippy / test）都挂 $(APP_BUILD_DEPS) = frontend + updater
 #   作为前置，干净检出后单跑其中任一目标都不会缺 updater sidecar。
+#   build-static / build-dynamic 统一经 cargo tauri build 执行 beforeBuildCommand、
+#   编译 app 并生成平台 bundle，不再用裸 cargo build 代替完整 Tauri 打包。
 #   static/dynamic 编译输出同名 target/$(BUILD)/jpcg_app，后构建者覆盖前者，
 #   因此：modules-dir 在构建 dynamic 后先把它另存为 jpcg_app-dynamic，`all`
 #   再把 build-static 放到最后，一键结束后 jpcg_app=默认 static、
 #   jpcg_app-dynamic=dynamic 变体，两种产物同时存在（无需额外 target 目录）。
 #
-# 产物布局（BUILD=debug 默认；BUILD=release 时全部落在 target/release/）：
+# 产物布局（BUILD=release 默认；显式 BUILD=debug 时落在 target/debug/）：
 #   target/$(BUILD)/jpcg_app                      app 本体（make all 后为默认 static 变体）
+#   target/$(BUILD)/bundle/                       Tauri 平台 app / 安装包及随包 data 资源
 #   target/$(BUILD)/jpcg_app-dynamic[.exe]        dynamic 变体（modules-dir 另存，便于对比/发布）
 #   target/$(BUILD)/libjpcg_{core,combo,update,const,gear}.{so,dylib}
 #   target/$(BUILD)/jpcg_*.dll                    五个模块库（动态模式/跨语言/增量更新）
@@ -54,7 +57,7 @@ SHELL := /bin/bash
 
 APP_DIR := examples/jpcg_app/src-tauri
 FRONTEND_DIR := examples/jpcg_app
-BUILD ?= debug
+BUILD ?= release
 
 CARGO ?= cargo
 NPM ?= npm
@@ -66,11 +69,16 @@ FORCE_SETUP ?= 0
 CARGO_JOBS ?=
 
 CARGO_BUILD_FLAGS :=
+TAURI_BUILD_FLAGS :=
+TAURI_CARGO_FLAGS :=
 ifeq ($(BUILD),release)
 CARGO_BUILD_FLAGS += --release
+else
+TAURI_BUILD_FLAGS += --debug
 endif
 ifneq ($(CARGO_JOBS),)
 CARGO_BUILD_FLAGS += -j$(CARGO_JOBS)
+TAURI_CARGO_FLAGS += -j$(CARGO_JOBS)
 endif
 
 UNAME_S := $(shell uname -s)
@@ -155,15 +163,15 @@ frontend-test: setup
 # Rust 构建
 # ----------------------------------------------------------------------------
 
-## 静态模式 app（默认；编译期链接 jpcg_core；先备齐前端 dist + updater sidecar）
+## 静态模式 app（默认；经 Tauri CLI 构建前端、app 与安装包）
 build-static: $(APP_BUILD_DEPS)
-	@echo "==> cargo build -p jpcg_app（static）"
-	$(CARGO) build -p jpcg_app $(CARGO_BUILD_FLAGS)
+	@echo "==> cargo tauri build（static，$(BUILD)）"
+	cd "$(FRONTEND_DIR)" && $(CARGO) tauri build $(TAURI_BUILD_FLAGS) $(if $(TAURI_CARGO_FLAGS),-- $(TAURI_CARGO_FLAGS))
 
-## 动态模式 app（dlopen libjpcg_core；先备齐前端 dist + updater sidecar）
+## 动态模式 app（dlopen libjpcg_core；经 Tauri CLI 构建前端、app 与安装包）
 build-dynamic: $(APP_BUILD_DEPS)
-	@echo "==> cargo build -p jpcg_app（dynamic）"
-	$(CARGO) build -p jpcg_app --no-default-features --features dynamic $(CARGO_BUILD_FLAGS)
+	@echo "==> cargo tauri build（dynamic，$(BUILD)）"
+	cd "$(FRONTEND_DIR)" && $(CARGO) tauri build $(TAURI_BUILD_FLAGS) -- --no-default-features --features dynamic $(TAURI_CARGO_FLAGS)
 
 ## 五个模块库 cdylib（jpcg_core / jpcg_combo / jpcg_update / jpcg_const / jpcg_gear）
 build-modules:
@@ -237,8 +245,8 @@ help:
 	@echo "  make setup          npm ci（缓存写入工作区，规避只读 HOME）"
 	@echo "  make frontend       npm run build（dist，编译期嵌入 app）"
 	@echo "  make frontend-test  npm test（vitest）"
-	@echo "  make build-static   静态模式 app（默认 goal）"
-	@echo "  make build-dynamic  动态模式 app（dlopen 模块库）"
+	@echo "  make build-static   cargo tauri build 静态 app + bundle（默认 goal）"
+	@echo "  make build-dynamic  cargo tauri build 动态 app + bundle（dlopen 模块库）"
 	@echo "  make build-modules  五个模块 cdylib（core/combo/update/const/gear）"
 	@echo "  make modules-dir    动态 app + 5 个模块库 → $(MODULES_DIR)（dynamic app 另存 $(APP_DYN)）"
 	@echo "  make updater        构建 updater → $(APP_DIR)/binaries/"
@@ -246,4 +254,5 @@ help:
 	@echo "  make fmt-check      rustfmt 检查"
 	@echo "  make clippy         clippy 静态检查"
 	@echo "  make check-all      fmt + clippy + 构建 + 测试 + 前端 test/build"
-	@echo "  可用变量：BUILD=release CARGO_JOBS=N FORCE_SETUP=1 NPM_CACHE=/path MODULES_DIR=/path"
+	@echo "  bundle 目录：$(BIN_DIR)/bundle/（默认 BUILD=release）"
+	@echo "  可用变量：BUILD=debug CARGO_JOBS=N FORCE_SETUP=1 NPM_CACHE=/path MODULES_DIR=/path"

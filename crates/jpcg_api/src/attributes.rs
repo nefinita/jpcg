@@ -57,7 +57,7 @@ pub struct AttributeConstant {
     pub value: u32,
 }
 
-/// 位于 data/shuxing/{profession}.toml 的 [attributes] 表；全部字段必须显式提供。
+/// 位于 data/{profession}/shuxing.toml 的 [attributes] 表；全部字段必须显式提供。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AttributeRules {

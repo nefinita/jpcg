@@ -20,5 +20,5 @@ done
 echo
 echo "完成。转换命令示例："
 echo "  cargo run -p json-to-toml -- --skills $OUT_DIR/skills.json --dots $OUT_DIR/dots.json \\"
-echo "      --overrides server_tools/json-to-toml/overrides.json --out data/shuxing --xinfa 10786"
+echo "      --overrides server_tools/json-to-toml/overrides.json --out data --xinfa 10786"
 echo "（数据维护与转换说明见 data/AGENTS.md）"

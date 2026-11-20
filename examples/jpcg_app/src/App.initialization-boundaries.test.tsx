@@ -80,6 +80,7 @@ beforeEach(() => {
   state.mode = "manual";
   localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: cockpitSchema.version, data: state }));
   vi.mocked(api.gearCatalog).mockRejectedValue(new Error("No gear catalog in this manual-mode test"));
+  vi.mocked(api.prepareGearLoadout).mockImplementation(async (_profession, loadout) => loadout ?? fixture.cases[0].composed.loadout);
   vi.mocked(api.listProfessions).mockResolvedValue([]);
   vi.mocked(api.loadProfessionConfig).mockImplementation(async (xinfa) => xinfa === "qixiu" ? B : A);
   vi.mocked(api.getModuleVersions).mockResolvedValue({ app: "test", core: "test", combo: "test", update: "test", const: "test" });

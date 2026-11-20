@@ -10,11 +10,17 @@ fn desktop_bridge_subprocess() {
         .env("JPCG_DATA_DIR", root.join("data"))
         .env(
             "JPCG_GEAR_LIB",
-            root.join("target/debug").join(format!(
-                "{}jpcg_gear{}",
-                std::env::consts::DLL_PREFIX,
-                std::env::consts::DLL_SUFFIX
-            )),
+            root.join("target")
+                .join(if cfg!(debug_assertions) {
+                    "debug"
+                } else {
+                    "release"
+                })
+                .join(format!(
+                    "{}jpcg_gear{}",
+                    std::env::consts::DLL_PREFIX,
+                    std::env::consts::DLL_SUFFIX
+                )),
         )
         .env("JPCG_GEAR_BRIDGE_CHILD", "1")
         .status()
@@ -26,16 +32,26 @@ fn desktop_bridge_child() {
     if std::env::var_os("JPCG_GEAR_BRIDGE_CHILD").is_none() {
         return;
     }
-    let catalog: jpcg_gear::Catalog = gear_bridge::call("catalog", &serde_json::json!({})).unwrap();
+    let catalog: jpcg_gear::Catalog =
+        gear_bridge::call("catalog", &serde_json::json!({"profession":"mowen"})).unwrap();
     assert_eq!(catalog.version.revision, "live-50-20261106");
     let text = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../data/gear/sample-loadout.toml"),
+            .join("../../data/mowen/gear/sample-loadout.toml"),
     )
     .unwrap();
-    let mut loadout: jpcg_gear::Loadout = toml::from_str(&text).unwrap();
-    // 真实 50 级装备必须走职业 TOML 换算；样例文件保持旧模式供历史用例使用。
-    loadout.attribute_rules = Some("profession-toml".into());
+    // 随附真实装备样例已显式选择职业 TOML 换算，不再依赖调用方补字段。
+    let loadout: jpcg_gear::Loadout = toml::from_str(&text).unwrap();
+    let prepared: jpcg_gear::Loadout = gear_bridge::call(
+        "prepare_loadout",
+        &serde_json::json!({"profession":"mowen","loadout":loadout}),
+    )
+    .unwrap();
+    assert_eq!(prepared.choices.len(), 12);
+    assert_eq!(
+        prepared.attribute_rules.as_deref(),
+        Some(jpcg_gear::attributes::PROFESSION_TOML)
+    );
     let composition: jpcg_gear::Composition = gear_bridge::call("compose", &loadout).unwrap();
     assert_eq!(composition.player.jcsx, "根骨");
     let exported: String = gear_bridge::call("export", &loadout).unwrap();
@@ -43,8 +59,11 @@ fn desktop_bridge_child() {
         gear_bridge::call("import", &serde_json::json!({"toml":exported})).unwrap();
     assert_eq!(composition.composed.stats, imported.composed.stats);
     assert!(
-        gear_bridge::call::<_, serde_json::Value>("catalog", &serde_json::json!({"path":"/tmp"}))
-            .is_err()
+        gear_bridge::call::<_, serde_json::Value>(
+            "catalog",
+            &serde_json::json!({"profession":"mowen","path":"/tmp"}),
+        )
+        .is_err()
     );
 }
 
@@ -59,11 +78,17 @@ fn desktop_joint_cancel_subprocess() {
         .env("JPCG_DATA_DIR", root.join("data"))
         .env(
             "JPCG_GEAR_LIB",
-            root.join("target/debug").join(format!(
-                "{}jpcg_gear{}",
-                std::env::consts::DLL_PREFIX,
-                std::env::consts::DLL_SUFFIX
-            )),
+            root.join("target")
+                .join(if cfg!(debug_assertions) {
+                    "debug"
+                } else {
+                    "release"
+                })
+                .join(format!(
+                    "{}jpcg_gear{}",
+                    std::env::consts::DLL_PREFIX,
+                    std::env::consts::DLL_SUFFIX
+                )),
         )
         .env("JPCG_GEAR_BRIDGE_CHILD", "1")
         .status()
@@ -77,7 +102,7 @@ fn desktop_joint_cancel_child() {
     }
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let request: jpcg_gear::OptimizeRequest = toml::from_str(
-        &std::fs::read_to_string(root.join("data/gear/sample-request.toml")).unwrap(),
+        &std::fs::read_to_string(root.join("data/mowen/gear/sample-request.toml")).unwrap(),
     )
     .unwrap();
     let id: jpcg_gear::OptimizeJobId = gear_bridge::call("optimize_joint_start", &request).unwrap();

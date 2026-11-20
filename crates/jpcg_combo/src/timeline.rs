@@ -23,7 +23,7 @@ use jpcg_core::type_set::skilltype::Skilltype;
 use jpcg_core::type_set::timing;
 use jpcg_core::type_set::xinfa::XinfaConfig;
 
-// 形态 / 施放副作用 / 技能键的数据结构由 core 数据层定义（与 data/combat/*.toml 一一对应），
+// 形态 / 施放副作用 / 技能键的数据结构由 core 数据层定义（与 data/{门派}/combat.toml 对应），
 // 时序引擎直接复用，避免两套类型。
 pub use jpcg_core::type_set::combat::{CombatData, FormDef, OnCast, SkillKey};
 use jpcg_core::type_set::modifier::QixueHook;

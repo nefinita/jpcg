@@ -1896,7 +1896,7 @@ mod current_config_filter {
         let path = std::env::var("JPCG_FILTER_REQUEST").unwrap();
         let req: OptimizeRequest =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        let catalog = crate::host::catalog().unwrap();
+        let catalog = crate::host::catalog(&req.loadout.school).unwrap();
         let req = prepare_request(&catalog, &req).unwrap();
         assert!(
             req.constraints.stats.keys().all(|k| k == "jiasu"),

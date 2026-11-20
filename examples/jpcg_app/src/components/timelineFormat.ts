@@ -23,7 +23,7 @@ export function formatTimelineEvent(e: TimelineEventDTO): string {
     case "form_switch":
       return `切器形 ${k.from} → ${k.to}`;
     case "qifeng_switch":
-      return `切曲风 ${k.from} → ${k.to}`;
+      return `切形态 ${k.from} → ${k.to}`;
     case "buff_gain":
       return `buff ${k.buff_id} ×${k.stacks}`;
     default: {

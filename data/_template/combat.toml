@@ -1,23 +1,28 @@
 # ============================================================================
-# data/combat 模板（#92 时序引擎）
+# data/<职业ID>/combat.toml 模板（#92 时序引擎）
 #
-# 用法：复制为 data/combat/{门派}.toml（如 mowen.toml）后按需删除/填写。
-# 以 `_` 开头的文件不会被加载。
+# 用法：复制整个 data/_template 为 data/<职业ID> 后按需删除/填写。
+# `_template` 不参与正常职业加载。
 #
 # 说明（两个独立维度）：
-#   - 器形（form）：琴 / 剑 这类会替换技能组与 GCD 的形态；各自独立 GCD 通道。
-#   - 曲风（qifeng）：阳春白雪 / 高山流水 / 平沙落雁 这类只换技能变体、不换 GCD 的状态。
+#   - 器形（form）：琴 / 剑、单持 / 双持这类会替换技能组与 GCD 的形态；各自独立 GCD 通道。
+#   - 形态（qifeng）：只换技能变体、不换 GCD 的状态；界面显示通用「形态」。
 #   - 没写的技能 = 默认瞬发、1.5s GCD、无 CD。
 #   - 所有表都是 deny_unknown_fields：字段名写错会解析失败（错误会指出文件与字段）。
 # ============================================================================
 
-# 曲风取值（按需增删；requires_qifeng / switch_qifeng 必须引用这里的 id）
+# 形态 id（按需增删；requires_qifeng / switch_qifeng 必须引用这里的 id）
 qifeng = ["yangchun", "gaoshan", "pingsha"]
 
 [meta]
 profession = "mowen"
 version = "template-1"
-note = "填表模板；复制为 mowen.toml 后按需修改"
+note = "填表模板；复制整个目录为新职业后按需修改"
+# 界面显示名与面板规则均由数据下发；内部 qifeng 字段暂时保留兼容。
+qifeng_names = { yangchun = "阳春白雪", gaoshan = "高山流水", pingsha = "平沙落雁" }
+miji_per_skill_cap = 4
+mixed_qixue_cap = 3
+mixed_slot_from = 7
 
 # ----------------------------------------------------------------------------
 # 器形：不写 = 无器形概念（整个时间轴共用 1.5s GCD）
@@ -46,7 +51,7 @@ sub_id = 14474
 requires_instrument = "qin"
 cast_time = 1.5
 
-# 曲目技能示例：释放即切曲风，0 GCD、3 秒调息
+# 曲目技能示例：释放即切形态，0 GCD、3 秒调息
 # [[skill_combat]]
 # skill_id = 14069
 # sub_id = 0
@@ -55,7 +60,7 @@ cast_time = 1.5
 # cooldown = 3.0
 # on_cast = { switch_qifeng = "gaoshan" }
 
-# 变体技能示例：只有高山流水曲风下可用
+# 变体技能示例：只有高山流水形态下可用
 # [[skill_combat]]
 # skill_id = 14298
 # sub_id = 18860

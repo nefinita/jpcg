@@ -13,15 +13,9 @@ default = "live-50"
 
 [[value_sets]]
 id = "live-50"
-name = "正式服·50级·第1赛季"
+name = "正式服·50级"
 level = 50
 file = "live-50.toml"
-
-[[value_sets]]
-id = "cszj-exp-260908"
-name = "体验服·苍生铸世一测"
-level = 50
-file = "cszj-exp-260908.toml"
 
 [[value_sets]]
 id = "live-130"
