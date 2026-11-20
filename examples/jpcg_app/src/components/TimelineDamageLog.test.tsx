@@ -44,3 +44,11 @@ it("按分:秒展示时间，并按事件顺序累计伤害", () => {
   expect(text).toContain("第 1 跳");
   expect(text).toContain("qu-yangchun → jian");
 });
+
+it("保留后端按动作归属筛选的边界读条命中，并直接展示后端累计", () => {
+  const events = [{ time: 2, cumulative: 12345, kind: { kind: "cast" as const, skill_name: "边界读条", damage: 12345, hit_time: 2 } }];
+  act(() => root.render(<TimelineDamageLog events={events} killStart={0} killEnd={1.999} />));
+  expect(container.querySelectorAll("tbody tr")).toHaveLength(1);
+  expect(container.textContent).toContain("边界读条");
+  expect(container.querySelector("tbody tr td:last-child")?.textContent).toBe("12,345");
+});

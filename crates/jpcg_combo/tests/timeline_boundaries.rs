@@ -320,3 +320,40 @@ fn adjacent_start_end_is_empty_window() {
     assert_eq!(result.total_damage, 0.0);
     assert_eq!(result.final_kill_prob, 0.0);
 }
+
+#[test]
+fn implicit_end_includes_single_instant_hit_after_start() {
+    let mut req = request();
+    req.actions = vec![flag("start"), cast()];
+    req.hostile.target_hp = 1;
+    let result = calculate_timeline(req).unwrap();
+    assert!(result.total_damage > 0.0);
+    assert_eq!(result.final_kill_prob, 1.0);
+}
+
+#[test]
+fn implicit_end_keeps_last_dot_tail_with_or_without_start() {
+    let mut req = request();
+    req.skills[0].dot_flag = 1;
+    req.skills[0].dot_interval = 1.0;
+    req.skills[0].dot_duration = 3.0;
+    let baseline = calculate_timeline(req.clone()).unwrap();
+    req.hostile.target_hp = baseline.total_damage as u32;
+    req.actions = vec![flag("start"), cast()];
+    let result = calculate_timeline(req.clone()).unwrap();
+    assert_eq!(result.kill_end, baseline.kill_end);
+    assert_eq!(result.total_damage, baseline.total_damage);
+    assert_eq!(result.final_kill_prob, 1.0);
+    assert_eq!(
+        result
+            .events
+            .iter()
+            .filter(|e| matches!(e.kind, TimelineEventKindDTO::DotTick { .. }))
+            .count(),
+        3
+    );
+    req.actions.push(flag("end"));
+    let explicit = calculate_timeline(req).unwrap();
+    assert!(explicit.total_damage < result.total_damage);
+    assert_eq!(explicit.final_kill_prob, 0.0);
+}

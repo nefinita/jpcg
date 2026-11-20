@@ -60,23 +60,16 @@ const kindName = (kind: TimelineEventDTO["kind"]) => {
   }
 };
 
-export function TimelineDamageLog({ events, killStart, killEnd }: {
+export function TimelineDamageLog({ events }: {
   events: TimelineEventDTO[];
-  /** 有效测量窗口；不传则展示全部事件。 */
+  /** 窗口已由后端按动作归属筛选；保留参数兼容调用方，不再按时间二次裁剪。 */
   killStart?: number | null;
   killEnd?: number | null;
 }) {
-  // 只展示测量窗口内的事件；累计伤害按窗口内顺序重新累加，末行 = 窗口总伤。
-  const filtered = events.filter((event) => {
-    if (killStart == null && killEnd == null) return true;
-    return (killStart == null || event.time >= killStart - 1e-4)
-      && (killEnd == null || event.time <= killEnd + 1e-4);
-  });
-  let acc = 0;
-  const rows = filtered.map((event, index) => {
+  // 后端提供可见事件和累计伤害，前端只渲染。
+  const rows = events.map((event, index) => {
     const damage = kindDamage(event.kind);
-    acc += damage;
-    return { event, index, damage, cumulative: acc };
+    return { event, index, damage, cumulative: event.cumulative ?? 0 };
   });
   return (
     <div className={styles.root}>

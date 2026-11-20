@@ -450,3 +450,104 @@ it.each([false, true])("调优期间锁定整个编辑区，完成或失败后�
   expect(host.querySelector('[inert]')).toBeNull();
   expect(host.textContent).not.toContain("调优期间已锁定配装、属性和连招");
 });
+
+async function prepareOptimizeTest() {
+  const state = saved();
+  state.form.hostile.target_hp = "1000";
+  localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
+  const draft = defaultComboDraft(); draft.sequence = [{ kind: "flag", flag: "start" }];
+  localStorage.setItem(`${STORAGE_KEYS.comboDraft}:mowen`, JSON.stringify({ version: 3, data: draft }));
+  vi.mocked(api.calculateTimeline).mockResolvedValue({ events: [], total_damage: 0, window_dps: 0, skipped_actions: 0 });
+  vi.mocked(api.listenGearOptimizeProgress).mockReturnValue(() => {});
+  await render(); await wait(); await wait();
+  await act(async () => {
+    const select = section("调优设置").querySelector<HTMLSelectElement>("select")!;
+    select.value = "window_dps";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+it.each([false, true])("准备请求期间立即加锁，双击只启动一次，加载失败也解锁（失败=%s）", async (fails) => {
+  await prepareOptimizeTest();
+  const bundle = await api.loadCombatBundle("mowen");
+  const loading = deferred<typeof bundle>();
+  vi.mocked(api.loadCombatBundle).mockReturnValue(loading.promise);
+  const running = deferred<any>();
+  vi.mocked(api.optimizeGear).mockReturnValue(running.promise);
+  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === "自动调优")!;
+  await act(async () => { button.click(); button.click(); });
+  expect(host.querySelector("[inert]")).not.toBeNull();
+  expect(api.optimizeGear).not.toHaveBeenCalled();
+  await act(async () => { if (fails) loading.reject(new Error("准备请求失败")); else loading.resolve(bundle); });
+  if (fails) {
+    expect(api.optimizeGear).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("准备请求失败");
+  } else {
+    expect(api.optimizeGear).toHaveBeenCalledTimes(1);
+    const stop = host.querySelector<HTMLButtonElement>('button[title="停止当前调优计算"]')!;
+    expect(stop.closest("[inert]")).toBeNull();
+    await act(async () => stop.click());
+    expect(api.cancelGearOptimize).toHaveBeenCalledTimes(1);
+    expect(host.querySelector("[inert]")).not.toBeNull();
+    await act(async () => running.resolve({ best: null, delta: null, complete: false, stop_reason: "cancelled", progress: { evaluated: 0, combinations: 1 }, warnings: [] }));
+  }
+  expect(host.querySelector("[inert]")).toBeNull();
+});
+
+it("准备阶段停止后不启动后端调优，空请求也可靠解锁", async () => {
+  await prepareOptimizeTest();
+  const bundle = await api.loadCombatBundle("mowen");
+  const loading = deferred<typeof bundle>();
+  vi.mocked(api.loadCombatBundle).mockReturnValue(loading.promise);
+  await click("自动调优");
+  await click("停止");
+  await act(async () => loading.resolve(bundle));
+  expect(api.optimizeGear).not.toHaveBeenCalled();
+  expect(api.cancelGearOptimize).not.toHaveBeenCalled();
+  expect(host.querySelector("[inert]")).toBeNull();
+  await act(async () => root.unmount()); root = createRoot(host);
+  localStorage.removeItem(`${STORAGE_KEYS.comboDraft}:mowen`);
+  await render(); await wait();
+  await click("自动调优");
+  expect(host.querySelector("[inert]")).toBeNull();
+  expect(host.textContent).toContain("请先在排轴器编辑连招");
+});
+
+it("从调优设置导出的 JSON 包含当前约束和计算平台", async () => {
+  vi.mocked(api.listComputeBackends).mockResolvedValue([{ id: "cpu", label: "CPU", available: true, kind: "cpu" }] as never);
+  await prepareOptimizeTest();
+  const settings = section("调优设置");
+  await act(async () => {
+    const select = settings.querySelector<HTMLSelectElement>("select")!;
+    select.value = "window_dps"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    const platform = settings.querySelectorAll<HTMLSelectElement>("select")[1];
+    platform.value = "cpu"; platform.dispatchEvent(new Event("change", { bubbles: true }));
+    const haste = settings.querySelector<HTMLInputElement>('input[type="number"]')!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(haste, "1234");
+    haste.dispatchEvent(new Event("input", { bubbles: true }));
+    const arena = settings.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    if (arena.checked) arena.click();
+  });
+  let exported!: Blob;
+  const create = vi.fn((blob: Blob) => { exported = blob; return "blob:export-test"; });
+  const revoke = vi.fn();
+  const oldCreate = URL.createObjectURL; const oldRevoke = URL.revokeObjectURL;
+  URL.createObjectURL = create; URL.revokeObjectURL = revoke;
+  const download = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  try {
+    await click("导出穷举请求", settings);
+    const text = await new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.readAsText(exported); });
+    const request = JSON.parse(text);
+    expect(request.constraints.stats).toEqual({ jiasu: { min: 1234 } });
+    expect(request.constraints.required_sets).toEqual({});
+    expect(request.objective.metric).toBe("window_dps");
+    expect(request.objective.request.samples).toBe(0);
+    expect(request.loadout).toEqual(saved().loadouts.mowen);
+    expect(request.compute).toBe("cpu");
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith("blob:export-test");
+    expect(api.optimizeGear).not.toHaveBeenCalled();
+  } finally {
+    download.mockRestore(); URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke;
+  }
+});

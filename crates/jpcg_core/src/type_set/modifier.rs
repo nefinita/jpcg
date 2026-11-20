@@ -254,19 +254,32 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn miji_applies_to_shares_between_base_and_variant() {
         let shared = MijiDef {
             id: "m".into(),
             skill_id: 100,
             sub_id: 1,
             applies_to: vec![(100, 1), (200, 2)],
-            modifiers: vec![],
+            modifiers: vec![
+                SkillModifier::BaseDamageAdd(20),
+                SkillModifier::CastTimeMul(-10.0),
+            ],
             ..Default::default()
         };
         assert!(shared.targets_skill(100, 1), "基础技能命中");
         assert!(shared.targets_skill(200, 2), "变体命中");
         assert!(!shared.targets_skill(100, 2), "同 id 不同 sub 不命中");
+        for (skill_id, sub_id) in [(100, 1), (200, 2)] {
+            let input = Skilltype {
+                skill_id,
+                sub_id,
+                ..skill()
+            };
+            let out = resolve_skill(&input, &[&shared], &[]);
+            assert_eq!(out.base_damage1, 120);
+            assert_eq!(out.base_damage2, 120);
+            assert!((out.cast_time - 1.8).abs() < 1e-6);
+        }
         let plain = MijiDef {
             skill_id: 100,
             sub_id: 0,
@@ -279,6 +292,7 @@ mod tests {
         assert!(!plain.targets_skill(101, 0));
     }
 
+    #[test]
     fn miji_modifiers_apply_without_adding_new_skill() {
         let miji = MijiDef {
             id: "m1".into(),

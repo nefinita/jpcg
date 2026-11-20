@@ -2,7 +2,7 @@
 
 独立 Rust crate，提供 12 槽位模板校验、属性合成、约束搜索、JSON API 和 `gear-opt` CLI。现有 `jpcg_api`、core/combo 引擎、FFI、应用 UI 和工作流均不修改。供 #91 集成；这不是 #90 全部验收完成的声明。
 
-`data/gear/` **全为人为构造的合成测试样例**，`sample=true`、`revision=synthetic-v1`。装备/套装点数、装分、CD 秒数都不是游戏事实；莫问主属性与技能计算使用仓库现有 `shuxing/mowen.toml`。正式数据、真实人工配装基准及套装 CD 规则仍待维护者提供。
+`data/gear/` 当前提供莫问 50 级 `live-50-20261106` 目录，`sample=false`，来源与各文件 `provenance` 一致；早期 `synthetic-v1` 才是全人为构造样例。`sample-loadout.toml` / `sample-request.toml` 的“sample”指调用示例，不代表目录数值为合成数据。莫问主属性与技能计算使用仓库现有 `shuxing/mowen.toml`；真实人工配装基准、其他职业数据及未标明的规则仍待维护者验证。
 
 ## 运行
 
@@ -59,7 +59,7 @@ JSON 输入为以下之一，拒绝多余字段：
 
 ```json
 {"method":"validate"}
-{"method":"compose","loadout":{"school":"mowen","revision":"synthetic-v1","value_set":"live-130","choices":[]}}
+{"method":"compose","loadout":{"school":"mowen","revision":"live-50-20261106","value_set":"live-50","choices":[]}}
 {"method":"optimize","request":{}}
 ```
 
