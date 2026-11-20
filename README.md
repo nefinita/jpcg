@@ -2,7 +2,7 @@
 
 > **精确计算每一发伤害，科学规划连招，轻松掌握击杀线。**
 >
-> **版本**: v2.1.0 | **更新日期**: 2026年10月
+> **版本**: v2.2.0-beta.2 | **更新日期**: 2026年11月
 > **适用平台**: Windows / macOS / Linux
 
 ---
@@ -112,7 +112,31 @@ kill_prob = kills / 50_000
 
 ---
 
-## 📦 本次更新 (v2.1.0)
+## 📦 本次更新 (v2.2.0-beta.2)
+
+> v2.2.0-beta.2 于 2026-11-17 发布：战斗时序引擎、配装驱动驾驶台、逐职业属性换算与全量穷举配装调优上线。
+> 详细公告见 [`docs/announcements/v2.2.0-beta.2.md`](docs/announcements/v2.2.0-beta.2.md)。
+
+- **战斗时序引擎**（#92 / #97）—— 加速（16 帧/秒量化、25% 封顶）、GCD / 读条 / 引导、CD 与充能、
+  形态切换、秘籍 / 奇穴替换映射、DOT 施加快照全部数据化建模，伤害事件进入真实时间轴，
+  配套数据在 `data/combat/*.toml`
+- **配装驱动驾驶台**（#91 / #95 / #96 / #107）—— 12 个部位卡片平铺、随改随算（125ms 防抖）、
+  钉住基准 + 差值对比、配装 / 连招草稿 / 结果基准全局持久化，手动属性降级为模式切换
+- **逐职业属性换算**（#100 / #98）—— 裸装基础值 + 装备模板 → 逐职业 TOML 规则 → 玩家属性，
+  全链路可追溯；旧手填配装打开时提示并一键切换，避免静默少算
+- **配装调优：全量穷举 × GPU/CPU 双后端**（#94）—— 新 crate `jpcg_compute`：CPU AVX-512 16 路 +
+  wgpu GPU 适配器批量跑 50k 蒙特卡洛（同 seed 计数逐候选一致，Metal 已对拍）；
+  升级档空间全量遍历（莫问 2^12 = 4096 套，`complete = true` 保证空间内最优）；
+  前端「平台」下拉 + 「停止」按钮；默认竞技场四件套 + 最低加速 928；
+  击杀率统一固定种子，手调与调优结果可直接比较；穷举请求可导出至 `gear-opt` CLI 工作站跑批
+- **数值修正** —— 11-12 技改「洞天」伤害 −5%（4851→4608）；变宫 / 变徵正确继承基础技能秘籍；
+  测量窗口改「动作归属 + 显式边界」，总伤 / DPS / 击杀曲线 / 伤害日志同一口径
+- ⚠️ **旧 130 级配置文件不兼容新特性**；旧计算器引擎保留切换入口至 v2.3 后将逐步删除，
+  v2.1 单独开源提供下载但不再维护
+
+---
+
+## 📦 往期版本记录（v2.1.0，2026-10-13）
 
 > v2.1.0 于 2026-10-13 发布：三平台产物、通道更新包（tgz + sha256）与模块 dll 同步上线。
 
@@ -186,7 +210,8 @@ pub enum Roadmap {
     AttributeAutoDiffDone,
     /// 智能配装器 — 基于约束搜索的最优方案推荐
     /// 输入预算/品级/套装条件，自动输出最优属性配比
-    SmartGearOptimizer,
+    /// — 已实现（v2.2：有界优化 + 全量穷举调优，GPU/CPU 批量 MC）
+    SmartGearOptimizerDone,
     /// 论坛用户系统 + 评论互动
     ForumCommunity,
     /// 更多可视化分析工具（属性收益曲线、装备对比等）
@@ -196,7 +221,8 @@ pub enum Roadmap {
 
 - ~~**正式稳定版本发布**~~（已完成：v2.1.0，2026-10-13）
 - **更多心法数据持续更新**，覆盖全部门派
-- **智能配装器**：基于约束条件搜索最优配装方案
+- ~~**智能配装器**~~（已实现：v2.2 配装调优 —— 有界优化 + 升级档全量穷举，
+  CPU AVX-512 / wgpu GPU 双后端批量精确 MC，穷举请求可导出 CLI 跑批）
 - **论坛系统**：用户账号、评论互动、配置评分
 - **安装包**：Windows（.msi）/ macOS（.dmg）安装包
 
@@ -259,8 +285,8 @@ npm run build
 |------|------|------|
 | **static**（默认） | `cargo build-app-static` / `make build-static` | 编译期静态链接引擎，调试最直接 |
 | **dynamic** | `cargo build-app-dynamic` / `make build-dynamic` | 运行时 dlopen `libjpcg_core`，更新只需替换 dll |
-| **模块 dll** | `cargo build-modules` / `make build-modules` | 构建四个 cdylib：core / combo / update / const |
-| **模块目录** | `make modules-dir` | 构建 dynamic app + 4 个模块 dll，复制到 `target/<build>/modules/`（ffi_bridge 动态加载首选目录，优先于 exe 同目录），并把 dynamic app 另存为 `jpcg_app-dynamic` |
+| **模块 dll** | `cargo build-modules` / `make build-modules` | 构建五个 cdylib：core / combo / gear / update / const |
+| **模块目录** | `make modules-dir` | 构建 dynamic app + 5 个模块 dll，复制到 `target/<build>/modules/`（ffi_bridge 动态加载首选目录，优先于 exe 同目录），并把 dynamic app 另存为 `jpcg_app-dynamic` |
 
 ### 打包发布
 
@@ -320,11 +346,15 @@ cargo run -p forum
 crates/jpcg_api/      纯 DTO 类型契约（serde，跨端单一来源）
 crates/jpcg_core/     核心计算引擎 + host JSON 层 + FFI（句柄 + JSON 协议）
 crates/jpcg_combo/    连招引擎（依赖 core；cdylib+rlib 双产物）
+crates/jpcg_gear/     配装契约/模板合成/有界搜索/全量穷举调优 + host/ffi（cdylib）
+crates/jpcg_compute/  批量 MC 计算后端（CPU AVX-512 / wgpu GPU 枚举与批量执行）
 crates/jpcg_update/   App / 数据 / 模块(dll) 自动更新（nefinita-ai.com）
 crates/jpcg_updater/  独立更新器（替换主程序并重启）
 crates/jpcg_const/    药品/食物/等级常量（独立版本 130.3.{日期}，编译期由 preset TOML 固化）
 examples/jpcg_app/    Tauri v2 桌面应用（React 19 + TypeScript + Vite）
 data/shuxing/         各心法技能/属性数据（TOML，[version] 等级.赛季.修改日期）
+data/combat/          战斗时序数据（加速/GCD/CD/形态/秘籍/奇穴，逐心法 TOML）
+data/gear/            配装数据（装备模板/属性套/逐职业换算规则）
 data/values/          数值集清单 index.toml + 各值集快照（换算常数，运行期可选）
 server_tools/         manifest-gen（清单）/ deploy-gen（发布通道布局）/ forum（论坛）/ json-to-toml（技能数据转换）
 ```
