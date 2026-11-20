@@ -9,10 +9,10 @@ const convertedFields = ["tizhi", "liliang", "shenfa", "gengu", "yuanqi", "qixue
 /** 跨门派装备的显示名；后端 schools 里暂无 name 字段。 */
 const SCHOOL_NAMES: Record<string, string> = { mowen: "莫问", bingxin: "冰心" };
 
-export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, onCancel, optimizing, optProgress, optResult, pending }: {
+export default function GearPanel({ catalog, loadout, composition, onChange, onReset, onExport, onImport, onOptimize, onExportRequest, optimizing, optProgress, optResult, pending }: {
   catalog: GearCatalog; loadout: GearLoadout; composition?: GearComposition;
   onChange: (loadout: GearLoadout) => void; onReset: () => void; onExport: () => void;
-  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; onExportRequest?: (options: OptimizeOptions) => void; onCancel?: () => void; optimizing: boolean; optProgress?: number | null;
+  onImport: (file: File) => Promise<void>; onOptimize: (options: OptimizeOptions) => void; onExportRequest?: (options: OptimizeOptions) => void; optimizing: boolean; optProgress?: number | null;
   optResult?: { result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null; pending: boolean;
 }) {
   const [opts, setOpts] = useState<OptimizeOptions>({ metric: "kill_probability", arena4: true, hasteMin: 928, compute: null });
@@ -36,7 +36,6 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
       <div><h2>当前配装</h2><p>{catalog.version.sample ? "合成测试样例 · 非游戏装备数值" : `赛季 ${catalog.version.season}`} · {catalog.version.revision}</p></div>
       <div className={styles.actions}>
         <button onClick={() => onOptimize(opts)} disabled={optimizing || pending}>{optimizing ? (optProgress != null ? `调优中 ${optProgress}%` : "调优中…") : "自动调优"}</button>
-        {optimizing && onCancel && <button onClick={onCancel} title="停止当前调优计算">停止</button>}
         <button onClick={onReset}>重置配装</button>
         <button onClick={onExport} disabled={stale}>导出配装</button>
         <label>导入配装<input type="file" accept=".toml" onChange={(e) => {
@@ -46,6 +45,7 @@ export default function GearPanel({ catalog, loadout, composition, onChange, onR
       </div>
     </header>
     <div className={styles.optimizeBar} aria-label="调优设置">
+      {onExportRequest && <button onClick={() => onExportRequest(opts)} disabled={optimizing || pending || stale}>导出穷举请求</button>}
       <label>调优目标
         <select value={opts.metric} onChange={(e) => setOpts((p) => ({ ...p, metric: e.target.value as OptimizeOptions["metric"] }))}>
           <option value="kill_probability">击杀率</option>

@@ -58,6 +58,8 @@ export default function App() {
   const [comboBusy, setComboBusy] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const optimizeLock = useRef(false);
+  const optimizeCancelled = useRef(false);
+  const optimizeRunning = useRef(false);
   const [optProgress, setOptProgress] = useState<number | null>(null);
   const [optResult, setOptResult] = useState<{ result: GearOptimizeResult; metric: OptimizeOptions["metric"] } | null>(null);
   const saveComboResult = useCallback((inputKey: string, result: TimelineResultDTO) => {
@@ -234,8 +236,9 @@ export default function App() {
   }, [catalog, loadout, compatible, rulesCurrent, comboDraft, formData, addToast]);
 
   const handleCancelOptimize = useCallback(async () => {
+    optimizeCancelled.current = true;
     try {
-      await api.cancelGearOptimize();
+      if (optimizeRunning.current) await api.cancelGearOptimize();
       addToast("已请求停止调优", "info");
     } catch (err) {
       addToast(String(err), "error");
@@ -243,28 +246,37 @@ export default function App() {
   }, [addToast]);
 
   const handleExportOptimizeRequest = useCallback(async (opts: OptimizeOptions) => {
-    const request = await buildOptimizeRequest(opts);
-    if (!request) return;
-    const blob = new Blob([JSON.stringify(request, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `jpcg-exhaustive-request-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    addToast("已导出全量穷举请求（含当前约束；击杀率目标使用所选后端精确 MC）", "success");
+    try {
+      const request = await buildOptimizeRequest(opts);
+      if (!request) return;
+      const blob = new Blob([JSON.stringify(request, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `jpcg-exhaustive-request-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      addToast("已导出全量穷举请求（含当前约束；击杀率目标使用所选后端精确 MC）", "success");
+    } catch (err) {
+      addToast(String(err), "error");
+    }
   }, [buildOptimizeRequest, addToast]);
 
   const handleOptimize = useCallback(async (opts: OptimizeOptions) => {
     if (optimizeLock.current) return;
-    const request = await buildOptimizeRequest(opts);
-    if (!request) return;
     optimizeLock.current = true;
+    optimizeCancelled.current = false;
     ++actionRevision.current; // 作废调优开始前尚未完成的导入/环境切换
     setOptimizing(true); setOptProgress(null); setStatus("配装自动调优中…");
     let unlisten = () => {};
     try {
+      const request = await buildOptimizeRequest(opts);
+      if (!request || optimizeCancelled.current) {
+        setStatus(optimizeCancelled.current ? "配装自动调优已取消" : "配装自动调优未启动");
+        return;
+      }
       unlisten = api.listenGearOptimizeProgress((pct) => setOptProgress(pct));
+      optimizeRunning.current = true;
       const result = await api.optimizeGear(request);
       setOptResult({ result, metric: opts.metric });
       if (result.best) {
@@ -282,6 +294,7 @@ export default function App() {
       addToast(String(err), "error");
       setStatus("配装自动调优失败");
     } finally {
+      optimizeRunning.current = false;
       unlisten();
       setOptProgress(null);
       optimizeLock.current = false;
@@ -362,7 +375,7 @@ export default function App() {
             {catalog && loadout && <GearPanel catalog={catalog} loadout={loadout} composition={composition} pending={stale || calculating}
               onOptimize={(options) => void handleOptimize(options)} optimizing={optimizing} optProgress={optProgress} optResult={optResult} onChange={changeLoadout}
               onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
-              onExport={() => void exportLoadout()} onImport={importLoadout} onExportRequest={(options) => void handleExportOptimizeRequest(options)} onCancel={() => void handleCancelOptimize()} />}
+              onExport={() => void exportLoadout()} onImport={importLoadout} onExportRequest={(options) => void handleExportOptimizeRequest(options)} />}
             {resultPanel}
           </div>
         </> : <div className={styles.manualBody}><div className={styles.configPanel}>{configPanel}</div>{resultPanel}</div>}
@@ -375,5 +388,6 @@ export default function App() {
   </div>{optimizing && <div className={styles.optimizeLock} role="status" aria-live="polite">
     <strong>正在调优配装{optProgress == null ? "…" : ` · ${optProgress}%`}</strong>
     <p>调优期间已锁定配装、属性和连招，完成后自动解锁。</p>
+    <button onClick={() => void handleCancelOptimize()} title="停止当前调优计算">停止</button>
   </div>}<StatusBar message={status} /><Toast toasts={toasts} onRemove={removeToast} /></div>;
 }
