@@ -2,7 +2,7 @@
 // host::combat — 战斗时序数据 DTO 层（#92）
 //
 // 对外入口：
-//   - load_combat_data(profession)       → `data/combat/{门派}.toml` 的 DTO
+//   - load_combat_data(profession)       → `data/{门派}/combat.toml` 的 DTO
 //   - load_combat_with_skills(profession)→ 技能池（已套 overlay）+ combat DTO
 //   - 本模块同时提供 core 领域类型 ↔ jpcg_api DTO 的双向转换（供 combo 引擎复用）
 // ============================================================================
@@ -131,9 +131,10 @@ impl From<CombatMeta> for CombatMetaDTO {
             profession: m.profession,
             version: m.version,
             note: m.note,
-            miji_per_skill_cap: jpcg_api::default_miji_cap(),
-            mixed_qixue_cap: jpcg_api::default_mixed_cap(),
-            mixed_slot_from: jpcg_api::default_mixed_slot_from(),
+            qifeng_names: m.qifeng_names,
+            miji_per_skill_cap: m.miji_per_skill_cap,
+            mixed_qixue_cap: m.mixed_qixue_cap,
+            mixed_slot_from: m.mixed_slot_from,
         }
     }
 }
@@ -470,6 +471,10 @@ impl From<CombatMetaDTO> for CombatMeta {
             profession: m.profession,
             version: m.version,
             note: m.note,
+            qifeng_names: m.qifeng_names,
+            miji_per_skill_cap: m.miji_per_skill_cap,
+            mixed_qixue_cap: m.mixed_qixue_cap,
+            mixed_slot_from: m.mixed_slot_from,
         }
     }
 }
@@ -477,11 +482,7 @@ impl From<CombatMetaDTO> for CombatMeta {
 impl From<CombatDataDTO> for CombatData {
     fn from(d: CombatDataDTO) -> Self {
         CombatData {
-            meta: CombatMeta {
-                profession: d.meta.profession,
-                version: d.meta.version,
-                note: d.meta.note,
-            },
+            meta: d.meta.into(),
             form: d.form.into_iter().map(Into::into).collect(),
             qifeng: d.qifeng,
             skill_combat: d.skill_combat.into_iter().map(Into::into).collect(),
@@ -535,6 +536,13 @@ mod tests {
                 profession: "mowen".into(),
                 version: "v1".into(),
                 note: "n".into(),
+                qifeng_names: std::collections::BTreeMap::from([
+                    ("yangchun".into(), "阳春白雪".into()),
+                    ("gaoshan".into(), "高山流水".into()),
+                ]),
+                miji_per_skill_cap: 2,
+                mixed_qixue_cap: 2,
+                mixed_slot_from: 5,
             },
             form: vec![FormDef {
                 id: "single".into(),
@@ -583,10 +591,18 @@ mod tests {
         let dto = CombatDataDTO::from(data.clone());
         assert_eq!(dto.form[0].id, "single");
         assert_eq!(dto.skill_combat[0].on_cast.lock_skills, vec![(2, 0)]);
+        assert_eq!(
+            dto.meta.qifeng_names.get("yangchun").map(String::as_str),
+            Some("阳春白雪")
+        );
+        assert_eq!(dto.meta.miji_per_skill_cap, 2);
+        assert_eq!(dto.meta.mixed_qixue_cap, 2);
+        assert_eq!(dto.meta.mixed_slot_from, 5);
         let back = CombatData::from(dto);
         // DTO 往返后与原始数据一致（逐字段比对关键项；CombatData 未实现 PartialEq）
         assert_eq!(back.form[0].gcd_base, 1.5);
         assert!(back.buff[0].ignore_cap);
         assert_eq!(back.miji[0].modifiers.len(), 1);
+        assert_eq!(back.meta, data.meta);
     }
 }

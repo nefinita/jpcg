@@ -1,5 +1,5 @@
 // ============================================================================
-// json-to-toml — IcyTide/Generator 技能 JSON → JPCG data/shuxing TOML 转换器
+// json-to-toml — IcyTide/Generator 技能 JSON → JPCG data/<职业>/shuxing.toml 转换器
 //
 // 数据来源: https://github.com/IcyTide/Generator（assets/json/skills.json、
 // dots.json/belongs.json），伤害均为公式字符串。
@@ -43,7 +43,7 @@ use std::path::PathBuf;
 #[command(
     name = "json-to-toml",
     version,
-    about = "IcyTide/Generator 技能 JSON → JPCG data/shuxing TOML"
+    about = "IcyTide/Generator 技能 JSON → JPCG data/<职业>/shuxing.toml"
 )]
 struct Args {
     /// skills.json 路径
@@ -55,8 +55,8 @@ struct Args {
     /// overrides.json 路径
     #[arg(long, default_value = "overrides.json")]
     overrides: PathBuf,
-    /// 输出目录
-    #[arg(long, default_value = "../../data/shuxing")]
+    /// 数据根目录；实际写入 <out>/<职业>/shuxing.toml
+    #[arg(long, default_value = "../../data")]
     out: PathBuf,
     /// 要转换的池 id（可多次），如 --xinfa 10447 --xinfa 10786
     #[arg(long)]
@@ -425,11 +425,27 @@ fn main() {
         let file_name = ov
             .and_then(|o| o.file.clone())
             .unwrap_or_else(|| format!("{pool_id}.toml"));
+        let Some(profession) = file_name.strip_suffix(".toml") else {
+            eprintln!("[fail] 输出职业文件名必须以 .toml 结尾：{file_name}");
+            continue;
+        };
+        if profession.is_empty()
+            || !profession
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+        {
+            eprintln!("[fail] 输出职业 ID 非法：{profession}");
+            continue;
+        }
         let out = render_toml(&args, ov, &skills);
-        let out_path = args.out.join(&file_name);
-        match fs::write(&out_path, &out) {
-            Ok(()) => println!("[ok] {file_name}: {} 条技能", skills.len()),
-            Err(e) => eprintln!("[fail] 写入 {file_name}: {e}"),
+        let out_dir = args.out.join(profession);
+        let out_path = out_dir.join("shuxing.toml");
+        match fs::create_dir_all(&out_dir)
+            .map_err(|e| e.to_string())
+            .and_then(|()| fs::write(&out_path, &out).map_err(|e| e.to_string()))
+        {
+            Ok(()) => println!("[ok] {}: {} 条技能", out_path.display(), skills.len()),
+            Err(e) => eprintln!("[fail] 写入 {}: {e}", out_path.display()),
         }
         if !skipped.is_empty() {
             println!("  [skip] {} 条跳过（无伤害数据）:", skipped.len());

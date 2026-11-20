@@ -2,7 +2,7 @@
 # 莫问 —— 战斗时序 overlay（#92）
 #
 # 数据来源：游戏内 tooltip 截图（data/skill-shots/莫问/）+ data/skill-shots/out/mowen-final.json
-# 基准：50 级，最终阴性内功攻击 8438；伤害数值在 data/shuxing/mowen.toml，这里只写时序。
+# 基准：50 级，最终阴性内功攻击 8438；伤害数值在 data/mowen/shuxing.toml，这里只写时序。
 #
 # 四形态：阳春白雪 / 高山流水 / 平沙落雁（三曲）+ 剑
 #   - 曲之间用各自的「曲」主动切换（14230 / 14229 / 14232）
@@ -16,6 +16,10 @@ qifeng = ["yangchun", "gaoshan", "pingsha"]
 profession = "mowen"
 version = "2026-11-12"
 note = "由游戏内 tooltip 截图整理；曲/气/影 与形态切换技能已补 id，九衢闻曲与太常律 主技能 id 仍缺"
+qifeng_names = { yangchun = "阳春白雪", gaoshan = "高山流水", pingsha = "平沙落雁" }
+miji_per_skill_cap = 4
+mixed_qixue_cap = 3
+mixed_slot_from = 7
 
 # ----------------------------------------------------------------------------
 # 形态

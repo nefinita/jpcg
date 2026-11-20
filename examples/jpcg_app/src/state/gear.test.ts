@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { fixture } from "../test/gear-fixture";
 import { defaultCockpit, cockpitSchema } from "./cockpit";
 import { emptyGearStats, type GearLoadout } from "../types/gear";
-import { gearInputKey, gearPlayerForm, initialLoadout, isGearComposition, isGearLoadout, sanitizeGearLoadout, PROFESSION_ATTRIBUTE_RULES } from "./gear";
+import { gearInputKey, gearPlayerForm, isGearComposition, isGearLoadout, sanitizeGearLoadout, PROFESSION_ATTRIBUTE_RULES } from "./gear";
 import { toCalculateRequest } from "../utils/normalize";
 
 describe("配装属性换算契约", () => {
-  it("旧存档缺少五维及规则字段时仍能完整恢复，且不自动开启新规则", () => {
+  it("合成样例旧存档保留旧模式，默认生成与真实目录迁移由 Rust 负责", () => {
     const legacy = fixture.cases[0].composed.loadout;
     expect(legacy.base.tizhi).toBeUndefined();
+    expect(legacy.attribute_rules == null).toBe(true);
     expect(isGearLoadout(legacy)).toBe(true);
     expect(isGearComposition(fixture.cases[0])).toBe(true);
     const state = defaultCockpit(); state.loadouts.mowen = legacy;
     expect(cockpitSchema.validate(JSON.parse(JSON.stringify(state)))).toBe(true);
-    expect(initialLoadout(fixture.catalog, "mowen")?.attribute_rules).toBeUndefined();
   });
 
   it("五维输入与规则参与持久化和计算缓存键，拒绝非法点数", () => {
@@ -45,9 +45,8 @@ describe("配装属性换算契约", () => {
 
 describe("sanitizeGearLoadout", () => {
   it("丢弃旧版本遗留字段（sockets），保留当前字段", () => {
-    const loadout = initialLoadout(fixture.catalog, "mowen");
-    expect(loadout).not.toBeNull();
-    const legacy = { ...loadout!, sockets: { tou: ["八级-根骨"] }, wucai: "五彩石-根骨会效攻击" };
+    const loadout = fixture.cases[0].composed.loadout;
+    const legacy = { ...loadout, sockets: { tou: ["八级-根骨"] }, wucai: "五彩石-根骨会效攻击" };
     const clean = sanitizeGearLoadout(legacy as unknown as GearLoadout);
     expect("sockets" in clean).toBe(false);
     expect(clean.wucai).toBe("五彩石-根骨会效攻击");

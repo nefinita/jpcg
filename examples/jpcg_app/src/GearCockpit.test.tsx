@@ -27,6 +27,7 @@ beforeEach(() => {
   state.loadouts.mowen = fixture.cases[0].composed.loadout;
   localStorage.setItem(STORAGE_KEYS.cockpit, JSON.stringify({ version: 2, data: state }));
   vi.mocked(api.gearCatalog).mockResolvedValue(fixture.catalog);
+  vi.mocked(api.prepareGearLoadout).mockImplementation(async (_profession, loadout) => loadout ?? fixture.cases[0].composed.loadout);
   vi.mocked(api.composeGear).mockImplementation(async (loadout) => ({ ...fixture.cases[loadout.choices.find((c) => c.slot === "jie1")?.variant === 2 ? 1 : 0], composed: { ...fixture.cases[0].composed, loadout } }));
   vi.mocked(api.calculateDamage).mockResolvedValue(result(100));
   vi.mocked(api.listProfessions).mockResolvedValue([]); vi.mocked(api.loadProfessionConfig).mockResolvedValue(null);
@@ -110,6 +111,24 @@ it("实际解析回退到其他值集时不提交配装计算", async () => {
   await render(); await wait(); expect(api.composeGear).not.toHaveBeenCalled();
   await click("使用模板数值集 live-130"); expect(host.textContent).toContain("模板对应数值集不可用");
   expect(api.calculateDamage).not.toHaveBeenCalled();
+});
+
+it("真实目录的旧配装由后端修复，前端只保存返回 DTO", async () => {
+  const legacy = fixture.cases[0].composed.loadout;
+  const migrated = { ...legacy, attribute_rules: PROFESSION_ATTRIBUTE_RULES };
+  vi.mocked(api.gearCatalog).mockResolvedValue({ ...fixture.catalog,
+    version: { ...fixture.catalog.version, sample: false } });
+  vi.mocked(api.prepareGearLoadout).mockResolvedValue(migrated);
+  await render(); await wait();
+  expect(api.prepareGearLoadout).toHaveBeenCalledWith("mowen", legacy);
+  expect(saved().loadouts.mowen).toEqual(migrated);
+  expect(vi.mocked(api.composeGear).mock.lastCall?.[0]).toEqual(migrated);
+});
+
+it("合成样例的旧配装不在前端隐式迁移", async () => {
+  await render(); await wait();
+  expect(api.prepareGearLoadout).not.toHaveBeenCalled();
+  expect(saved().loadouts.mowen.attribute_rules == null).toBe(true);
 });
 
 it("规则选择后将宿主换算攻击与加速送到计算链，重启保留选择且不改手动值", async () => {

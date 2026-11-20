@@ -397,7 +397,11 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
       return {
         skills: await mockResponse("load_skill_pool", args),
         combat: {
-          meta: { profession, version: "mock", note: "浏览器预览数据", miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7 },
+          meta: {
+            profession, version: "mock", note: "浏览器预览数据",
+            qifeng_names: { yangchun: "阳春白雪", gaoshan: "高山流水", pingsha: "平沙落雁" },
+            miji_per_skill_cap: 4, mixed_qixue_cap: 3, mixed_slot_from: 7,
+          },
           form: forms,
           qifeng: ["yangchun", "gaoshan", "pingsha"],
           skill_combat: [
@@ -499,7 +503,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
         }
         t += skill?.cast_time ?? 1.5;
       }
-      // 浏览器预览：补一条器形切换与一条曲风切换事件，便于检查视觉
+      // 浏览器预览：补一条器形切换与一条形态切换事件，便于检查视觉
       if (events.length >= 2) {
         events.splice(1, 0, {
           time: events[0].time,
@@ -530,7 +534,7 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
           legal: time != null,
           instrument: initialInstrument,
           qifeng: initialQifeng,
-          skipped_reason: time == null ? "当前器形/曲风不满足技能要求" : "",
+          skipped_reason: time == null ? "当前器形/形态不满足技能要求" : "",
           required_instrument: def?.requires_instrument ?? null,
           required_qifeng: def?.requires_qifeng ?? null,
           switches: [] as TimelineStepSwitchDTO[],
@@ -660,9 +664,14 @@ async function mockResponse(command: string, args?: Record<string, unknown>): Pr
 
 // 桌面配装入口：失败必须显示，浏览器不伪造 Rust 合成或 TOML 解析。
 // 旧版本存档可能带已删除字段（如 sockets）；统一在这里剔除，避免后端 deny_unknown_fields 拒绝。
-export async function gearCatalog(): Promise<import("../types/gear").GearCatalog> {
+export async function gearCatalog(profession: string): Promise<import("../types/gear").GearCatalog> {
   if (!isTauri()) throw new Error("配装模板需要桌面应用；可切换手动属性模式");
-  return invoke("gear_catalog");
+  return invoke("gear_catalog", { profession });
+}
+/** 默认配装与旧配装修复由 Rust 决定；前端只提交当前职业和已有状态。 */
+export async function prepareGearLoadout(profession: string, loadout?: import("../types/gear").GearLoadout | null): Promise<import("../types/gear").GearLoadout> {
+  if (!isTauri()) throw new Error("配装初始化需要桌面应用");
+  return invoke("prepare_gear_loadout", { profession, loadout: loadout ? sanitizeGearLoadout(loadout) : null });
 }
 export async function composeGear(loadout: import("../types/gear").GearLoadout): Promise<import("../types/gear").GearComposition> {
   if (!isTauri()) throw new Error("配装合成需要桌面应用");

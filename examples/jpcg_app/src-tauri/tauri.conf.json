@@ -26,13 +26,10 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "data/shuxing/*.toml",
-      "data/combat/*.toml",
-      "data/values/*.toml",
-      "data/gear/templates.toml",
-      "data/gear/sets.toml",
-      "data/gear/schools.toml",
-      "data/gear/overrides.toml"
+      "data/*/shuxing.toml",
+      "data/*/combat.toml",
+      "data/*/gear/*.toml",
+      "data/values/*.toml"
     ],
     "externalBin": [
       "binaries/jpcg_updater"

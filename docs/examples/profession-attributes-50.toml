@@ -1,6 +1,6 @@
 # 仅用于学习录入结构：所有系数均人为构造，不是50级游戏数据！
 # 按职业提供可验证系数后，将 [attributes] 和 [[attributes.conversions]] 写入
-# 对应 data/shuxing/{职业ID}.toml。该文件自身 [version].level 必须真实匹配。
+# 对应 data/{职业ID}/shuxing.toml。该文件自身 [version].level 必须真实匹配。
 # 本示例不部署到 data/，不能作为真实职业配置使用。
 [version]
 level = 50

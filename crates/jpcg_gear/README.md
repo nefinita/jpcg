@@ -2,7 +2,7 @@
 
 独立 Rust crate，提供 12 槽位模板校验、属性合成、约束搜索、JSON API 和 `gear-opt` CLI。现有 `jpcg_api`、core/combo 引擎、FFI、应用 UI 和工作流均不修改。供 #91 集成；这不是 #90 全部验收完成的声明。
 
-`data/gear/` 当前提供莫问 50 级 `live-50-20261106` 目录，`sample=false`，来源与各文件 `provenance` 一致；早期 `synthetic-v1` 才是全人为构造样例。`sample-loadout.toml` / `sample-request.toml` 的“sample”指调用示例，不代表目录数值为合成数据。莫问主属性与技能计算使用仓库现有 `shuxing/mowen.toml`；真实人工配装基准、其他职业数据及未标明的规则仍待维护者验证。
+`data/mowen/gear/` 当前提供莫问 50 级 `live-50-20261106` 目录，`sample=false`，来源与各文件 `provenance` 一致；早期 `synthetic-v1` 才是全人为构造样例。`sample-loadout.toml` / `sample-request.toml` 的“sample”指调用示例，不代表目录数值为合成数据。莫问主属性与技能计算使用仓库现有 `data/mowen/shuxing.toml`；真实人工配装基准、其他职业数据及未标明的规则仍待维护者验证。
 
 ## 运行
 
@@ -10,13 +10,13 @@
 
 ```sh
 cargo run -p jpcg_gear --bin gear-opt -- validate
-cargo run -p jpcg_gear --bin gear-opt -- compose --loadout data/gear/sample-loadout.toml
-JPCG_DATA_DIR="$PWD/data" cargo run -p jpcg_gear --bin gear-opt -- optimize --request data/gear/sample-request.toml
+cargo run -p jpcg_gear --bin gear-opt -- compose --loadout data/mowen/gear/sample-loadout.toml
+JPCG_DATA_DIR="$PWD/data" cargo run -p jpcg_gear --bin gear-opt -- optimize --request data/mowen/gear/sample-request.toml
 printf '%s\n' '{"method":"validate"}' | cargo run -p jpcg_gear --bin gear-opt -- api
 cargo test -p jpcg_gear --locked
 ```
 
-`--catalog <目录>` 在子命令之前指定，默认 `data/gear`。目录必须包含 `templates.toml`、`sets.toml`、`schools.toml`、`overrides.toml`。校验/合成只读取该目录；优化的技能和值集路径沿用 core 的 `JPCG_DATA_DIR` / 安装目录规则。优化要求明确的可用数据值集，禁止静默回退 builtin。
+`--catalog <目录>` 在子命令之前指定，默认 `data/mowen/gear`。目录必须包含 `templates.toml`、`sets.toml`、`schools.toml`、`overrides.toml`。校验/合成只读取该目录；优化的技能和值集路径沿用 core 的 `JPCG_DATA_DIR` / 安装目录规则。优化要求明确的可用数据值集，禁止静默回退 builtin。
 
 compose/optimize 成功输出 JSON；api 输出 `{"status":"ok","result":...}` 或 `{"status":"error","message":...}`。输入错误退出码 1；命令行 optimize 无可行结果也退出 1，仍输出结果。完整遍历且无解为 `complete=true,best=null`；预算耗尽且尚无解为 `complete=false,best=null`，二者含义不同。库 API 不可行时仍返回 `Ok(OptimizeResult)`，由调用方检查 `best`。
 
@@ -100,17 +100,17 @@ Linux x86_64，rustc 1.99.1，`cargo build -p jpcg_gear --release --locked` 后�
 
 ## #91 桌面接入（后续叠放分支）
 
-- `host::catalog` 按 core 的既有数据根优先级读取完整 `gear/` 四文件并校验，支持 `JPCG_DATA_DIR` 指向根或 `shuxing/`。前端不能传任意文件路径，损坏数据报错，不伪装成空目录或静默回退样例。
-- Tauri 命令 `gear_catalog / compose_gear / export_gear / import_gear` 在后台阻塞任务中调用同一 host。合成返回 `Composition { composed, player }`，其中 `player` 复用本 crate 原有的转换，裸装 base 与手动总属性分开保存。
-- 静态模式开启 `engine`；动态壳仅依赖 `default-features=false` 的模型，通过 `commands/gear_bridge.rs` dlopen gear。独立 ABI 1：`jpcg_gear_call(method,input_json)` 返回原有 status/result/message 信封，`jpcg_gear_free_string` 释放本库字符串，另有 ABI/版本 getter；无可变会话，panic 不跨 ABI。方法为 `catalog/compose/export/import`，不是时序模拟接口。
+- `host::catalog(profession)` 按 core 的数据根优先级读取 `data/{职业ID}/gear/` 的六个核心文件（templates / sets / schools / overrides / enchants / wucai）并校验；旧 `data/gear/` 仅作读取回退。支持 `JPCG_DATA_DIR` 指向根或旧 `shuxing/`。前端只传职业 ID，不能传任意文件路径；损坏数据报错，不伪装成空目录或静默回退样例。
+- Tauri 命令 `gear_catalog / prepare_gear_loadout / compose_gear / export_gear / import_gear` 在后台阻塞任务中调用同一 host。`prepare_gear_loadout` 统一生成默认配装并重置、迁移真实目录的旧配装；前端不再复制这套业务逻辑。合成返回 `Composition { composed, player }`，裸装 base 与手动总属性分开保存。
+- 静态模式开启 `engine`；动态壳仅依赖 `default-features=false` 的模型，通过 `commands/gear_bridge.rs` dlopen gear。独立 ABI 1：`jpcg_gear_call(method,input_json)` 返回原有 status/result/message 信封，`jpcg_gear_free_string` 释放本库字符串，另有 ABI/版本 getter；无可变会话，panic 不跨 ABI。方法为 `catalog/prepare_loadout/compose/export/import`，不是时序模拟接口。
 - 动态库搜索：显式 `JPCG_GEAR_LIB` → exe 的 `modules/` → exe 同目录 → CWD `target/debug` / `target/release`。缺库、缺符号或 ABI 不匹配直接报错。
-- `make build-modules` / `modules-dir` 包含第五个 gear 模块；发布资产与 deploy-gen 模块清单同步加入 gear。Tauri bundle 资源同时包含 gear 四个模板文件，首次安装即可读取。此改动仅准备构建/打包，不发布或部署。
+- `make build-modules` / `modules-dir` 包含第五个 gear 模块；发布资产与 deploy-gen 模块清单同步加入 gear。Tauri bundle 资源按职业目录包含完整配装文件，首次安装即可读取。
 - 核查动态壳不链接引擎：`cargo tree -p jpcg_app --no-default-features --features dynamic -e normal`；验证实际 bridge：先 `cargo build -p jpcg_gear`，再 `cargo test -p jpcg_gear --no-default-features --test dynamic_bridge`。`python3 scripts/test-gear-dynamic.py` 验证 C ABI、目录、错误及 TOML 往返。
 - 前端新安装默认配装模式；#95 的 v1 存储迁移后仍保留手动模式。配装按心法保存、选项只来自校验后的目录；数值集不匹配时不计算。CD/加速仅展示已有元数据，连招仍调用现有接口，不新增 #92 规则。
 
 ## #98 原始属性换算
 
-`Loadout.attribute_rules="profession-toml"` 显式从当前职业的 `data/shuxing/{职业ID}.toml` 读取 `[attributes]`。当前版本按50级对齐，但不自动填入未验证系数；职业版本、规则和所选值集等级必须一致。所有转换比例由文件提供，无四心法或130级常数白名单。`Stats` 新增五维及额外气血，输入必须为转换前原始点数；`Composed.panel` 返回派生面板与规则版本，旧手填继续保留原语义。历史130级规则ID需重新选择，不能使用缓存结果混算。录入示例、阶段、兼容与验证边界见 [属性引擎说明](../../docs/attribute-engine.md)。
+`Loadout.attribute_rules="profession-toml"` 显式从当前职业的 `data/{职业ID}/shuxing.toml` 读取 `[attributes]`。当前版本按50级对齐，但不自动填入未验证系数；职业版本、规则和所选值集等级必须一致。所有转换比例由文件提供，无四心法或130级常数白名单。`Stats` 新增五维及额外气血，输入必须为转换前原始点数；`Composed.panel` 返回派生面板与规则版本，旧手填继续保留原语义。历史130级规则ID需重新选择，不能使用缓存结果混算。录入示例、阶段、兼容与验证边界见 [属性引擎说明](../../docs/attribute-engine.md)。
 
 
 ## 联合搜索修复后的接口

@@ -45,6 +45,17 @@ it("按分:秒展示时间，并按事件顺序累计伤害", () => {
   expect(text).toContain("qu-yangchun → jian");
 });
 
+it("器形与形态切换使用后端职业数据提供的显示名", () => {
+  const events: TimelineResultDTO["events"] = [
+    { time: 0, kind: { kind: "form_switch", from: "single", to: "dual" } },
+    { time: 0, kind: { kind: "qifeng_switch", from: "feng", to: "lei" } },
+  ];
+  const names: Record<string, string> = { single: "单持", dual: "双持", feng: "风", lei: "雷" };
+  act(() => root.render(<TimelineDamageLog events={events} formName={(id) => names[id] ?? id} qifengName={(id) => names[id] ?? id} />));
+  expect(container.textContent).toContain("单持 → 双持");
+  expect(container.textContent).toContain("风 → 雷");
+});
+
 it("保留后端按动作归属筛选的边界读条命中，并直接展示后端累计", () => {
   const events = [{ time: 2, cumulative: 12345, kind: { kind: "cast" as const, skill_name: "边界读条", damage: 12345, hit_time: 2 } }];
   act(() => root.render(<TimelineDamageLog events={events} killStart={0} killEnd={1.999} />));

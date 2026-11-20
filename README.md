@@ -119,7 +119,7 @@ kill_prob = kills / 50_000
 
 - **战斗时序引擎**（#92 / #97）—— 加速（16 帧/秒量化、25% 封顶）、GCD / 读条 / 引导、CD 与充能、
   形态切换、秘籍 / 奇穴替换映射、DOT 施加快照全部数据化建模，伤害事件进入真实时间轴，
-  配套数据在 `data/combat/*.toml`
+  配套数据在 `data/{门派}/combat.toml`
 - **配装驱动驾驶台**（#91 / #95 / #96 / #107）—— 12 个部位卡片平铺、随改随算（125ms 防抖）、
   钉住基准 + 差值对比、配装 / 连招草稿 / 结果基准全局持久化，手动属性降级为模式切换
 - **逐职业属性换算**（#100 / #98）—— 裸装基础值 + 装备模板 → 逐职业 TOML 规则 → 玩家属性，
@@ -189,7 +189,7 @@ kill_prob = kills / 50_000
 - **击杀概率曲线**：蒙特卡洛模拟（50,000 路径），配每步伤害柱状图 / 预设管理
 
 ### 🎯 动态职业列表
-自动识别 `data/shuxing/` 下的数据文件，下拉菜单显示心法名称及版本信息（如"莫问 130级第3赛季"），无需手动配置。
+自动识别 `data/{门派}/shuxing.toml`（并兼容旧 `data/shuxing/`），下拉菜单显示心法名称及版本信息，无需手动配置。
 
 ### 📋 配装导入/导出
 支持导出当前配置为 TOML 文件，方便保存和分享；也支持导入外部配置。
@@ -230,7 +230,7 @@ pub enum Roadmap {
 
 ## 🔧 编译与运行
 
-> 源码编译需要 Rust ≥ 1.85（rustup 默认 toolchain）与 Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`（前端工具链要求，CI 使用 Node 22）。
+> 源码编译需要 Rust ≥ 1.85（rustup 默认 toolchain）、Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`（前端工具链要求，CI 使用 Node 22），以及 Tauri CLI（`cargo install tauri-cli --locked`）。
 > Windows / macOS / Linux 三平台均可构建。
 
 ### 一键构建（推荐）
@@ -239,16 +239,19 @@ pub enum Roadmap {
 make setup        # 安装前端依赖（npm ci；npm 缓存默认工作区 .cache/npm）
 make frontend     # 前端构建（tsc + vite build → dist/，Tauri 嵌入前置）
 make updater      # 编译 jpcg_updater 并复制为 Tauri externalBin（host-triple 后缀）
-make all          # setup → frontend → updater → modules-dir（dynamic app + 4 模块 dll）→ build-static
+make all          # setup → frontend → updater → modules-dir（dynamic app + 5 模块 dll）→ build-static
                   # 结束后：jpcg_app = static；jpcg_app-dynamic = dynamic 变体
 make check-all    # fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端测试/构建
 
-# release 产物：make all BUILD=release
+# 默认即 release，产物位于 target/release/bundle/：make all
+# 显式调试构建：make all BUILD=debug
 ```
 
 > 顺序要点：前端 `dist/` 与 updater sidecar（externalBin）都在**编译 app 阶段**被 tauri-build 校验/嵌入，
 > 故两者必须先于任何 app 编译（`make all` 与 `build-static`/`build-dynamic`/`clippy`/`test` 均已通过
-> `APP_BUILD_DEPS` 排好序，`make build-*` 单独跑也不会缺文件；`scripts/check-make-order.sh` 在 CI 中守卫该顺序）；
+> `APP_BUILD_DEPS` 排好序，`make build-*` 单独跑也不会缺文件；`scripts/check-make-order.sh` 在 CI 中守卫该顺序）。
+> `build-static` / `build-dynamic` 统一执行 `cargo tauri build`，会运行前端构建并生成 `target/<build>/bundle/`
+> 下的平台 app／安装包，不再以裸 `cargo build` 代替完整 Tauri 打包。
 > static/dynamic 编译产物同名 `target/<build>/jpcg_app`，`modules-dir` 会先把 dynamic 产物另存为
 > `jpcg_app-dynamic`，最后 `build-static` 落地默认 `jpcg_app`（static），两种产物同时保留。
 > npm 缓存默认写工作区 `.cache/npm`，可用 `NPM_CACHE=/path` 覆盖。
@@ -291,16 +294,11 @@ npm run build
 ### 打包发布
 
 ```sh
-# 1. 先编译 updater 并复制到 Tauri binaries（必需，否则 build 失败）
-make updater
-#  等价手工命令：
-#  cargo build -p jpcg_updater
-#  cp target/debug/jpcg_updater \
-#    examples/jpcg_app/src-tauri/binaries/jpcg_updater-$(rustc -vV | grep host | cut -d' ' -f2)
+# 完整 Tauri 打包：自动准备前端与 updater，生成 app／安装包
+make build-static BUILD=release
 
-# 2. Tauri 打包安装包
-cd examples/jpcg_app
-npx tauri build
+# 动态模式；产物均在 target/release/bundle/
+make build-dynamic BUILD=release
 ```
 
 ### 更新发布（自动链路）
@@ -333,7 +331,7 @@ make check-all      # fmt + clippy + 模块库 + 双模式构建 + 全量测试 
 # 连招引擎 / 核心引擎单测
 cargo test -p jpcg_combo -p jpcg_core
 
-# Python FFI 调用演示（需 JPCG_DATA_DIR 指向含 shuxing/ 的目录）
+# Python FFI 调用演示（JPCG_DATA_DIR 指向数据根，兼容旧 shuxing/）
 JPCG_DATA_DIR=./data python3 examples/python_demo/jpcg_demo.py
 
 # 论坛服务（配置分享，端口 8080）
@@ -352,9 +350,8 @@ crates/jpcg_update/   App / 数据 / 模块(dll) 自动更新（nefinita-ai.com�
 crates/jpcg_updater/  独立更新器（替换主程序并重启）
 crates/jpcg_const/    药品/食物/等级常量（独立版本 130.3.{日期}，编译期由 preset TOML 固化）
 examples/jpcg_app/    Tauri v2 桌面应用（React 19 + TypeScript + Vite）
-data/shuxing/         各心法技能/属性数据（TOML，[version] 等级.赛季.修改日期）
-data/combat/          战斗时序数据（加速/GCD/CD/形态/秘籍/奇穴，逐心法 TOML）
-data/gear/            配装数据（装备模板/属性套/逐职业换算规则）
+data/{门派}/          单职业技能 shuxing.toml、时序 combat.toml 与 gear/ 配装目录
+data/_template/       技能与时序结构模板，不参与职业列表
 data/values/          数值集清单 index.toml + 各值集快照（换算常数，运行期可选）
 server_tools/         manifest-gen（清单）/ deploy-gen（发布通道布局）/ forum（论坛）/ json-to-toml（技能数据转换）
 ```
@@ -366,7 +363,7 @@ server_tools/         manifest-gen（清单）/ deploy-gen（发布通道布局�
 心法数据以 TOML 格式存储，结构清晰易懂：
 
 ```toml
-# data/shuxing/mowen.toml — 莫问 130级第3赛季
+# data/mowen/shuxing.toml — 莫问 130级第3赛季
 [xinfa]
 xinfa_name = "莫问"
 xinfa_nom = "根骨"

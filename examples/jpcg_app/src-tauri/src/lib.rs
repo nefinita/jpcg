@@ -15,6 +15,7 @@ pub fn run() {
             commands::calculate::calculate_damage,
             commands::calculate::panel_stats,
             commands::gear::gear_catalog,
+            commands::gear::prepare_gear_loadout,
             commands::gear::compose_gear,
             commands::gear::export_gear,
             commands::gear::import_gear,

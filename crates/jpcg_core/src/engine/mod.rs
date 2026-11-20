@@ -13,7 +13,7 @@ use std::io::Error;
 use crate::{
     engine::atkcal::JpcgConfig,
     log::{error, success},
-    store::{TomlConfig, data_dirs},
+    store::TomlConfig,
     type_set::{
         buff::BuffConfig, coefficient::CoefficientConfig, hostilepile::HostilepileConfig,
         player::PlayerConfig, xinfa::XinfaConfig,
@@ -22,7 +22,7 @@ use crate::{
 use serde::Serialize;
 
 /// 启动完整伤害计算
-/// 1. 定位可执行文件所在目录下的 data/shuxing/{profession}.toml
+/// 1. 定位 data/{profession}/shuxing.toml（旧 data/shuxing/{profession}.toml 仅读取兼容）
 /// 2. 解析 TOML 获得技能列表
 /// 3. 对每个技能调用单技能伤害计算
 ///
@@ -57,16 +57,14 @@ pub fn start_calculation_with_config(
 ) -> Result<Vec<CalculateResult>, Error> {
     success("Calculation started!");
 
-    // ---- 步骤1+3: 定位并读取心法技能表（多目录合并：用户覆盖优先，其后随包资源）----
-    let dirs = data_dirs();
-    if dirs.is_empty() {
+    // ---- 步骤1+3: 定位并读取心法技能表（新职业目录优先，旧目录兼容）----
+    let paths = crate::store::paths::shuxing_file_paths(&xinfa.profession)
+        .map_err(|e| Error::other(e.to_string()))?;
+    if paths.is_empty() {
         error("无法获取数据文件目录");
         return Err(Error::other("无法获取数据文件目录"));
     }
-    let file_path = dirs
-        .iter()
-        .map(|d| d.join(format!("{}.toml", xinfa.profession)))
-        .find(|p| p.exists());
+    let file_path = paths.iter().find(|p| p.exists());
 
     let skill_table: TomlConfig = match file_path {
         // 文件不存在时使用默认空技能表

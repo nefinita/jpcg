@@ -382,6 +382,8 @@ export interface CombatMetaDTO {
   profession: string;
   version: string;
   note: string;
+  /** 形态 id → 显示名，由后端职业数据下发 */
+  qifeng_names?: Record<string, string>;
   miji_per_skill_cap?: number;
   mixed_qixue_cap?: number;
   mixed_slot_from?: number;
@@ -429,7 +431,7 @@ export interface QixueDefDTO {
 export interface CombatDataDTO {
   meta: CombatMetaDTO;
   form: FormDefDTO[];
-  /** 曲风 id 列表（yangchun / gaoshan / pingsha …） */
+  /** 形态 id 列表；显示名见 meta.qifeng_names */
   qifeng: string[];
   skill_combat: SkillCombatDTO[];
   buff: TimedBuffDefDTO[];

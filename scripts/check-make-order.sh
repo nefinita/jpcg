@@ -8,7 +8,7 @@
 #
 # 本守卫不真正构建，只对 `make -n`（dry-run）的执行计划做顺序断言：
 # 前端构建（npm run build）与 updater（cargo build -p jpcg_updater）必须出现在
-# 第一条会编译 app 的命令（cargo build -p jpcg_app / cargo clippy --workspace）之前。
+# 第一条会编译 app 的命令（cargo tauri build / cargo clippy --workspace 等）之前。
 # 这样无需网络/UI 依赖即可在 CI 里便宜地防止顺序回退（回归 PR #78 的 review P2）。
 set -uo pipefail
 
@@ -17,8 +17,8 @@ cd "$(dirname "$0")/.." || exit 1
 # 目标 → 说明（空字符串 = 默认 goal）
 TARGETS=("all" "check-all" "build-static" "build-dynamic" "test" "")
 
-# 会编译 app（进而触发 tauri-build 校验）的第一批命令（build / clippy / test 都会编译 app）
-APP_PATTERN='^[[:space:]]*cargo (build -p jpcg_app|clippy --workspace|test --workspace)'
+# 会编译 app（进而触发 tauri-build 校验）的第一批命令（Tauri build / clippy / test 都会编译 app）
+APP_PATTERN='cargo (build -p jpcg_app|tauri build|clippy --workspace|test --workspace)'
 # 前置资源命令
 FRONTEND_PATTERN='npm run build'
 UPDATER_PATTERN='^[[:space:]]*cargo build -p jpcg_updater'

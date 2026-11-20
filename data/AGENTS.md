@@ -4,16 +4,36 @@
 
 ## 目录职责
 
+正式运行数据按职业 ID 分目录：
+
+```text
+data/
+  <profession>/
+    shuxing.toml       # 技能、心法元数据与属性换算
+    combat.toml        # 手工战斗时序 overlay
+    gear/              # 本职业装备目录与调用样例
+  _template/
+    shuxing.toml
+    combat.toml
+  values/              # 全职业共享的值集清单与快照
+  skill-shots/         # 数据生产证据，不属于客户端运行资源
+  raw-src/             # 上游 JSON 缓存，已被 gitignore
+```
+
 | 路径 | 内容 | 修改方式 |
 | --- | --- | --- |
-| `shuxing/` | 心法元数据、技能伤害、DOT 基础参数、职业属性换算 | 由 JSON 转换器或截图工具生成后人工校准；不要盲目批量覆盖 |
-| `combat/` | 形态、曲风、GCD/读条/CD、时序 DOT、buff、秘籍、奇穴 | 手工维护的 overlay，不写技能基础伤害真源 |
-| `gear/` | 装备、套装、门派映射、覆盖、附魔、五彩石与样例请求 | 按统一 revision/value_set 维护；真实值与合成样例明确区分 |
+| `<profession>/shuxing.toml` | 心法元数据、技能伤害、DOT 基础参数、职业属性换算 | 由 JSON 转换器或截图工具生成后人工校准；不要盲目批量覆盖 |
+| `<profession>/combat.toml` | 器形、形态、GCD/读条/CD、时序 DOT、buff、秘籍、奇穴与界面规则 | 手工维护的 overlay，不写技能基础伤害真源 |
+| `<profession>/gear/` | 装备、套装、门派映射、覆盖、附魔、五彩石与样例请求 | 按统一 revision/value_set 维护；真实值与合成样例明确区分 |
 | `values/` | 换算常数快照及 `index.toml` 清单 | 新值集新增快照并登记，不原地混用不同等级 |
 | `skill-shots/` | 技能截图、OCR 中间结果和汇总 JSON | 数据生产证据，保留来源与可复核性 |
 | `raw-src/` | 上游 JSON 下载缓存 | 已被 gitignore，不作为入库真源 |
 
-`_template.toml` 只解释结构，可能保留历史等级示例；`_` 开头的 shuxing/combat 文件不参与正常加载。当前真实数据应参考对应职业文件，而不是把模板等级当作项目现状。
+新增职业时新增完整的 `data/<profession>/`，职业 ID 只允许字母、数字、下划线和连字符。技能、时序和配装都按同一个 ID 关联；不要只复制莫问文件改个名字就宣称支持新职业，未核实的系数和装备必须明确标记或保持缺失并报错。
+
+`_template/` 只解释结构，可能保留历史等级示例，不参与正常职业加载。当前真实数据应参考对应职业文件，而不是把模板等级当作项目现状。当前仓库只有 `mowen/` 一份真实职业数据。
+
+旧 `data/shuxing/<profession>.toml`、`data/combat/<profession>.toml` 与 `data/gear/` 仅作读取兼容，不保留仓库副本。每个数据根内都是新布局优先、旧布局其次；技能编辑只保存到 `<profession>/shuxing.toml`。新增文件不要写回旧目录。
 
 ## 通用约束
 
@@ -22,13 +42,14 @@
 - `[version].level`、`[attributes].level`、`attributes.value_set`、gear 的 `value_set` 与所选值集等级必须一致。禁止把 50 级职业规则与 130 级技能/常数混算，也不要只改等级标签冒充迁移。
 - `sample=true` 或 `revision=synthetic-*` 是人为测试数据；`sample=false` 也需要 `provenance` 支撑。样例与真实数据不能共用含混 revision。
 - 数据加载优先级为 `JPCG_DATA_DIR` → 安装版用户目录 → 随包资源 → exe 同目录 `data/`。高优先级文件存在但损坏时必须报错，不能静默退回旧版本。
+- 职业目录选择、默认配装、旧配装修复和属性规则判断均由 Rust 后端完成；前端只传职业 ID／用户输入并展示结果，不在 TypeScript 里另写一套规则。
 - 数据修改也要新增根目录 `changes/YYYY-MM-DD-HHMMSS.md`，注明来源、影响职业/值集以及是否经过游戏内验证。
 
 ## shuxing：技能与职业换算
 
 ### 技能数据
 
-每个职业一个 `{profession}.toml`，主要结构为 `[xinfa]`、`[version]`、`[[skill]]`，可选 `[attributes]`。技能唯一键是 `skill_id + sub_id`，名称不是可靠主键。
+每个职业一个 `<profession>/shuxing.toml`，主要结构为 `[xinfa]`、`[version]`、`[[skill]]`，可选 `[attributes]`。技能唯一键是 `skill_id + sub_id`，名称不是可靠主键。
 
 - `[xinfa]`：`xinfa_name`、`xinfa_nom`、`atk_up`、`pofang_up`、`huixin_up`。
 - `[version]`：`level`、`season`（若当前格式使用）、`modified=YYYYMMDD`，可附来源说明。
@@ -44,10 +65,10 @@ server_tools/json-to-toml/fetch-json.sh
 cargo run -p json-to-toml -- \
   --skills data/raw-src/skills.json --dots data/raw-src/dots.json \
   --overrides server_tools/json-to-toml/overrides.json \
-  --out data/shuxing --xinfa <技能池id>
+  --out data --xinfa <技能池id>
 ```
 
-`overrides.json` 负责输出文件、心法名/主属性、校准倍率、无质名单和追加真伤形态。上游未提供的职业倍率不能用 `1.0` 冒充已校准结果；批量再生成前先检查现有文件是否已包含截图校准或 `[attributes]`。
+`--out` 是数据根；转换器实际写入 `<out>/<profession>/shuxing.toml`，不会覆盖同职业的 `combat.toml` 或 `gear/`。`overrides.json` 负责输出职业 ID、心法名/主属性、校准倍率、无质名单和追加真伤形态。上游未提供的职业倍率不能用 `1.0` 冒充已校准结果；批量再生成前先检查现有文件是否已包含截图校准或 `[attributes]`。
 
 ### `[attributes]` 原始属性换算
 
@@ -62,7 +83,7 @@ cargo run -p json-to-toml -- \
 
 ## combat：手工时序 overlay
 
-`combat/{profession}.toml` 按 `skill_id + sub_id` 合并到同名 shuxing 技能，只覆盖时序与修正。未声明的技能默认瞬发、1.5 秒 GCD、无 CD；基础伤害仍以 shuxing 为准。
+`<profession>/combat.toml` 按 `skill_id + sub_id` 合并到同职业 shuxing 技能，只覆盖时序与修正。未声明的技能默认瞬发、1.5 秒 GCD、无 CD；基础伤害仍以 shuxing 为准。
 
 顶层可使用：
 
@@ -78,18 +99,19 @@ qifeng = ["yangchun", "gaoshan", "pingsha"]  # 仅需要的职业声明
 
 关键约定：
 
-- `[[form]]` 定义器形/武器形态：`id/name/gcd_base/initial/skills`；技能用 `requires_instrument` 限定形态，切换用 `on_cast.switch_instrument`。
-- 曲风与器形是两个维度：技能可写 `requires_qifeng`、`qifeng_gain`、`spend_all_qifeng`，切换用 `on_cast.switch_qifeng`。当前曲风上限与部分名称仍有莫问语义，泛化是 `PLAN.md` 的未来事项，不要在数据整理中顺手改引擎。
+- `[[form]]` 定义器形/武器形态：`id/name/gcd_base/initial/skills`；技能用 `requires_instrument` 限定器形，切换用 `on_cast.switch_instrument`。`name` 同时用于界面显示和技能过滤。
+- 形态与器形是两个维度：技能可写 `requires_qifeng`、`qifeng_gain`、`spend_all_qifeng`，切换用 `on_cast.switch_qifeng`；`[meta].qifeng_names` 提供形态 id 到显示名的映射。界面统称「形态」，内部 qifeng 字段与点数结算暂时保持兼容，资源引擎泛化仍按 `PLAN.md` 单独实施。
+- `[meta]` 必须显式声明 `miji_per_skill_cap`、`mixed_qixue_cap`、`mixed_slot_from`，前端按下发值渲染秘籍槽和混选规则。后端默认值只用于读取旧文件，新增职业不得依赖默认值。
 - `[[skill_combat]]` 常用字段：`cast_time`、`channel/channel_ticks`、`gcd_base/gcd_kind/gcd_lane`、`cooldown/cd_haste`、`charges/recharge`、`buff_id`、`jihuoqixue`。
 - `on_cast` 还可声明 `gcd_lanes`、`lock_skills`、`advance_dot_targets/advance_dot_ticks` 等副作用；以 `crates/jpcg_core/src/type_set/combat.rs` 的当前结构为准。
 - `[[buff]]` 定义持续时间、层数、刷新/独立实例和效果；`[[miji]]` 挂到技能上修正，`[[qixue]]` 可替换技能并附加修正。奇穴替换先于秘籍/奇穴 modifiers。
 - 时序 DOT 可在 overlay 写 `dot_interval/dot_duration` 与每跳伤害参数。DOT 施加时快照攻击/会心/破防/加速，持续时长随加速变化而跳数固定。
 - GCD 与读条按 16 帧/秒量化，普通加速封顶 25% 后再加可突破上限的部分；CD 当前按连续比例缩放，不要自行帧量化。
-- 引用的形态、曲风、技能、buff、秘籍和奇穴必须存在且 ID 唯一。`_template.toml` 与 `mowen.toml` 分别提供结构和真实示例。
+- 引用的器形、形态、技能、buff、秘籍和奇穴必须存在且 ID 唯一。`_template/combat.toml` 与 `mowen/combat.toml` 分别提供结构和真实示例。
 
 ## gear：配装目录与搜索输入
 
-目录核心文件包括 `templates.toml`、`sets.toml`、`schools.toml`、`overrides.toml`、`enchants.toml`、`wucai.toml`，另有 `sample-loadout.toml`、`sample-request.toml` 作为调用样例。完整字段契约见 `crates/jpcg_gear/README.md`。
+每个 `<profession>/gear/` 的核心文件包括 `templates.toml`、`sets.toml`、`schools.toml`、`overrides.toml`、`enchants.toml`、`wucai.toml`，另有 `sample-loadout.toml`、`sample-request.toml` 作为调用样例。完整字段契约见 `crates/jpcg_gear/README.md`。
 
 - 各目录文件的 `[version]` 必须按契约一致，至少核对 `schema/season/revision/value_set/sample/provenance`；loadout 也必须选择匹配的 school/revision/value_set。
 - 装备唯一键包含 school 与完整 choice（slot/source/tier/variant）；12 槽位、饰品双属性套、套装阈值、跨门派可穿规则均由目录校验，不能在前端另造一套。
@@ -98,12 +120,12 @@ qifeng = ["yangchun", "gaoshan", "pingsha"]  # 仅需要的职业声明
 - `complete=true` 只表示对应搜索空间已遍历；若跨门派模板、装饰或档位被排除，必须准确描述空间。取消/超时结果不能写成全量最优。
 - 固定 seed 的 50k MC 用于候选间可重复比较；CPU/GPU 对拍还要核对候选顺序、HP 状态、计数和完整结果，而不只看最佳概率。
 
-常用验证：
+常用验证（默认 CLI 目录是 `data/mowen/gear`，其他职业显式传 `--catalog`）：
 
 ```sh
 cargo run -p jpcg_gear --bin gear-opt -- validate
-cargo run -p jpcg_gear --bin gear-opt -- compose --loadout data/gear/sample-loadout.toml
-JPCG_DATA_DIR="$PWD/data" cargo run -p jpcg_gear --bin gear-opt -- optimize --request data/gear/sample-request.toml
+cargo run -p jpcg_gear --bin gear-opt -- compose --loadout data/mowen/gear/sample-loadout.toml
+JPCG_DATA_DIR="$PWD/data" cargo run -p jpcg_gear --bin gear-opt -- optimize --request data/mowen/gear/sample-request.toml
 cargo test -p jpcg_gear --locked
 ```
 

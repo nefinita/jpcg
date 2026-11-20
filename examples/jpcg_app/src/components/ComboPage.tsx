@@ -15,12 +15,10 @@ import { TimelineDamageLog } from "./TimelineDamageLog";
 import type { MijiDefDTO, QixueDefDTO } from "../types";
 import styles from "./ComboPage.module.css";
 
-const QIFENG_NAMES: Record<string, string> = {
-  yangchun: "阳春白雪",
-  gaoshan: "高山流水",
-  pingsha: "平沙落雁",
+const qifengName = (combat: CombatDataDTO | undefined, id?: string | null): string => {
+  if (!id) return "—";
+  return combat?.meta.qifeng_names?.[id] ?? id;
 };
-const qifengName = (combat: CombatDataDTO, id: string): string => QIFENG_NAMES[id] ?? id ?? "—";
 type SkillStep = Extract<SequenceItem, { kind: "skill" }>;
 
 interface Props {
@@ -58,6 +56,11 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     (id: string) => combatBundle?.combat.form.find((f) => f.id === id)?.name ?? id,
     [combatBundle],
   );
+  const initialInstrument = combatBundle?.combat.form.find((f) => f.initial)?.id
+    ?? combatBundle?.combat.form[0]?.id ?? "";
+  const mijiCap = combatBundle?.combat.meta.miji_per_skill_cap ?? 0;
+  const mixedSlotFrom = combatBundle?.combat.meta.mixed_slot_from ?? Number.MAX_SAFE_INTEGER;
+  const mixedQixueCap = combatBundle?.combat.meta.mixed_qixue_cap ?? 0;
 
   // #92 秘籍/奇穴：可选列表来自门派 combat overlay；勾选结果写进连招草稿（持久化）
   const [timelineMiji, setTimelineMiji] = useState<MijiDefDTO[]>([]);
@@ -74,22 +77,26 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       : update), [setDraftField]);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
-  /** 秘籍配置弹窗（独立入口；左侧选技能，右侧配置 4 个槽） */
+  /** 秘籍配置弹窗：槽位数由后端职业数据下发 */
   const [mijiOpen, setMijiOpen] = useState(false);
   const [mijiSkill, setMijiSkill] = useState<SkillPoolItemDTO | null>(null);
-  /** 技能目录过滤：全部 / 琴 / 剑 / 收藏 */
-  const [poolFilter, setPoolFilter] = useState<"all" | "qin" | "jian" | "fav">("all");
+  /** 技能目录过滤：全部 / 后端器形列表 / 收藏 */
+  const [poolFilter, setPoolFilter] = useState<string>("all");
+  const poolFilters = useMemo(() => [
+    { key: "all", label: "全部" },
+    ...(combatBundle?.combat.form ?? []).map((form) => ({ key: form.id, label: form.name })),
+    { key: "fav", label: "已收藏" },
+  ], [combatBundle]);
 
   // 奇穴盘：分组/顺序/合并全部由后端算好（group_label / group_ids），前端只渲染。
   const qixueGroups = useMemo(() => {
     type Chip = { key: string; label: string; ids: string[]; shelved: boolean; slot: number };
-    const mixedFrom = combatBundle?.combat.meta.mixed_slot_from ?? 7;
     const groups: { label: string; mixed: boolean; chips: Chip[] }[] = [];
     for (const q of timelineQixue) {
-      const label = q.group_label || `第${["一", "二", "三", "四", "五", "六"][q.slot - 1] ?? "?"}重`;
+      const label = q.group_label || "未分组";
       let group = groups[groups.length - 1];
       if (!group || group.label !== label) {
-        group = { label, mixed: q.slot >= mixedFrom, chips: [] };
+        group = { label, mixed: q.slot >= mixedSlotFrom, chips: [] };
         groups.push(group);
       }
       group.chips.push({
@@ -101,11 +108,13 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       });
     }
     return groups;
-  }, [timelineQixue, combatBundle]);
+  }, [timelineQixue, mixedSlotFrom]);
   const selectedQixueCount = qixueGroups.reduce(
     (n, g) => n + g.chips.filter((c) => c.ids.some((id) => selQixue.includes(id))).length,
     0,
   );
+  const mixedPoolSize = qixueGroups.filter((g) => g.mixed)
+    .reduce((n, g) => n + g.chips.length, 0);
 
   const toggleQixue = useCallback((slot: number, ids: string[], mixed: boolean) => {
     setSelQixue((prev) => {
@@ -117,16 +126,14 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         return [...prev.filter((x) => !sameSlot.has(x)), ...ids];
       }
       // 混选池：上限由后端 meta 提供，按「格」计数（后端已把同一奇穴多条效果合并）
-      const mixedFrom = combatBundle?.combat.meta.mixed_slot_from ?? 7;
-      const cap = combatBundle?.combat.meta.mixed_qixue_cap ?? 3;
       const next = [...prev, ...ids];
       const picked = timelineQixue.filter(
-        (q) => q.slot >= mixedFrom && (q.group_ids ?? [q.id]).some((id) => next.includes(id)),
+        (q) => q.slot >= mixedSlotFrom && (q.group_ids ?? [q.id]).some((id) => next.includes(id)),
       ).length;
-      if (picked > cap) return prev;
+      if (picked > mixedQixueCap) return prev;
       return next;
     });
-  }, [timelineQixue, combatBundle]);
+  }, [timelineQixue, mixedSlotFrom, mixedQixueCap, setSelQixue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +215,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         setCombatError(null);
         setTimelineMiji(bundle.combat.miji ?? []);
         setTimelineQixue(bundle.combat.qixue ?? []);
+        setPoolFilter((current) => current === "all" || current === "fav"
+          || bundle.combat.form.some((form) => form.id === current) ? current : "all");
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -366,18 +375,17 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   const mijiText = useCallback((m: MijiDefDTO) =>
     m.effects && m.effects.length > 0 ? m.effects.join("，") : "无数值效果", []);
 
-  /** 切换某技能的秘籍：同一技能最多 4 个（游戏内秘籍槽位） */
+  /** 切换某技能的秘籍：槽位上限由后端职业数据提供 */
   const mijiSkills = useMemo(() => pool.filter((s) => mijiFor(s).length > 0), [pool, mijiFor]);
 
   const toggleMiji = useCallback((skill: SkillPoolItemDTO, id: string) => {
     setSelMiji((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      const cap = combatBundle?.combat.meta.miji_per_skill_cap ?? 4;
       const equipped = mijiFor(skill).filter((m) => prev.includes(m.id)).length;
-      if (equipped >= cap) return prev;
+      if (equipped >= mijiCap) return prev;
       return [...prev, id];
     });
-  }, [mijiFor, combatBundle]);
+  }, [mijiFor, mijiCap, setSelMiji]);
 
   /** 技能卡的时序标签：吟唱 / 调息 / 充能 */
   const castLabel = useCallback((skill: SkillPoolItemDTO) => {
@@ -407,10 +415,10 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       const def = combatBundle?.combat.skill_combat.find(
         (sc) => sc.skill_id === s.skill_id && (sc.sub_id ?? 0) === (s.sub_id ?? 0),
       );
-      const instrument = def?.requires_instrument ?? "qin";
+      const instrument = def?.requires_instrument ?? initialInstrument;
       return instrument === poolFilter;
     });
-  }, [groups, poolFilter, favorites, skillKey, combatBundle, selQixue]);
+  }, [groups, poolFilter, favorites, skillKey, combatBundle, selQixue, initialInstrument]);
 
 
   const activeMijiSkill = mijiSkill ?? mijiSkills[0] ?? null;
@@ -453,12 +461,16 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
 
       {combatBundle && (
         <div className={styles.axisBar} data-testid="axis-bar">
-          <span className={styles.axisChip}>
-            器形 <b>{formName(timelineResult?.final_instrument || (combatBundle.combat.form.find((f) => f.initial)?.id ?? ""))}</b>
-          </span>
-          <span className={styles.axisChip}>
-            曲风 <b>{qifengName(combatBundle.combat, timelineResult?.final_qifeng || combatBundle.combat.qifeng?.[0] || "")}</b>
-          </span>
+          {combatBundle.combat.form.length > 0 && (
+            <span className={styles.axisChip}>
+              器形 <b>{formName(timelineResult?.final_instrument || initialInstrument)}</b>
+            </span>
+          )}
+          {combatBundle.combat.qifeng.length > 0 && (
+            <span className={styles.axisChip}>
+              形态 <b>{qifengName(combatBundle.combat, timelineResult?.final_qifeng || combatBundle.combat.qifeng[0])}</b>
+            </span>
+          )}
           {formData && (
             <>
               <span className={styles.axisDivider} />
@@ -491,7 +503,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
 
       {combatError && (
         <div className={styles.warnBanner}>
-          战斗数据（data/combat）加载失败：{combatError}
+          战斗数据（data/&#123;门派&#125;/combat.toml）加载失败：{combatError}
         </div>
       )}
 
@@ -559,7 +571,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
             />
           </div>
           <div className={styles.filterRow}>
-            {([["all", "全部"], ["qin", "曲"], ["jian", "剑"], ["fav", "已收藏"]] as const).map(([key, label]) => (
+            {poolFilters.map(({ key, label }) => (
               <button key={key} type="button"
                 className={`${styles.filterChip} ${poolFilter === key ? styles.filterChipOn : ""}`}
                 onClick={() => setPoolFilter(key)}>
@@ -575,7 +587,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                 const def = combatBundle?.combat.skill_combat.find(
                   (sc) => sc.skill_id === s.skill_id && (sc.sub_id ?? 0) === (s.sub_id ?? 0),
                 );
-                const accent = def?.requires_instrument === "jian" ? styles.tileJian : styles.tileQin;
+                const accent = def?.requires_instrument && def.requires_instrument !== initialInstrument
+                  ? styles.tileJian : styles.tileQin;
                 const qifengNeed = def?.requires_qifeng ?? null;
                 const miji = mijiFor(s);
                 const equipped = miji.filter((m) => selMiji.includes(m.id)).length;
@@ -583,7 +596,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                   <div key={`${key}-${itemIndex}`}
                     className={`${styles.skillTile} ${accent} ${fav ? styles.favoriteTile : ""}`}
                     onContextMenu={(e) => { e.preventDefault(); toggleFavorite(s); }}
-                    title={`${s.skill_name} | ${s.base_damage1}-${s.base_damage2}${qifengNeed ? ` | 需${qifengNeed}` : ""}${fav ? " · 已收藏" : " · 右键收藏"}`}>
+                    title={`${s.skill_name} | ${s.base_damage1}-${s.base_damage2}${qifengNeed ? ` | 需${qifengName(combatBundle?.combat, qifengNeed)}` : ""}${fav ? " · 已收藏" : " · 右键收藏"}`}>
                     <button type="button" className={styles.tileAdd} data-skill-card={key}
                       data-skill-name={s.skill_name} onClick={() => addToSequence(s)} aria-label={`添加${s.skill_name}`}>
                     <span className={styles.tileName}>{s.skill_name}</span>
@@ -593,7 +606,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                       <button type="button" className={`${styles.tileGear} ${equipped > 0 ? styles.tileGearOn : ""}`}
                         title="秘籍配置"
                         onClick={(e) => { e.stopPropagation(); setMijiSkill(s); setMijiOpen(true); }}>
-                        {equipped}/4
+                        {equipped}/{mijiCap}
                       </button>
                     )}
                     {fav && <span className={styles.tileStar}><IconStar size={10} /></span>}
@@ -636,13 +649,13 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                           {(provided, snapshot) => (
                             <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                               className={`${styles.stepCard} ${snapshot.isDragging ? styles.dragging : ""} ${steps[i] && !steps[i].legal ? styles.illegalStep : ""}`}
-                              title={steps[i] && !steps[i].legal ? `${steps[i].skipped_reason}${steps[i].required_instrument ? `，需要器形「${formName(steps[i].required_instrument!)}」` : ""}${steps[i].required_qifeng ? `，需要曲风「${qifengName(combatBundle?.combat ?? ({} as never), steps[i].required_qifeng!)}」` : ""}` : undefined}>
+                              title={steps[i] && !steps[i].legal ? `${steps[i].skipped_reason}${steps[i].required_instrument ? `，需要器形「${formName(steps[i].required_instrument!)}」` : ""}${steps[i].required_qifeng ? `，需要形态「${qifengName(combatBundle?.combat, steps[i].required_qifeng!)}」` : ""}` : undefined}>
                               {(steps[i]?.switches ?? []).map((sw, si) => (
                                 <div key={`sw-${si}`} className={styles.stepSwitch}>
-                                  <span className={styles.stepSwitchKind}>{sw.switch_kind === "form" ? "器形" : "曲风"}</span>
+                                  <span className={styles.stepSwitchKind}>{sw.switch_kind === "form" ? "器形" : "形态"}</span>
                                   <span className={styles.stepSwitchArrow}>⇄</span>
                                   <span className={styles.stepSwitchTo}>
-                                    {sw.switch_kind === "form" ? formName(sw.to) : qifengName(combatBundle?.combat ?? ({} as never), sw.to)}
+                                    {sw.switch_kind === "form" ? formName(sw.to) : qifengName(combatBundle?.combat, sw.to)}
                                   </span>
                                 </div>
                               ))}
@@ -655,7 +668,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                                   <span className={styles.comboName}>{item.skill.skill_name}</span>
                                   <span className={styles.comboMeta}>
                                     {steps[i]
-                                      ? `${formName(steps[i].instrument)} · ${qifengName(combatBundle?.combat ?? ({} as never), steps[i].qifeng)}`
+                                      ? `${formName(steps[i].instrument)} · ${qifengName(combatBundle?.combat, steps[i].qifeng)}`
                                       : "—"}
                                   </span>
                                   {selMiji.length > 0 && (
@@ -691,7 +704,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           {timelineResult && (
             <div className={styles.boardStats}>
               <span>当前序列 <b>{sequence.length}</b> 步</span>
-              <span>形态/曲风切换 <b>{steps.reduce((n, step) => n + step.switches.length, 0)}</b> 次</span>
+              <span>器形/形态切换 <b>{steps.reduce((n, step) => n + step.switches.length, 0)}</b> 次</span>
               <span>非法步骤 <b>{steps.filter((step) => !step.legal).length}</b></span>
               <span>未执行动作 <b>{timelineResult.skipped_actions}</b></span>
             </div>
@@ -711,7 +724,8 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
           ) : timelineResult ? (
             <>
               <div className={styles.logScroll}>
-                <TimelineDamageLog events={timelineResult.events} killStart={timelineResult.kill_start} killEnd={timelineResult.kill_end} />
+                <TimelineDamageLog events={timelineResult.events} killStart={timelineResult.kill_start} killEnd={timelineResult.kill_end}
+                  formName={formName} qifengName={(id) => qifengName(combatBundle?.combat, id)} />
               </div>
               <div className={styles.totalsRow}>
                 <div className={styles.totalBox}>
@@ -753,12 +767,14 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         </aside>
       </div>
 
-      {/* 奇穴盘：同重互斥，第七~九重为混选池（最多 3 个） */}
+      {/* 奇穴盘：固定槽互斥；混选槽位与上限由后端职业数据提供 */}
       {timelineQixue.length > 0 && (
         <details open className={styles.qixueBoard} data-testid="qixue-board">
           <summary className={styles.qixueHead}>
             <span>奇穴盘</span>
-            <span className={styles.qixueHint}>同重互斥 · 混选 9 选 3</span>
+            <span className={styles.qixueHint}>
+              同重互斥{mixedPoolSize > 0 ? ` · 混选 ${mixedPoolSize} 选 ${mixedQixueCap}` : ""}
+            </span>
             <span className={styles.qixueLegend}>
               <i className={styles.qixueLegendDot} />
               虚线 = 引擎未实装，暂不可选
@@ -770,7 +786,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
               <div className={`${styles.qixueGroup} ${g.mixed ? styles.qixueGroupMixed : ""}`} key={g.label}>
                 <div className={styles.qixueGroupLabel}>
                   {g.label}
-                  {g.mixed && <span className={styles.qixueGroupHint}>9 选 3</span>}
+                  {g.mixed && <span className={styles.qixueGroupHint}>{mixedPoolSize} 选 {mixedQixueCap}</span>}
                 </div>
                 <div className={styles.qixueGroupChips}>
                   {g.chips.map((chip) => {
@@ -820,7 +836,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
         </div>
       )}
 
-      {/* 秘籍配置（独立入口：左侧技能，右侧 4 个槽位 + 候选） */}
+      {/* 秘籍配置：技能列表与槽位数均由后端职业数据提供 */}
       {mijiOpen && (
         <div className={styles.mijiOverlay} onClick={() => setMijiOpen(false)}>
           <div className={styles.mijiModal} onClick={(e) => e.stopPropagation()} data-testid="miji-config">
@@ -841,7 +857,7 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                         className={`${styles.mijiSkillItem} ${active ? styles.mijiSkillItemOn : ""}`}
                         onClick={() => setMijiSkill(s)}>
                         <span>{s.skill_name}</span>
-                        <span className={styles.mijiSkillCount}>{count}/4</span>
+                        <span className={styles.mijiSkillCount}>{count}/{mijiCap}</span>
                       </button>
                     );
                   })}
@@ -852,10 +868,10 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
                     <>
                       <div className={styles.mijiDetailTitle}>
                         {activeMijiSkill.skill_name}
-                        <span>{mijiFor(activeMijiSkill).filter((m) => selMiji.includes(m.id)).length}/4</span>
+                        <span>{mijiFor(activeMijiSkill).filter((m) => selMiji.includes(m.id)).length}/{mijiCap}</span>
                       </div>
                       <div className={styles.mijiConfigSlots}>
-                        {[0, 1, 2, 3].map((slot) => {
+                        {Array.from({ length: mijiCap }, (_, slot) => {
                           const equipped = mijiFor(activeMijiSkill).filter((m) => selMiji.includes(m.id))[slot];
                           return (
                             <span key={slot} className={`${styles.mijiConfigSlot} ${equipped ? styles.mijiConfigSlotOn : ""}`}>

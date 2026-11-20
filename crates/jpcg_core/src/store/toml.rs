@@ -30,7 +30,7 @@ pub fn toml_input(profession: &str) -> Option<String> {
 
 // ============================================================================
 // TomlConfig — TOML 配置顶层结构
-// 对应 data/shuxing/{心法名}.toml 文件格式:
+// 对应 data/{心法ID}/shuxing.toml 文件格式（旧 data/shuxing/{心法名}.toml 仅读取兼容）:
 //   [xinfa]
 //   xinfa_name = "莫问"
 //   xinfa_nom = "根骨"
@@ -53,71 +53,54 @@ pub struct TomlConfig {
 
 // ============================================================================
 // load_config — 按心法名加载技能配置表
-// 路径: {exe_dir}/data/shuxing/{profession}.toml
+// 正式路径：data/{profession}/shuxing.toml；旧路径仅读取兼容。
 // ============================================================================
 
-/// 按心法名加载技能配置表；在 `data_dirs()` 中取**首个**存在该文件的目录
-/// （安装版用户覆盖优先，其后随包资源）——修复“保存单个心法后遮蔽其他心法”。
+/// 按心法名加载技能配置表；取首个存在的候选文件，用户数据优先于随包资源。
 pub fn load_config(profession: &str) -> TomlConfig {
-    load_config_from(&super::paths::data_dirs(), profession)
+    match super::paths::shuxing_file_paths(profession) {
+        Ok(paths) => load_config_from_paths(&paths, profession),
+        Err(e) => {
+            error(&e);
+            TomlConfig::default()
+        }
+    }
 }
 
-/// 显式目录列表版（便于测试多目录合并）
+fn load_config_from_paths(paths: &[PathBuf], profession: &str) -> TomlConfig {
+    match read_config_strict_paths(paths, profession) {
+        Ok(Some(config)) => config,
+        Ok(None) => TomlConfig::default(),
+        Err(e) => {
+            error(&e);
+            TomlConfig::default()
+        }
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn load_config_from(dirs: &[PathBuf], profession: &str) -> TomlConfig {
-    for dir in dirs {
-        let file_path = dir.join(format!("{}.toml", profession));
-        if !file_path.exists() {
-            continue;
-        }
-        let content = match std::fs::read_to_string(&file_path) {
-            Ok(c) => c,
-            Err(e) => {
-                error(&format!("读取配置文件失败: {}", e));
-                return TomlConfig::default();
-            }
-        };
-        match toml::from_str::<TomlConfig>(&content) {
-            Ok(mut config) => {
-                config.xinfa.profession = profession.to_string();
-                return config;
-            }
-            Err(e) => {
-                error(&format!(
-                    "解析心法 '{}' 的 TOML 配置失败: {}",
-                    profession, e
-                ));
-                return TomlConfig::default();
-            }
-        }
-    }
-    TomlConfig::default()
-}
-
-/// 心法标识只能作为单个文件名使用，不能携带路径、扩展名或空白。
-fn validate_profession(profession: &str) -> Result<(), String> {
-    if profession.is_empty()
-        || profession.len() > 128
-        || !profession
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
-    {
-        return Err("心法标识仅允许字母、数字、下划线和连字符，且长度为 1..128".into());
-    }
-    Ok(())
+    let paths: Vec<PathBuf> = dirs
+        .iter()
+        .map(|dir| dir.join(format!("{profession}.toml")))
+        .collect();
+    load_config_from_paths(&paths, profession)
 }
 
 /// 严格读取首个存在的文件；损坏或不可读的高优先级文件不得被低优先级文件遮盖。
-fn read_config_strict(dirs: &[PathBuf], profession: &str) -> Result<Option<TomlConfig>, String> {
-    validate_profession(profession)?;
-    for dir in dirs {
-        let path = dir.join(format!("{profession}.toml"));
-        match std::fs::symlink_metadata(&path) {
+fn read_config_strict_paths(
+    paths: &[PathBuf],
+    profession: &str,
+) -> Result<Option<TomlConfig>, String> {
+    super::paths::validate_profession(profession)?;
+    for path in paths {
+        match std::fs::symlink_metadata(path) {
             Ok(_) => (),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
             Err(e) => return Err(format!("读取 {} 元数据失败: {e}", path.display())),
         }
         // 包括悬空符号链接：文件已存在但不可读，不能回退到资源目录。
-        let text = std::fs::read_to_string(&path)
+        let text = std::fs::read_to_string(path)
             .map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
         let mut config: TomlConfig =
             toml::from_str(&text).map_err(|e| format!("解析 {} 失败: {e}", path.display()))?;
@@ -125,6 +108,15 @@ fn read_config_strict(dirs: &[PathBuf], profession: &str) -> Result<Option<TomlC
         return Ok(Some(config));
     }
     Ok(None)
+}
+
+#[cfg(test)]
+fn read_config_strict(dirs: &[PathBuf], profession: &str) -> Result<Option<TomlConfig>, String> {
+    let paths: Vec<PathBuf> = dirs
+        .iter()
+        .map(|dir| dir.join(format!("{profession}.toml")))
+        .collect();
+    read_config_strict_paths(&paths, profession)
 }
 
 fn validate_attribute_rules(config: &TomlConfig) -> Result<(), String> {
@@ -176,14 +168,8 @@ fn validate_attribute_rules(config: &TomlConfig) -> Result<(), String> {
 /// 从当前心法 TOML 严格加载规则；不提供历史快照、常量或默认规则兜底。
 /// 值集与请求是否一致由调用的配装层校验。
 pub fn load_attribute_rules(profession: &str) -> Result<jpcg_api::AttributeRules, String> {
-    load_attribute_rules_from(&super::paths::data_dirs(), profession)
-}
-
-pub(crate) fn load_attribute_rules_from(
-    dirs: &[PathBuf],
-    profession: &str,
-) -> Result<jpcg_api::AttributeRules, String> {
-    let mut config = read_config_strict(dirs, profession)?
+    let paths = super::paths::shuxing_file_paths(profession)?;
+    let mut config = read_config_strict_paths(&paths, profession)?
         .ok_or_else(|| format!("找不到心法 {profession} 的 TOML 配置"))?;
     validate_attribute_rules(&config)?;
     config
@@ -192,27 +178,42 @@ pub(crate) fn load_attribute_rules_from(
         .ok_or("心法 TOML 缺少 [attributes] 规则表".into())
 }
 
-/// 保存技能配置到可写数据根。旧编辑器没有 attributes 字段时保留当前优先配置中的规则。
+#[cfg(test)]
+pub(crate) fn load_attribute_rules_from(
+    dirs: &[PathBuf],
+    profession: &str,
+) -> Result<jpcg_api::AttributeRules, String> {
+    let paths: Vec<PathBuf> = dirs
+        .iter()
+        .map(|dir| dir.join(format!("{profession}.toml")))
+        .collect();
+    let mut config = read_config_strict_paths(&paths, profession)?
+        .ok_or_else(|| format!("找不到心法 {profession} 的 TOML 配置"))?;
+    validate_attribute_rules(&config)?;
+    config
+        .attributes
+        .take()
+        .ok_or("心法 TOML 缺少 [attributes] 规则表".into())
+}
+
+/// 保存技能配置到可写数据根的职业目录。旧编辑器没有 attributes 字段时保留当前优先配置中的规则。
 /// 不能通过省略字段或 null 删除规则；有规则时禁止写入与其等级不一致的版本。
 pub fn save_skill_toml(profession: &str, config: TomlConfig) -> Result<(), String> {
     let root = super::paths::data_root_writable().ok_or("无法获取可写数据目录")?;
-    save_skill_toml_to(
-        &super::paths::data_dirs(),
-        &root.join("shuxing"),
-        profession,
-        config,
-    )
+    let paths = super::paths::shuxing_file_paths(profession)?;
+    let file_path = super::paths::shuxing_save_path(&root, profession)?;
+    save_skill_toml_to_paths(&paths, &file_path, profession, config)
 }
 
-fn save_skill_toml_to(
-    dirs: &[PathBuf],
-    writable_dir: &std::path::Path,
+fn save_skill_toml_to_paths(
+    paths: &[PathBuf],
+    file_path: &std::path::Path,
     profession: &str,
     mut config: TomlConfig,
 ) -> Result<(), String> {
-    validate_profession(profession)?;
+    super::paths::validate_profession(profession)?;
     if config.attributes.is_none()
-        && let Some(existing) = read_config_strict(dirs, profession)?
+        && let Some(existing) = read_config_strict_paths(paths, profession)?
     {
         config.attributes = existing.attributes;
         if config.attributes.is_some() && config.version.is_none() {
@@ -223,11 +224,30 @@ fn save_skill_toml_to(
         validate_attribute_rules(&config)?;
     }
     let content = toml::to_string_pretty(&config).map_err(|e| format!("序列化失败: {e}"))?;
+    let writable_dir = file_path.parent().ok_or("技能保存路径缺少父目录")?;
     std::fs::create_dir_all(writable_dir).map_err(|e| format!("创建数据目录失败: {e}"))?;
-    let file_path = writable_dir.join(format!("{profession}.toml"));
-    std::fs::write(&file_path, &content).map_err(|e| format!("写入文件失败: {e}"))?;
+    std::fs::write(file_path, &content).map_err(|e| format!("写入文件失败: {e}"))?;
     info(&format!("技能数据已保存到: {:?}", file_path));
     Ok(())
+}
+
+#[cfg(test)]
+fn save_skill_toml_to(
+    dirs: &[PathBuf],
+    writable_dir: &std::path::Path,
+    profession: &str,
+    config: TomlConfig,
+) -> Result<(), String> {
+    let paths: Vec<PathBuf> = dirs
+        .iter()
+        .map(|dir| dir.join(format!("{profession}.toml")))
+        .collect();
+    save_skill_toml_to_paths(
+        &paths,
+        &writable_dir.join(format!("{profession}.toml")),
+        profession,
+        config,
+    )
 }
 
 #[cfg(test)]

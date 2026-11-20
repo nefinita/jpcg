@@ -350,7 +350,28 @@ mod tests {
 
     const EXP: &str = include_str!("../../../../data/values/cszj-exp-260908.toml");
     const LIVE: &str = include_str!("../../../../data/values/live-130.toml");
-    const INDEX: &str = include_str!("../../../../data/values/index.toml");
+    // 单测清单独立于正式数据维护，覆盖默认值、同等级备选和高等级快照的通用行为。
+    const INDEX: &str = r#"
+default = "live-50"
+
+[[value_sets]]
+id = "live-50"
+name = "测试正式服50级"
+level = 50
+file = "live-50.toml"
+
+[[value_sets]]
+id = "cszj-exp-260908"
+name = "测试体验服50级"
+level = 50
+file = "cszj-exp-260908.toml"
+
+[[value_sets]]
+id = "live-130"
+name = "测试正式服130级"
+level = 130
+file = "live-130.toml"
+"#;
 
     /// 隔离临时目录：`root/values/` 写入 index + 两份快照，Drop 时清理
     struct TempData {

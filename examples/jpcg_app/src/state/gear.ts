@@ -1,4 +1,4 @@
-import { GEAR_SLOTS, emptyGearStats, type GearCatalog, type GearChoice, type GearLoadout, type GearComposition, type GearStats, type GearAttributePanel } from "../types/gear";
+import { GEAR_SLOTS, emptyGearStats, type GearChoice, type GearLoadout, type GearComposition, type GearStats, type GearAttributePanel } from "../types/gear";
 import type { FormData, PlayerConfigDTO } from "../types";
 import { toCalculateRequest } from "../utils/normalize";
 export const slotNames = { tou: "头部", yi: "上衣", yao: "腰带", shou: "护手", ku: "裤子", xie: "鞋子", wuqi: "武器", anqi: "暗器", xianglian: "项链", yaozhui: "腰坠", jie1: "戒指一", jie2: "戒指二" };
@@ -28,22 +28,6 @@ export const choiceKey = (c: GearChoice) => `${c.slot}:${c.source}:${c.tier}:${c
 /** FormData 不存 null；缺失转化值不能归零，否则会关闭旧版主属性转攻击。 */
 export function gearPlayerForm(player: PlayerConfigDTO): Record<string, number | string> {
   return Object.fromEntries(Object.entries(player).filter(([, value]) => value != null));
-}
-export function initialLoadout(catalog: GearCatalog, school: string): GearLoadout | null {
-  const choices = GEAR_SLOTS.map((slot) => {
-    const own = catalog.templates.find((t) => t.school === school && t.choice.slot === slot);
-    const cross = catalog.templates.find((t) => t.cross_school && t.choice.slot === slot);
-    const picked = own ?? cross;
-    return picked ? { ...picked.choice, school: picked.school === school ? undefined : picked.school } : undefined;
-  });
-  if (choices.some((c) => !c)) return null;
-  const enchants: Record<string, string> = {};
-  for (const slot of GEAR_SLOTS) {
-    const first = (catalog.enchants ?? []).find((e) => e.slot === slot);
-    if (first) enchants[slot] = first.id;
-  }
-  const wucai = catalog.wucai?.[0]?.id;
-  return { school, revision: catalog.version.revision, value_set: catalog.version.value_set, base: { ...emptyGearStats(), tizhi: 18, gengu: 18, shenfa: 18, yuanqi: 17, liliang: 17 }, choices: choices as GearChoice[], enchants, ...(wucai ? { wucai } : {}) };
 }
 export function gearInputKey(form: FormData, loadout: GearLoadout) {
   return JSON.stringify({ mode: "gear", loadout, context: { ...toCalculateRequest(form), player: null } });

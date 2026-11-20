@@ -1,23 +1,23 @@
 // ============================================================================
 // paths — 路径定位
-// 负责定位数据根、数值集目录与连招预设目录。
+// 负责定位数据根、职业数据、数值集目录与连招预设目录。
 //
-// 数据根（含 shuxing/、values/）是**读写唯一真源**：
-//   - 读取：JPCG_DATA_DIR → bundle 用户目录（更新落盘处）→ bundle Resources → exe 同目录 data
-//   - 写入（更新落盘，见 data_root_writable）：JPCG_DATA_DIR → bundle 用户目录 → exe 同目录 data
-// 安装版（.app）资源只读，故更新落到用户数据目录；开发版落到 exe 同目录 data。
-// 保存文件 saved_config.toml 仍位于工作目录。
+// 正式布局：data/<profession>/{shuxing.toml, combat.toml, gear/}；values/ 全职业共享。
+// 旧布局 data/{shuxing,combat,gear}/ 仅保留读取兼容，新保存与更新应写正式布局。
+// 数据根读取：JPCG_DATA_DIR → bundle 用户目录（更新落盘处）→ bundle Resources → exe 同目录 data。
+// 写入：JPCG_DATA_DIR → bundle 用户目录 → exe 同目录 data；saved_config.toml 仍位于工作目录。
 // ============================================================================
 
 use std::path::{Path, PathBuf};
 
-/// 目录是否像一个数据根（含 shuxing/ 或 values/）
+/// 目录是否像一个数据根（含旧 shuxing/ 或共享 values/）。任意已存在目录也接受，
+/// 以便只含新职业目录或即将写入数据的目录作为 JPCG_DATA_DIR。
 fn has_data(dir: &Path) -> bool {
     dir.join("shuxing").is_dir() || dir.join("values").is_dir()
 }
 
 /// macOS .app bundle 的用户数据根（`~/Library/Application Support/com.qinthirteen.jpcg/data`）。
-/// 与连招预设目录同源；bundle 资源只读，故更新落到此处。
+/// 与连招预设目录同源；bundle 资源只读，故更新落到用户数据目录。
 fn bundle_user_data(home: &Path) -> PathBuf {
     home.join("Library")
         .join("Application Support")
@@ -27,7 +27,7 @@ fn bundle_user_data(home: &Path) -> PathBuf {
 
 /// 读取数据根候选（纯函数，便于测试）；顺序即优先级。
 /// bundle（exe 位于 `Contents/MacOS`）：用户目录（更新落盘处）优先，其次随包只读资源；
-/// 最后兑底 exe 同目录 data（开发模式）。
+/// 最后兜底 exe 同目录 data（开发模式）。
 fn read_roots(exe_dir: &Path, home: Option<&Path>) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if exe_dir.ends_with("MacOS") {
@@ -42,7 +42,7 @@ fn read_roots(exe_dir: &Path, home: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-/// 读取数据根的候选目录（不含 `JPCG_DATA_DIR`，由调用方优先处理）
+/// 读取数据根的候选目录（不含 `JPCG_DATA_DIR`，由调用方优先处理）。
 fn read_root_candidates() -> Vec<PathBuf> {
     let Ok(exe) = std::env::current_exe() else {
         return Vec::new();
@@ -54,7 +54,7 @@ fn read_root_candidates() -> Vec<PathBuf> {
     read_roots(exe_dir, home.as_deref())
 }
 
-/// 将 `JPCG_DATA_DIR` 的值归一为数据根（兼容指向根、指向 shuxing、或任意已存在目录）
+/// 将 `JPCG_DATA_DIR` 的值归一为数据根（兼容指向根、旧 shuxing、或任意已存在目录）。
 fn env_data_root(p: &Path) -> Option<PathBuf> {
     if has_data(p) {
         return Some(p.to_path_buf());
@@ -68,8 +68,16 @@ fn env_data_root(p: &Path) -> Option<PathBuf> {
     None
 }
 
+/// 当前进程的数据根。设置环境变量时只读该根，未设置时按用户目录→随包资源→exe 合并。
+fn data_roots() -> Vec<PathBuf> {
+    if let Some(dir) = std::env::var_os("JPCG_DATA_DIR") {
+        return env_data_root(&PathBuf::from(dir)).into_iter().collect();
+    }
+    read_root_candidates()
+}
+
 /// 纯函数版可写根解析（便于测试）：
-/// `JPCG_DATA_DIR` → bundle 用户目录（exe 位于 `Contents/MacOS`）→ `exe_dir/data`
+/// `JPCG_DATA_DIR` → bundle 用户目录（exe 位于 `Contents/MacOS`）→ `exe_dir/data`。
 fn writable_root(exe_dir: &Path, env_dir: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
     if let Some(p) = env_dir {
         return env_data_root(p);
@@ -80,7 +88,7 @@ fn writable_root(exe_dir: &Path, env_dir: Option<&Path>, home: Option<&Path>) ->
     Some(exe_dir.join("data"))
 }
 
-/// 可写数据根（更新落盘目标）。读取侧见 [`data_dir`] / [`values_dir`]。
+/// 可写数据根（更新落盘目标）。读取侧见各职业文件与 [`values_dir`]。
 pub fn data_root_writable() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let exe_dir = exe.parent()?;
@@ -89,61 +97,97 @@ pub fn data_root_writable() -> Option<PathBuf> {
     writable_root(exe_dir, env_dir.as_deref(), home.as_deref())
 }
 
-/// shuxing 目录候选（按优先级，仅返回存在的）——用于**多目录合并读取**：
-/// 安装版用户目录（更新/编辑落盘处）优先，其后随包只读资源；同文件以先出现者为准。
-pub fn data_dirs() -> Vec<PathBuf> {
-    if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
-        let p = PathBuf::from(dir);
-        let shuxing = if p.join("shuxing").is_dir() {
-            p.join("shuxing")
-        } else {
-            p
-        };
-        return if shuxing.is_dir() {
-            vec![shuxing]
-        } else {
-            Vec::new()
-        };
+/// 心法标识只能作为单个目录名使用，不能携带路径、扩展名或空白。
+pub(crate) fn validate_profession(profession: &str) -> Result<(), String> {
+    if profession.is_empty()
+        || profession.len() > 128
+        || !profession
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
+    {
+        return Err("心法标识仅允许字母、数字、下划线和连字符，且长度为 1..128".into());
     }
-    read_root_candidates()
-        .into_iter()
-        .map(|r| r.join("shuxing"))
-        .filter(|d| d.is_dir())
-        .collect()
+    Ok(())
 }
 
-/// 战斗时序 overlay 目录（data/combat）：`{门派}.toml` 手工数据（形态 / GCD 通道 / buff / 秘籍 / 奇穴）。
-/// 解析顺序与 [`data_dirs`] 一致：`JPCG_DATA_DIR`（兼容指向数据根或 shuxing/）→ 安装版用户目录 → 随包资源 → exe 同目录。
-#[allow(dead_code)]
-pub fn combat_dirs() -> Vec<PathBuf> {
-    if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
-        let p = PathBuf::from(dir);
-        let root = if p.join("shuxing").is_dir() {
-            p
-        } else if p.file_name().and_then(|n| n.to_str()) == Some("shuxing") {
-            match p.parent() {
-                Some(parent) => parent.to_path_buf(),
-                None => return Vec::new(),
+/// 每个数据根内均为新布局优先、旧布局其次；根之间仍保持用户目录→随包资源顺序。
+fn profession_files_from_roots(
+    roots: &[PathBuf],
+    profession: &str,
+    legacy_dir: &str,
+    canonical_name: &str,
+) -> Result<Vec<PathBuf>, String> {
+    validate_profession(profession)?;
+    Ok(roots
+        .iter()
+        .flat_map(|root| {
+            [
+                root.join(profession).join(canonical_name),
+                root.join(legacy_dir).join(format!("{profession}.toml")),
+            ]
+        })
+        .collect())
+}
+
+/// 某职业技能文件的严格读取候选；调用方取首个存在者，损坏时不得回退。
+pub fn shuxing_file_paths(profession: &str) -> Result<Vec<PathBuf>, String> {
+    profession_files_from_roots(&data_roots(), profession, "shuxing", "shuxing.toml")
+}
+
+/// 某职业战斗 overlay 的严格读取候选；文件全部不存在时由调用方返回空 overlay。
+pub fn combat_file_paths(profession: &str) -> Result<Vec<PathBuf>, String> {
+    profession_files_from_roots(&data_roots(), profession, "combat", "combat.toml")
+}
+
+/// 技能编辑的唯一写入位置。即使旧布局仍可读取，新保存也只写职业目录。
+pub fn shuxing_save_path(root: &Path, profession: &str) -> Result<PathBuf, String> {
+    validate_profession(profession)?;
+    Ok(root.join(profession).join("shuxing.toml"))
+}
+
+/// 扫描正式布局的职业技能文件；返回值保留数据根优先级，由调用方按职业去重。
+fn profession_files_in_roots(roots: &[PathBuf]) -> Vec<(String, PathBuf)> {
+    let mut out = Vec::new();
+    for root in roots {
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
             }
-        } else {
-            p
-        };
-        let combat = root.join("combat");
-        return if combat.is_dir() {
-            vec![combat]
-        } else {
-            Vec::new()
-        };
+            let Some(profession) = dir.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if profession.starts_with('_') || validate_profession(profession).is_err() {
+                continue;
+            }
+            let path = dir.join("shuxing.toml");
+            if path.is_file() {
+                out.push((profession.to_string(), path));
+            }
+        }
     }
-    read_root_candidates()
+    out
+}
+
+/// 正式布局职业技能文件（用于门派列表；单职业加载请用 [`shuxing_file_paths`]）。
+pub fn profession_files() -> Vec<(String, PathBuf)> {
+    profession_files_in_roots(&data_roots())
+}
+
+/// 旧 shuxing 目录候选，仅供旧布局职业列表合并读取。
+/// 新职业加载不依赖此函数；保留多目录合并，避免保存单个心法遮蔽其他心法。
+pub fn data_dirs() -> Vec<PathBuf> {
+    data_roots()
         .into_iter()
-        .map(|r| r.join("combat"))
-        .filter(|d| d.is_dir())
+        .map(|root| root.join("shuxing"))
+        .filter(|dir| dir.is_dir())
         .collect()
 }
 
-/// 数值集目录（data/values）：存放 index.toml 与各值集快照。
-/// 解析顺序与 [`data_dirs`] 一致，且兼容 `JPCG_DATA_DIR` 直接指向 `data/shuxing` 的既有用法。
+/// 数值集目录（data/values）：存放 index.toml 与各值集快照，全职业共享。
 pub fn values_dir() -> Option<PathBuf> {
     if let Ok(dir) = std::env::var("JPCG_DATA_DIR") {
         return values_dir_from_env(&PathBuf::from(dir));
@@ -154,23 +198,32 @@ pub fn values_dir() -> Option<PathBuf> {
         .find(|d| d.is_dir())
 }
 
-/// 配装目录与值集共享读取优先级；存在但损坏的高优先级目录由调用方报错，不能静默回退。
-pub fn gear_dir() -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os("JPCG_DATA_DIR") {
-        let root = env_data_root(&PathBuf::from(dir))?;
-        let gear = root.join("gear");
-        return gear.is_dir().then_some(gear);
+fn gear_dir_from_roots(roots: &[PathBuf], profession: &str) -> Result<PathBuf, String> {
+    validate_profession(profession)?;
+    for root in roots {
+        let canonical = root.join(profession).join("gear");
+        if canonical.is_dir() {
+            return Ok(canonical);
+        }
+        let legacy = root.join("gear");
+        if legacy.is_dir() {
+            return Ok(legacy);
+        }
     }
-    read_root_candidates()
-        .into_iter()
-        .map(|r| r.join("gear"))
-        .find(|p| p.is_dir())
+    Err(format!(
+        "找不到职业 {profession} 的配装数据（应为 data/{profession}/gear），请安装对应数据或设置 JPCG_DATA_DIR"
+    ))
+}
+
+/// 当前职业的配装目录。旧 `data/gear` 仅作兼容；正式数据按职业隔离。
+pub fn gear_dir(profession: &str) -> Result<PathBuf, String> {
+    gear_dir_from_roots(&data_roots(), profession)
 }
 
 /// 由 `JPCG_DATA_DIR` 的值解析 values 目录。
 /// 兼容两种既有写法：
-///   - 指向数据根（含 shuxing/、values/）→ `<root>/values`
-///   - 直接指向 `<root>/shuxing`       → `<root>/values`（取同级）
+///   - 指向数据根（含职业目录、旧 shuxing/、values/）→ `<root>/values`
+///   - 直接指向 `<root>/shuxing` → `<root>/values`（取同级）。
 pub(crate) fn values_dir_from_env(p: &Path) -> Option<PathBuf> {
     let direct = p.join("values");
     if direct.is_dir() {
@@ -187,13 +240,12 @@ pub(crate) fn values_dir_from_env(p: &Path) -> Option<PathBuf> {
     None
 }
 
-/// 连招预设目录路径（开发模式: exe_dir/data/combo；.app bundle: 用户数据目录/combo）
+/// 连招预设目录路径（开发模式: exe_dir/data/combo；.app bundle: 用户数据目录/combo）。
 pub fn combo_presets_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let exe_dir = exe.parent()?;
 
     let dir = if exe_dir.ends_with("MacOS") {
-        // macOS .app bundle — 用用户数据目录（可写）
         let home = std::env::var("HOME").ok()?;
         PathBuf::from(home)
             .join("Library")
@@ -201,7 +253,6 @@ pub fn combo_presets_dir() -> Option<PathBuf> {
             .join("com.qinthirteen.jpcg")
             .join("combo")
     } else {
-        // 开发模式: exe_dir/data/combo
         exe_dir.join("data").join("combo")
     };
     Some(dir)
@@ -259,10 +310,71 @@ mod tests {
         let root = tmp("envshuxing");
         let shuxing = root.join("shuxing");
         std::fs::create_dir_all(&shuxing).unwrap();
-        // 指向 <root>/shuxing → 归一为 root
         assert_eq!(env_data_root(&shuxing), Some(root.clone()));
-        // 指向含 shuxing/ 的 root → 即 root
         assert_eq!(env_data_root(&root), Some(root.clone()));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn profession_paths_prefer_new_layout_inside_each_root() {
+        let user = tmp("path-user");
+        let bundle = tmp("path-bundle");
+        let roots = [user.clone(), bundle.clone()];
+        assert_eq!(
+            profession_files_from_roots(&roots, "mowen", "shuxing", "shuxing.toml").unwrap(),
+            vec![
+                user.join("mowen/shuxing.toml"),
+                user.join("shuxing/mowen.toml"),
+                bundle.join("mowen/shuxing.toml"),
+                bundle.join("shuxing/mowen.toml"),
+            ]
+        );
+        assert!(
+            profession_files_from_roots(&roots, "../mowen", "shuxing", "shuxing.toml").is_err()
+        );
+        let _ = std::fs::remove_dir_all(&user);
+        let _ = std::fs::remove_dir_all(&bundle);
+    }
+
+    #[test]
+    fn canonical_professions_scan_and_gear_selection_are_isolated() {
+        let root = tmp("canonical");
+        for profession in ["mowen", "badao"] {
+            let dir = root.join(profession);
+            std::fs::create_dir_all(dir.join("gear")).unwrap();
+            std::fs::write(dir.join("shuxing.toml"), "[xinfa]\n").unwrap();
+        }
+        std::fs::create_dir_all(root.join("values")).unwrap();
+        std::fs::create_dir_all(root.join("_template")).unwrap();
+        std::fs::write(root.join("_template/shuxing.toml"), "[xinfa]\n").unwrap();
+        let mut found = profession_files_in_roots(&[root.clone()]);
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            found.into_iter().map(|(id, _)| id).collect::<Vec<_>>(),
+            vec!["badao", "mowen"]
+        );
+        assert_eq!(
+            gear_dir_from_roots(&[root.clone()], "badao").unwrap(),
+            root.join("badao/gear")
+        );
+        assert!(gear_dir_from_roots(&[root.clone()], "missing").is_err());
+        assert!(gear_dir_from_roots(&[root.clone()], "../mowen").is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn legacy_gear_is_only_a_fallback() {
+        let root = tmp("legacy-gear");
+        std::fs::create_dir_all(root.join("gear")).unwrap();
+        assert_eq!(
+            gear_dir_from_roots(&[root.clone()], "mowen").unwrap(),
+            root.join("gear")
+        );
+        std::fs::create_dir_all(root.join("mowen/gear")).unwrap();
+        assert_eq!(
+            gear_dir_from_roots(&[root.clone()], "mowen").unwrap(),
+            root.join("mowen/gear")
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -282,7 +394,6 @@ mod tests {
             roots.get(1).map(PathBuf::as_path),
             Some(base.join("JPCG.app/Contents/Resources/data").as_path())
         );
-        // 可写根（更新落盘处）必是读取首选 → 写读一致
         assert_eq!(
             writable_root(&exe, None, Some(home.as_path())),
             roots.first().cloned()

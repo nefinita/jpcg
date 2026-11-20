@@ -2,6 +2,7 @@
 school = "mowen"
 revision = "live-50-20261106"
 value_set = "live-50"
+attribute_rules = "profession-toml"
 
 [base]
 

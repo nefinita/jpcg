@@ -12,7 +12,12 @@ fn sample() -> (Catalog, Loadout) {
 #[test]
 fn desktop_catalog_and_import_export_keep_composition() {
     let (catalog, loadout) = sample();
-    let output = host::dispatch(&catalog, "catalog", "{}").unwrap();
+    let output = host::dispatch(
+        &catalog,
+        "catalog",
+        &serde_json::json!({"profession":"mowen"}).to_string(),
+    )
+    .unwrap();
     assert_eq!(output["version"]["revision"], "synthetic-v1");
     let input = serde_json::to_string(&loadout).unwrap();
     let composed = host::dispatch(&catalog, "compose", &input).unwrap();
@@ -30,7 +35,14 @@ fn desktop_catalog_and_import_export_keep_composition() {
     )
     .unwrap();
     assert_eq!(imported, composed);
-    assert!(host::dispatch(&catalog, "catalog", r#"{"path":"/tmp"}"#).is_err());
+    assert!(
+        host::dispatch(
+            &catalog,
+            "catalog",
+            r#"{"profession":"mowen","path":"/tmp"}"#,
+        )
+        .is_err()
+    );
     assert!(host::dispatch(&catalog, "import", r#"{"toml":"bad","path":"/tmp"}"#).is_err());
     assert!(host::dispatch(&catalog, "unknown", "{}").is_err());
     let mut stale = loadout;

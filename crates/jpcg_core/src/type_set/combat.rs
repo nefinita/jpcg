@@ -2,8 +2,8 @@
 // combat — 战斗时序数据层（#92 时序引擎）
 //
 // 数据来源分两层：
-//   `data/shuxing/{门派}.toml`  json-to-toml 生成（伤害/技能基础数据，不手改）
-//   `data/combat/{门派}.toml`   **手工 overlay**（形态 / GCD 通道 / 施放副作用 /
+//   `data/{门派}/shuxing.toml`  json-to-toml 生成（伤害/技能基础数据，不手改）
+//   `data/{门派}/combat.toml`   **手工 overlay**（形态 / GCD 通道 / 施放副作用 /
 //                               定时 buff / 秘籍 / 奇穴；常改的东西放这里，免编译）
 //
 // overlay 只新增或覆盖时序相关字段，伤害数值仍以 shuxing 数据为准。
@@ -168,7 +168,19 @@ impl SkillCombatDef {
     }
 }
 
-/// 版本/元信息（`[meta]`）
+fn default_miji_per_skill_cap() -> u8 {
+    4
+}
+
+fn default_mixed_qixue_cap() -> u8 {
+    3
+}
+
+fn default_mixed_slot_from() -> u8 {
+    7
+}
+
+/// 版本、界面显示与面板规则（`[meta]`）
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CombatMeta {
@@ -178,9 +190,20 @@ pub struct CombatMeta {
     pub version: String,
     /// 备注
     pub note: String,
+    /// 形态 id → 显示名；内部 qifeng 字段仅作兼容标识
+    pub qifeng_names: std::collections::BTreeMap<String, String>,
+    /// 每个技能最多装备的秘籍数；缺省值仅兼容旧数据
+    #[serde(default = "default_miji_per_skill_cap")]
+    pub miji_per_skill_cap: u8,
+    /// 混选奇穴最多选几格；缺省值仅兼容旧数据
+    #[serde(default = "default_mixed_qixue_cap")]
+    pub mixed_qixue_cap: u8,
+    /// 从第几号槽位开始是混选池；缺省值仅兼容旧数据
+    #[serde(default = "default_mixed_slot_from")]
+    pub mixed_slot_from: u8,
 }
 
-/// `data/combat/{门派}.toml` 顶层结构
+/// `data/{门派}/combat.toml` 顶层结构（旧 `data/combat/{门派}.toml` 仅读取兼容）
 /// （不能 derive PartialEq：`QixueDef.replacement` 含 `Skilltype`，后者未实现）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -702,7 +725,7 @@ modifiers = [{ atk_xishu_add = 0.2 }]
 
     #[test]
     fn template_file_parses() {
-        let text = include_str!("../../../../data/combat/_template.toml");
+        let text = include_str!("../../../../data/_template/combat.toml");
         let data: CombatData = toml::from_str(text).expect("模板必须能解析");
         data.validate().expect("模板必须通过结构校验");
         assert_eq!(data.meta.profession, "mowen");

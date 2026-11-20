@@ -21,7 +21,7 @@ import { usePersistentState, writePreference, readPreference } from "./hooks/use
 import { cockpitSchema, defaultCockpit, comboDraftSchema, defaultComboDraft } from "./state/cockpit";
 import SnapshotDiff from "./components/SnapshotDiff";
 import type { GearCatalog, GearLoadout, GearComposition, OptimizeOptions, GearOptimizeResult, GearOptimizeRequest, GearTimelineMetric } from "./types/gear";
-import { initialLoadout, gearInputKey, gearPlayerForm, PROFESSION_ATTRIBUTE_RULES } from "./state/gear";
+import { gearInputKey, gearPlayerForm, PROFESSION_ATTRIBUTE_RULES } from "./state/gear";
 import CockpitCombo from "./components/CockpitCombo";
 import GearPanel from "./components/GearPanel";
 import styles from "./App.module.css";
@@ -89,15 +89,22 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    api.gearCatalog().then((value) => { if (!cancelled) { setCatalog(value); setGearError(""); } })
+    // 切换职业时旧目录立即可用性失效，不能拿同 revision 的其他职业目录计算。
+    setCatalog(null);
+    api.gearCatalog(formData.xinfa).then((value) => { if (!cancelled) { setCatalog(value); setGearError(""); } })
       .catch((err) => { if (!cancelled) setGearError(String(err)); });
     return () => { cancelled = true; };
-  }, [catalogAttempt]);
+  }, [catalogAttempt, formData.xinfa]);
 
   useEffect(() => {
-    if (!catalog || loadout) return;
-    const next = initialLoadout(catalog, formData.xinfa);
-    if (next) setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } }));
+    // 默认配装与真实目录的旧规则迁移均由后端决定；前端只保存并显示返回的 DTO。
+    if (!catalog || (loadout && (catalog.version.sample || loadout.attribute_rules))) return;
+    let cancelled = false;
+    api.prepareGearLoadout(formData.xinfa, loadout).then((next) => {
+      if (cancelled) return;
+      setCockpit((previous) => ({ ...previous, loadouts: { ...previous.loadouts, [next.school]: next } }));
+    }).catch((err) => { if (!cancelled) setGearError(String(err)); });
+    return () => { cancelled = true; };
   }, [catalog, loadout, formData.xinfa, setCockpit]);
 
   const desiredGearKey = loadout ? gearInputKey(formData, loadout) : "";
@@ -374,7 +381,14 @@ export default function App() {
           <div className={styles.gearBody}>
             {catalog && loadout && <GearPanel catalog={catalog} loadout={loadout} composition={composition} pending={stale || calculating}
               onOptimize={(options) => void handleOptimize(options)} optimizing={optimizing} optProgress={optProgress} optResult={optResult} onChange={changeLoadout}
-              onReset={() => { const next = initialLoadout(catalog, formData.xinfa); if (next) changeLoadout(next); }}
+              onReset={() => {
+                const profession = formData.xinfa;
+                const action = ++actionRevision.current;
+                void api.prepareGearLoadout(profession).then((next) => {
+                  if (action !== actionRevision.current || cockpitRef.current.form.xinfa !== profession) return;
+                  changeLoadout(next); setGearError("");
+                }).catch((err) => { if (action === actionRevision.current) setGearError(String(err)); });
+              }}
               onExport={() => void exportLoadout()} onImport={importLoadout} onExportRequest={(options) => void handleExportOptimizeRequest(options)} />}
             {resultPanel}
           </div>
@@ -388,6 +402,6 @@ export default function App() {
   </div>{optimizing && <div className={styles.optimizeLock} role="status" aria-live="polite">
     <strong>正在调优配装{optProgress == null ? "…" : ` · ${optProgress}%`}</strong>
     <p>调优期间已锁定配装、属性和连招，完成后自动解锁。</p>
-    <button onClick={() => void handleCancelOptimize()} title="停止当前调优计算">停止</button>
+    <button className={styles.optimizeStop} onClick={() => void handleCancelOptimize()} title="停止当前调优计算"><span className={styles.stopIcon} aria-hidden="true" />停止</button>
   </div>}<StatusBar message={status} /><Toast toasts={toasts} onRemove={removeToast} /></div>;
 }

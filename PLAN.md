@@ -25,7 +25,7 @@
 | 文档/模板 | CONTRIBUTING / CHANGELOG / PR+Issue 模板 / AGENTS / server_manifest / CODEOWNERS |
 | 版本模型 | 组件独立：root=core/tag 源（2.1.0）；const=`130.3.{date}`（130.3.20260602）；updater 独立（2.1.0） |
 | 命名 | 保留 `JPCG`（改名已搁置） |
-| 数据 | `data/shuxing/` 与 `data/values/` 保留在仓库并随 data 通道下发；暂未获得上游 lua 数据授权 |
+| 数据 | `data/{门派}/` 与 `data/values/` 保留在仓库并随 data 通道下发；暂未获得上游 lua 数据授权 |
 
 ## 3. 里程碑
 
@@ -63,14 +63,16 @@
 - **数据层**：boss 属性模板、副本环境增益模板
 - **命名**：若支持 PVE/全场景，产品名无需含 PVP（与 M1 重命名决策联动）
 
-### M5 — 全门派通用化：曲风 → 通用能量机制（规划，暂不实现）
+### M5 — 全门派通用化：曲风 → 通用能量机制（界面已通用化，资源引擎待规划）
 
 **背景**：用户要求「门派的区分只在 TOML 体现」，同时后续把莫问的曲风机制改成全门派通用的能量机制。
+
+**2026-11-20 进度**：连招页已改为通用「器形／形态」术语，形态名称、器形过滤、秘籍槽数与混选上限均由 combat `[meta]` 和 `[[form]]` 下发；前端不再保存莫问名称表或面板默认值。旧文件兼容默认值仍留在后端，内部 qifeng 字段、点数上限、事件和钩子的结算语义未改，不能据此宣称资源引擎已完成全门派泛化。
 
 **审计结论（2026-11-07）**：
 - 运行路径**没有门派分支**：`jpcg_core` / `jpcg_combo` / `jpcg_api` 中没有按 `profession` / `xinfa_name` / 技能名 / 技能 id 的 if/switch；
   `mowen`、`莫问`、技能 id 只出现在 `#[cfg(test)]` 单测和测试默认请求里；门派差异全部来自
-  `data/shuxing/{门派}.toml` + `data/combat/{门派}.toml`（模板见 `_template.toml`）。
+  `data/{门派}/shuxing.toml` + `data/{门派}/combat.toml`（模板见 `data/_template/`）。
 - 但以下「莫问曲风」被固化成引擎/DTO 概念（不是门派分支，但只有莫问语义可表达）：
   1. 曲风点数资源：`MAX_QIFENG = 9`（`crates/jpcg_combo/src/timeline.rs:1168`）、`qifeng_points: u8`（:346）、
      初始满点（:383）、施放后先结清消耗再获得且上限 9（:652-695）；
@@ -87,7 +89,7 @@
 莫问曲风只是其中一种数据实例；后端无门派分支，前端无名称表。
 
 **方案草案（不实现，后续按 PR 拆）**：
-1. TOML：`data/combat/{门派}.toml` 新增资源定义（如 `[[resource]] id/name/max/initial`），技能引用资源 id 的
+1. TOML：`data/{门派}/combat.toml` 新增资源定义（如 `[[resource]] id/name/max/initial`），技能引用资源 id 的
    `gain/spend_all/requires/switch`；保留 `qifeng` 段作为兼容别名（读取时映射为默认资源）。
 2. DTO 兼容：新增通用 `resource` 字段（id/name/cap/current），旧 `*_qifeng` 字段标 deprecated 并双写；
    前端逐步切到通用字段，旧存档/外部调用不破坏。
@@ -97,7 +99,7 @@
 5. 事件：`QifengSwitch` 泛化为 `ResourceSwitch { resource, from, to }`，旧值兼容映射。
 6. 迁移顺序（每步可独立 PR）：a) meta caps 数据化 → b) resource 定义 + DTO 双写 → c) 引擎状态资源化 →
    d) 事件/钩子资源化 → e) 前端删除 QIFENG_NAMES → f) 下个大版本删除兼容字段。
-7. 验收：新增 `data/shuxing/_fake.toml` + `data/combat/_fake.toml`（虚构门派，2 种资源/多器形）跑通
+7. 验收：新增 `data/_fake/shuxing.toml` + `data/_fake/combat.toml`（虚构门派，2 种资源/多器形）跑通
    Rust 测试 + 前端 mock，证明「加门派只改 TOML、零改代码」；莫问金标准数值保持不变。
 
 **暂不做**：本计划仅记录，不实现；当前曲风行为保持不变。

@@ -1,4 +1,4 @@
-//! 防回归：`data/shuxing/mowen.toml` 的倍率必须与截图反推的整数倍率一致。
+//! 防回归：`data/mowen/shuxing.toml` 的倍率必须与截图反推的整数倍率一致。
 //!
 //! 真源是 `data/skill-shots/mowen-final.json`（tooltip 反推），
 //! `scripts/apply-skill-coeff.py` 负责写回 TOML；json-to-toml 重新生成数据会覆盖，
@@ -20,7 +20,7 @@ fn mowen_coefficients_match_screenshots() {
         .expect("read mowen-final.json");
     let json: serde_json::Value = serde_json::from_str(&json_text).expect("parse json");
     let toml_text =
-        std::fs::read_to_string(data_path("shuxing/mowen.toml")).expect("read mowen.toml");
+        std::fs::read_to_string(data_path("mowen/shuxing.toml")).expect("read mowen.toml");
     let toml: toml::Value = toml::from_str(&toml_text).expect("parse toml");
     let skills = toml["skill"].as_array().expect("skill array");
 

@@ -13,10 +13,26 @@ fn call<T: Serialize, R: DeserializeOwned>(method: &str, input: &T) -> Result<R,
 }
 
 #[tauri::command]
-pub async fn gear_catalog() -> Result<Catalog, String> {
-    tauri::async_runtime::spawn_blocking(|| call("catalog", &serde_json::json!({})))
-        .await
-        .map_err(|e| e.to_string())?
+pub async fn gear_catalog(profession: String) -> Result<Catalog, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        call("catalog", &serde_json::json!({ "profession": profession }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+pub async fn prepare_gear_loadout(
+    profession: String,
+    loadout: Option<Loadout>,
+) -> Result<Loadout, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        call(
+            "prepare_loadout",
+            &serde_json::json!({ "profession": profession, "loadout": loadout }),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 pub async fn compose_gear(loadout: Loadout) -> Result<Composition, String> {
@@ -90,7 +106,7 @@ fn optimize_impl(
     request: jpcg_gear::OptimizeRequest,
     progress: std::sync::Arc<jpcg_gear::OptimizeProgress>,
 ) -> Result<jpcg_gear::OptimizeResult, String> {
-    let catalog = jpcg_gear::host::catalog()?;
+    let catalog = jpcg_gear::host::catalog(&request.loadout.school)?;
     jpcg_gear::optimize_joint(&catalog, &request, &progress)
 }
 

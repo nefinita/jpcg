@@ -128,6 +128,24 @@
 .optimizeLock {
   position: fixed; inset: 0; z-index: 10000;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px;
   background: var(--bg-overlay); color: var(--text-primary); backdrop-filter: blur(5px);
 }
-.optimizeLock strong, .optimizeLock p { background: var(--bg-surface); padding: 16px 24px; margin: 0; }
+.optimizeLock strong, .optimizeLock p { width: min(440px, 100%); background: var(--bg-surface); padding: 16px 24px; margin: 0; text-align: center; }
+.optimizeLock strong { border-radius: var(--radius-lg) var(--radius-lg) 0 0; border: 1px solid var(--border-subtle); border-bottom: 0; }
+.optimizeLock p { border-radius: 0 0 var(--radius-lg) var(--radius-lg); border: 1px solid var(--border-subtle); border-top: 0; color: var(--text-secondary); }
+.optimizeStop {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-width: 112px; min-height: 42px; margin-top: 20px; padding: 0 18px;
+  border: 1px solid color-mix(in srgb, var(--error) 55%, var(--border-default));
+  border-radius: var(--radius-md); background: var(--danger-bg); color: var(--danger-text);
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--error) 14%, transparent);
+  font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.stopIcon { width: 10px; height: 10px; border: 2px solid currentColor; border-radius: 2px; }
+.optimizeStop:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--error) 20%, var(--bg-surface)); box-shadow: 0 7px 22px color-mix(in srgb, var(--error) 22%, transparent); }
+.optimizeStop:active { transform: translateY(0); box-shadow: none; }
+.optimizeStop:focus-visible { outline: 3px solid color-mix(in srgb, var(--error) 32%, transparent); outline-offset: 3px; }
+.optimizeStop:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .optimizeStop { transition: none; } }

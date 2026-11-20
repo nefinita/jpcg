@@ -264,12 +264,14 @@ fn explicit_zero_rules_do_not_invent_generic_coefficients() {
 
 #[test]
 fn old_inputs_remain_legacy_and_historical_ids_cannot_silently_mix_versions() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/gear");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/mowen/gear");
     let c = Catalog::load(&root).unwrap();
     let mut l: Loadout =
         toml::from_str(&std::fs::read_to_string(root.join("sample-loadout.toml")).unwrap())
             .unwrap();
-    // 真实 50 级装备含体质/额外气血，旧模式必须显式选择 attribute_rules。
+    // 随附样例默认使用职业规则；切回旧模式时仍禁止静默忽略真实装备的五维/额外气血。
+    assert_eq!(l.attribute_rules.as_deref(), Some(PROFESSION_TOML));
+    l.attribute_rules = None;
     assert!(c.compose(&l).unwrap_err().contains("attribute_rules"));
     l.attribute_rules = Some("jx3-130-mowen-20260814".into());
     assert!(c.compose(&l).unwrap_err().contains("不再支持"));
@@ -294,8 +296,8 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
     }
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     let temp = tempfile::tempdir().unwrap();
-    for dir in ["gear", "shuxing", "values"] {
-        std::fs::create_dir(temp.path().join(dir)).unwrap();
+    for dir in ["mowen/gear", "values"] {
+        std::fs::create_dir_all(temp.path().join(dir)).unwrap();
     }
     for f in [
         "index.toml",
@@ -311,9 +313,15 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
     }
     // 夹具的换算规则按 cszj-exp-260908 写，默认值集也指向它，避免默认项切到 live-50 后不一致
     let idx_path = temp.path().join("values/index.toml");
-    let idx = std::fs::read_to_string(&idx_path)
+    let mut idx = std::fs::read_to_string(&idx_path)
         .unwrap()
         .replace("default = \"live-50\"", &format!("default = \"{}\"", VALUE));
+    if !idx.contains(&format!("id = \"{}\"", VALUE)) {
+        idx.push_str(&format!(
+            "\n[[value_sets]]\nid = \"{}\"\nname = \"测试值集\"\nlevel = 50\nfile = \"{}.toml\"\n",
+            VALUE, VALUE
+        ));
+    }
     std::fs::write(&idx_path, idx).unwrap();
     for f in [
         "schools.toml",
@@ -323,13 +331,13 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
         "enchants.toml",
         "wucai.toml",
     ] {
-        let text = std::fs::read_to_string(root.join("gear").join(f))
+        let text = std::fs::read_to_string(root.join("mowen/gear").join(f))
             .unwrap()
             .replace("live-130", VALUE)
             .replace("live-50", VALUE);
-        std::fs::write(temp.path().join("gear").join(f), text).unwrap();
+        std::fs::write(temp.path().join("mowen/gear").join(f), text).unwrap();
     }
-    let base = std::fs::read_to_string(root.join("shuxing/mowen.toml"))
+    let base = std::fs::read_to_string(root.join("mowen/shuxing.toml"))
         .unwrap()
         .replace("level = 130", "level = 50");
     let mut school: toml::Value = toml::from_str(&base).unwrap();
@@ -338,15 +346,15 @@ fn profession_toml_50_flows_through_host_optimizer_core_and_roundtrip() {
         .as_table_mut()
         .unwrap()
         .insert("attributes".into(), toml::Value::try_from(&r).unwrap());
-    let file = temp.path().join("shuxing/mowen.toml");
+    let file = temp.path().join("mowen/shuxing.toml");
     std::fs::write(&file, toml::to_string(&school).unwrap()).unwrap();
     // SAFETY: subprocess runs only this one test; no other threads access environment.
     unsafe {
         std::env::set_var("JPCG_DATA_DIR", temp.path());
     }
-    let c = host::catalog().unwrap();
+    let c = host::catalog("mowen").unwrap();
     let mut req: OptimizeRequest = toml::from_str(
-        &std::fs::read_to_string(root.join("gear/sample-request.toml"))
+        &std::fs::read_to_string(root.join("mowen/gear/sample-request.toml"))
             .unwrap()
             .replace("live-130", VALUE)
             .replace("live-50", VALUE),

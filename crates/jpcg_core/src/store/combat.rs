@@ -1,8 +1,8 @@
 // ============================================================================
-// store::combat — 战斗时序 overlay 读取（data/combat/{门派}.toml）
+// store::combat — 战斗时序 overlay 读取（data/{门派}/combat.toml）
 //
 // 读取顺序与 shuxing 数据一致（用户数据目录优先，其次随包资源），
-// 取第一个存在 `{门派}.toml` 的 combat 目录；文件不存在 = 无 overlay（返回默认空表）。
+// 取第一个存在的正式文件或旧 data/combat/{门派}.toml；文件不存在 = 无 overlay（返回默认空表）。
 // 解析失败 / 校验失败都带明确错误信息，便于数据同学定位。
 // ============================================================================
 
@@ -13,10 +13,11 @@ use crate::type_set::combat::CombatData;
 use crate::type_set::skilltype::Skilltype;
 
 /// 读取某门派的战斗 overlay；无文件时返回空 `CombatData`（不报错）。
-/// （B 阶段接 FFI/命令前先保留入口，故允许未使用）
 #[allow(dead_code)]
 pub fn load_combat(profession: &str) -> CombatData {
-    match load_combat_from(&super::paths::combat_dirs(), profession) {
+    let result = super::paths::combat_file_paths(profession)
+        .and_then(|paths| load_combat_from_paths(&paths, profession));
+    match result {
         Ok(data) => data,
         Err(e) => {
             error(&e);
@@ -25,22 +26,20 @@ pub fn load_combat(profession: &str) -> CombatData {
     }
 }
 
-/// 显式目录列表版（便于测试）：取首个存在文件的目录；解析后做结构校验。
-#[allow(dead_code)]
-pub(crate) fn load_combat_from(dirs: &[PathBuf], profession: &str) -> Result<CombatData, String> {
-    for dir in dirs {
-        let file_path = dir.join(format!("{}.toml", profession));
+/// 显式文件候选版：取首个存在文件；解析后做结构校验，损坏的高优先级文件不得回退。
+fn load_combat_from_paths(paths: &[PathBuf], profession: &str) -> Result<CombatData, String> {
+    super::paths::validate_profession(profession)?;
+    for file_path in paths {
         if !file_path.exists() {
             continue;
         }
-        let content = std::fs::read_to_string(&file_path)
+        let content = std::fs::read_to_string(file_path)
             .map_err(|e| format!("读取 combat 数据失败（{}）: {}", file_path.display(), e))?;
         let mut data: CombatData = toml::from_str(&content)
             .map_err(|e| format!("解析 combat 数据失败（{}）: {}", file_path.display(), e))?;
         if data.meta.profession.trim().is_empty() {
             data.meta.profession = profession.to_string();
         }
-        // 结构校验（id 唯一 / 引用非空 / 数值合法）
         data.validate()
             .map_err(|e| format!("{}（文件：{}）", e, file_path.display()))?;
         info(&format!("已加载战斗时序数据: {}", file_path.display()));
@@ -49,10 +48,17 @@ pub(crate) fn load_combat_from(dirs: &[PathBuf], profession: &str) -> Result<Com
     Ok(CombatData::default())
 }
 
+#[cfg(test)]
+pub(crate) fn load_combat_from(dirs: &[PathBuf], profession: &str) -> Result<CombatData, String> {
+    let paths: Vec<PathBuf> = dirs
+        .iter()
+        .map(|dir| dir.join(format!("{profession}.toml")))
+        .collect();
+    load_combat_from_paths(&paths, profession)
+}
+
 /// 读取某门派技能表 + combat overlay，并做「技能引用」交叉校验。
-///
-/// 返回套用 overlay 后的技能表（时序字段已覆盖）与 overlay 数据本身
-/// （形态 / GCD 通道 / buff / 秘籍 / 奇穴仍需调用方按需使用）。
+/// 返回套用 overlay 后的技能表（时序字段已覆盖）与 overlay 数据本身。
 #[allow(dead_code)]
 pub fn load_skills_with_combat(profession: &str) -> Result<(Vec<Skilltype>, CombatData), String> {
     let toml_cfg = super::load_config(profession);
@@ -64,7 +70,8 @@ pub fn load_skills_with_combat(profession: &str) -> Result<(Vec<Skilltype>, Comb
     {
         skills.push(crate::type_set::skilltype::Skilltype::idle());
     }
-    let data = load_combat_from(&super::paths::combat_dirs(), profession)?;
+    let paths = super::paths::combat_file_paths(profession)?;
+    let data = load_combat_from_paths(&paths, profession)?;
     data.validate_against_skills(&skills)?;
     Ok((data.apply_overlay(&skills), data))
 }
