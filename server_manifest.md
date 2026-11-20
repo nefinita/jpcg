@@ -36,15 +36,17 @@ JPCG/
     ├── jpcg-app-macos-aarch64       # macOS aarch64（Apple Silicon，单架构）
     ├── jpcg-app-linux-x86_64        # Linux x86_64
     ├── jpcg-app-windows-x86_64.exe  # Windows x86_64
-    ├── modules/                     # 模块 dll（三平台合并，9 个）
+    ├── modules/                     # 模块 dll（三平台合并，15 个）
     │   ├── modules_manifest.toml
-    │   ├── libjpcg_{core,update,const}.dylib
-    │   ├── libjpcg_{core,update,const}.so
-    │   └── jpcg_{core,update,const}.dll
+    │   ├── libjpcg_{core,combo,gear,update,const}.dylib
+    │   ├── libjpcg_{core,combo,gear,update,const}.so
+    │   └── jpcg_{core,combo,gear,update,const}.dll
     └── data/                        # 数据文件（目录名 = data_version）
         ├── data_manifest.toml
-        ├── readme.md
+        ├── AGENTS.md                # 数据维护说明，不参与计算
         ├── shuxing/*.toml
+        ├── combat/*.toml
+        ├── gear/*.toml
         └── values/*.toml
 ```
 
@@ -63,10 +65,10 @@ JPCG_beta/
 ├── jpcg-app-windows-x86_64.exe
 ├── modules/
 │   ├── modules_manifest.toml
-│   └── ...（三平台 dll ×9）
+│   └── ...（三平台 dll ×15）
 └── data/
     ├── data_manifest.toml
-    └── ...（shuxing/、values/ 等清单列出的文件）
+    └── ...（AGENTS.md、shuxing/、combat/、gear/、values/ 等清单列出的文件）
 ```
 
 > 文件名/清单 `os`+`arch` 与客户端 `std::env::consts::{OS, ARCH}` 严格一致
@@ -153,9 +155,9 @@ hash = "sha256hex值"
 hash_type = "SHA256"
 ```
 
-- 清单当前覆盖 `readme.md`、`data/shuxing/*.toml`、`data/values/*.toml`
+- 清单递归覆盖 `data/` 下的所有文件，包括 `AGENTS.md`、`shuxing/`、`combat/`、`gear/`、`values/` 等；生成前必须移除不想发布的本地缓存、嵌套副本和中间产物
 - 客户端按 hash 差量下载；stable 存 `{data_version}/data/`，beta 存 `data/`
-- 数据版本（`data_version`）用于数据更新判断；shuxing 文件内另有 `[version]={level,season,modified}`
+- 数据版本（`data_version`）用于数据更新判断；shuxing 文件内另有 `[version]` 记录等级、赛季（若适用）与修改日期
 
 ## 模块库（dll）增量更新（B 模式 / 动态模式）
 

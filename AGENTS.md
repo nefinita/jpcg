@@ -1,134 +1,123 @@
-# JPCG - JX3 PVP 计算器
+# JPCG 开发指南（Agent）
 
-Rust workspace for a 剑网3 damage calculator. Edition 2024 (requires rustc >= 1.85).
+本文件是维护者与 AI 的长期工作约定，不记录一次性修复过程。代码、配置和脚本是最新事实来源；本文件与它们冲突时先核实再更新文档。修改 `data/` 前必须阅读 `data/AGENTS.md`。
 
-## Workspace
+## 项目与 workspace
 
-| Path | Role |
-|------|------|
-| `crates/jpcg_api/` | 纯 DTO 类型契约 crate（serde 类型 + HostEventsTable，零依赖，双端单一来源） |
-| `crates/jpcg_core/` | Core calculation engine + `host/` JSON 入口 + FFI（句柄 + JSON 协议） |
-| `crates/jpcg_combo/` | 连招引擎（依赖 jpcg_core，排轴器后端）：编排 + MC 击杀率 + hp 步进真伤；cdylib+rlib，双产物（static 直调 / dynamic 经 ffi_bridge 加载 libjpcg_combo），dll 不进 modules_manifest |
-| `crates/jpcg_gear/` | 配装契约/模板合成/有界搜索 + host/ffi（独立 cdylib）；默认 engine，`default-features=false` 仅模型，供 dynamic 壳避免静态链接计算引擎 |
-| `crates/jpcg_const/` | 等级常数真源 + 药品/食物常量（编译期 const；jpcg_core 默认系数与固定公式取自 `jpcg_const::level_constant`；独立版本 `130.3.{YYYYMMDD}`） |
-| `crates/jpcg_update/` | App + data + modules(dll) auto-update (fetches from `nefinita-ai.com`) |
-| `crates/jpcg_updater/` | Standalone updater binary — replaces main exe & relaunches |
-| `examples/jpcg_app/src-tauri/` | Tauri v2 desktop app (this IS the app, not a mere example) |
-| `examples/python_demo/` | ctypes Python demo calling libjpcg_core via FFI |
-| `server_tools/manifest-gen/` | CLI to generate `data_manifest.toml` + `modules_manifest.toml` |
-| `server_tools/deploy-gen/` | CLI：GitHub Release 资产 → 更新服务器通道 stage（beta 根式 / stable 版本目录式） |
-| `server_tools/forum/` | Web forum for uploading/downloading `.toml` data files |
-| `server_tools/json-to-toml/` | 技能 JSON（IcyTide/Generator）→ `data/shuxing/*.toml` 转换器 |
+JPCG 是剑网3 伤害计算器：Rust 2024 workspace（rustc >= 1.85）+ Tauri v2 + React 19 + TypeScript + Vite。`examples/jpcg_app/` 是正式桌面应用，不是可随意替换的示例。
 
-## Commands
+| 路径 | 职责 |
+| --- | --- |
+| `crates/jpcg_api/` | serde DTO 与 `HostEventsTable`，前后端契约单一来源，尽量零业务依赖 |
+| `crates/jpcg_core/` | 单技能计算、配置/数据存储、host JSON 层、core FFI |
+| `crates/jpcg_combo/` | 连招与战斗时间轴、期望/蒙特卡洛结算；rlib + 独立 cdylib |
+| `crates/jpcg_gear/` | 配装目录、属性合成、有界/联合搜索、gear host/FFI 与 `gear-opt` |
+| `crates/jpcg_compute/` | 批量 MC 后端：CPU/AVX-512 与 wgpu；不是独立更新模块 |
+| `crates/jpcg_const/` | 等级常数、药品/食物常量；独立版本 |
+| `crates/jpcg_update/` | App、data、模块库更新 |
+| `crates/jpcg_updater/` | 独立更新器，替换主程序并重启 |
+| `examples/jpcg_app/` | Tauri/React 桌面应用 |
+| `server_tools/` | `manifest-gen`、`deploy-gen`、`forum`、`json-to-toml` |
+| `data/` | 技能、时序、配装、值集与数据生产材料；规则见 `data/AGENTS.md` |
+
+## 每次修改的工作约定
+
+- 先读相关实现、测试和现有未提交改动；不要覆盖、还原、暂存或提交用户已有工作，除非用户明确要求。
+- 字段、注释和配置键沿用项目的中文/拼音命名，不在同一层另起一套中英文 DTO。
+- 库代码禁止新增 `.unwrap()` / `.expect()`；错误经 `Result` 或明确的安全降级处理，panic 不得跨 FFI。
+- 计算逻辑改动必须跑金标准；新增行为补针对性测试。金标准用于锁定既有数值，不能为了“修测试”随意改期望值。
+- 每次修改都新增 `changes/YYYY-MM-DD-HHMMSS.md`，写明做了什么、为什么、关键决策和验证边界；发布时由脚本聚合进 `CHANGELOG.md`。
+- 文档只保留长期事实或明确标注日期的证据快照。不要在长期指南里复制当前版本号、测试数量或临时机器路径。
+
+## 常用命令
 
 ```sh
-# 一键流程（make；npm 缓存默认工作区 .cache/npm，可用 NPM_CACHE=/path 覆盖）
-make setup                           # npm ci 安装前端依赖（已是最新则跳过，FORCE_SETUP=1 强制）
-make frontend                        # 前端构建（tsc + vite → dist/，app 构建前置）
-make frontend-test                   # 前端测试（vitest）
-make updater                         # 编译 jpcg_updater → binaries/jpcg_updater-<host-triple>
-make all                             # setup → frontend → updater → modules-dir → build-static
-                                     # 结束：jpcg_app=static、jpcg_app-dynamic=dynamic、modules/ 含 5 库
-make check-all                       # fmt + clippy + 模块库 + 双模式构建 + 全量测试 + 前端 test/build
-make help                            # 列出所有目标
+make setup                 # npm ci；缓存默认在工作区 .cache/npm，可用 NPM_CACHE 覆盖
+make all                   # 前端 + updater + dynamic app/五模块 + static app
+make check-all             # fmt、clippy、模块、双模式、Rust/前端测试与构建
+make help
 
-cargo build                          # build all workspace members (incl. Tauri app)
+make build-static          # 静态链接引擎
+make build-dynamic         # 运行时加载模块
+make build-modules         # core / combo / gear / update / const 五个 cdylib
+make modules-dir           # dynamic app + 五模块到 target/<build>/modules/
+
 cargo test --workspace
+cargo test -p jpcg_core -- golden
+cargo test -p jpcg_combo -p jpcg_core
+cargo test -p jpcg_gear --locked
 
-# 双构建模式（app 静态链接 core vs dlopen core dll）
-# 以下为 .cargo/config.toml 别名，与 make build-* 目标一致
-cargo build-app-static               # 默认 static：编译期链接 jpcg_core
-cargo build-app-dynamic              # dynamic：dlopen libjpcg_core（更新只换 dll）
-cargo build-modules                  # 五个 cdylib（core/combo/update/const/gear）
-make build-static | build-dynamic | build-modules | modules-dir | test
-# make modules-dir 产物：target/<build>/modules/{4 dll} + jpcg_app-dynamic；make all 最终 jpcg_app=static
-
-cargo run -p manifest-gen -- --version v2.1.0 --data-dir ./data
-# also accepts: --output data_manifest.toml (default)
-#               --modules-dir <dll目录> --modules-output modules_manifest.toml --platform darwin
-
-# 发布通道布局（GitHub Release 资产目录 → 服务器 stage；beta/stable）
-cargo run -p deploy-gen -- --channel stable --version v2.1.0 \
-  --assets-dir ./release-assets --data-dir ./data --output ./stage
-
-# 技能 JSON → data/shuxing TOML（IcyTide/Generator 数据源）
-cargo run -p json-to-toml -- --skills skills.json --dots dots.json --overrides overrides.json \
-  --out data/shuxing --xinfa 10447 --level 130 --season 3 --modified 20260814
-
-cargo run -p forum                   # start forum (port 8080 by default)
-# PORT=9090 FORUM_DATA_DIR=./forum_data cargo run -p forum
-
-# Tauri dev (from examples/jpcg_app/):
-# npm install && npx tauri dev    (requires @tauri-apps/cli, frontendDist: ../dist)
-# For Vite dev server only: npm run dev (port 1420)
-# Frontend build only: npm run build
-
-# Before Tauri build, compile & copy updater（make updater 一步完成；等价手工命令）：
-# cargo build -p jpcg_updater
-# cp target/debug/jpcg_updater examples/jpcg_app/src-tauri/binaries/jpcg_updater-$(rustc -vV | grep host | cut -d' ' -f2)
-
-# Python demo（需 JPCG_DATA_DIR 指向含 shuxing/ 的目录）
-# JPCG_DATA_DIR=./data python3 examples/python_demo/jpcg_demo.py
-
-# 更新服务器布局（参考 server_manifest.md）：
-# release.yml 的 package job 自动调用 deploy-gen 生成通道 stage 与 tgz（无需手工）；
-# 手工生成/调试用上方「发布通道布局」的 deploy-gen 命令
-
-# 版本管理（组件独立，见 CONTRIBUTING.md）：
-# 根 workspace version = core 版本（release tag / 安装包命名源，当前 2.1.0）；继承 crates 用 version.workspace=true
-# jpcg_const = 130.3.{date}（等级.赛季.日期，当前 130.3.20260602）；jpcg_updater 独立（2.1.0）
-# bump: scripts/release.sh <alpha|beta|release>，或手工只改根 [workspace.package] version
-#       + scripts/sync-version.sh（同步 package.json/tauri.conf.json/commands.ts 模拟串/package-lock.json）
-#       不要用 cargo set-version：它会把 jpcg_const 的独立版本一起降级而失败
+cd examples/jpcg_app
+npm ci && npm test && npm run build
+npm run dev                # 仅 Vite，端口 1420
+npx tauri dev              # 完整桌面开发模式
 ```
 
-## 维护流程（三分支线性 + CI，详见 CONTRIBUTING.md）
+前端统一使用 npm 与 `package-lock.json`。不要只改本地命令就引入 bun/pnpm；迁移包管理器必须同时评审 Makefile、Tauri、CI、发布、Dependabot、audit 和版本同步。
 
-- **分支**：`dev`(集成/最上游，alpha.n，受保护) + `beta`(公测，beta.n，tag vX.Y.Z-beta.n，受保护) + `release`(稳定，X.Y.Z，tag vX.Y.Z，受保护)。线性：`release ⊂ beta ⊂ dev`，一律经 PR，squash 合并
-- **分支保护**（三分支均已配置）：必需 1 review（CODEOWNERS）+ 3 个必需状态检查 + linear history + conversation resolution；`beta`/`release` 额外 strict，`release` 额外 require last push approval
-- **发布**（scripts/release.sh --stage alpha|beta|release + release.yml）：tag 触发三平台矩阵构建，beta/stable 通道由 tag 判定；package job 调 deploy-gen 生成通道 tgz 并上传 Release
-- **CI**（.github/workflows/ci.yml）：dev/beta/release PR 均跑 rustfmt + clippy(不 -D warnings) + 构建/测试（含 dynamic 冒烟）+ 金标准 + 前端 test/build；必需检查名：`Rust 构建 + 测试 + lint` / `金标准回归（计算数值）` / `前端构建 (tsc + vite)`
-- **依赖**：deps.yml（cargo audit / npm audit）+ dependabot.yml（每周，目标分支 dev）
-- **变更日志**：`changes/` 逐条 + 发布时聚合到 CHANGELOG.md
+发布/数据工具的常用入口：
 
-## 开源与命名（当前决策）
+```sh
+cargo run -p manifest-gen -- --version vX.Y.Z --data-dir ./data
+cargo run -p deploy-gen -- --channel stable --version vX.Y.Z \
+  --assets-dir ./release-assets --data-dir ./data --output ./stage
+cargo run -p forum
+JPCG_DATA_DIR=./data python3 examples/python_demo/jpcg_demo.py
+```
 
-- **名称**：当前保留 `JPCG`（= JX3 PVP Calc GUI）。曾考虑改名"试剑/演武/剑算"等场景无关名以支持 PVE/全场景，
-  但**重命名已搁置**（内部 `jpcg_*` crate/FFI/`JPCG_*` env 均不动）。后续若改产品名，范围仅仓库/README/tauri productName/前端标题。
-- **`data/`（shuxing 数据 + values 值集）**：当前**保留在仓库**，并随 data 通道（`data_manifest.toml`）下发。
-  将来可能**联系其他项目负责人获取 lua 数据访问权限**后再评估数据合规与发布方式（详见 PLAN.md）。
-- **开源状态**：仓库已转为 **Public**（GitHub Free）。`dev`/`beta`/`release` 三分支保护均已启用：
-  必需 1 review + CODEOWNERS、3 个必需状态检查、linear history、conversation resolution；
-  `beta`/`release` 额外 strict，`release` 额外 require last push approval。转公有前的旧限制已不再适用。
-- **场景扩展**：core 引擎本就场景无关（PVE=不同 hostile/target_hp 配置）；支持 PVE/全场景主要是 UI 预设 + 数据模板，命名无需绑死 PVP。
+## 架构与数值不变量
 
-## Key facts
+### DTO、host 与 FFI
 
-- **Chinese-language code**: field names, comments, config keys are Chinese (pinyin).
-- **Data files** are TOML in `data/shuxing/`. Each profession has one `.toml` (e.g., `mowen.toml`). Core engine locates these via `std::env::current_exe()` parent → `data/shuxing/{xinfa}.toml`; env `JPCG_DATA_DIR` overrides (CLI/Python 场景).
-- **值集目录** `data/values/`：`index.toml` 是清单（`default` + `[[value_sets]]` 的 id/name/level/file），
-  每个值集一个快照 TOML（换算常数）当前有 `cszj-exp-260908`（体验服·苍生铸世一测，默认）与 `live-130`（正式服·130级）；
-  随 data 通道下发，客户端运行期选择，快照按 mtime 校验缓存。
-- **`player.jcsx` is a `String`** — must NOT be coerced to number. Previously broke deserialization.
-- **`saved_config.toml`** reads/writes from CWD, NOT exe parent dir.
-- **`toml_input()` appends `.toml`** — callers pass the path without the extension.
-- **Update server**: `https://nefinita-ai.com/updates/JPCG/` (stable) / `JPCG_beta/` (beta). `data_manifest.toml` at `https://nefinita-ai.com/files/JPCG/`. Modules(dll) manifest at `files/JPCG/{version}/modules/modules_manifest.toml` (beta: `files/JPCG_beta/modules/`).
-- **FFI 协议** (`jpcg_core`): 句柄 + JSON — `jpcg_handle_create` / `jpcg_call(handle, method, request_json)` / `jpcg_last_error` / `jpcg_free_string` / `jpcg_handle_free` / `jpcg_abi_version` (1)。方法名与 Tauri 命令一一对应。更新编排经 `jpcg_set_host_events` 回调表（HostEventsTable 定义在 jpcg_api）。`jpcg_combo` 同协议独立 dll（`jpcg_combo_call` 等），combo 专属方法（calculate_combo/预设 CRUD/export/import_config）只在 combo dll，core ffi 不再含 combo 分支。
-- **core 分层**: `type_set/`(领域类型) → `engine/`(计算) → `store/`(文件) → `host/`(JSON 契约层，DTO↔core 转换在 `host/conv.rs`) → `ffi.rs`。金标准测试在 `engine/atkcal.rs::golden_tests`（不改行为）。
-- **combo 计算模型** (`jpcg_combo/engine.rs`): 双通道 — 期望通道（g/h/q/dot 期望 + 累计/方差，含追加真伤期望）/ 蒙特卡洛通道（50k 采样，dot 逐跳独立会心，真伤逐路径实时结算）。hp 语义：`max_hp>0` 用 max/current；否则 `target_hp` 满血；都 0 → 击杀率恒 1。追加真伤公式唯一实现在 core `JpcgConfig::lost_hp_append`（语义 A：`已损失=max-结算后剩余`，真伤与伤害同扣血）。
-- **DTO 单源**: `jpcg_api` crate；Tauri `commands/types.rs` 仅为 `pub use jpcg_api::*`。`load_config` 返回形状与 CalculateRequest 一致（player/hostile/xinfa_config/buff/coefficient）。
-- **Tauri 双模式**: `features: static`(默认)/`dynamic`。dynamic 时经 `commands/ffi_bridge.rs` dlopen（加载顺序: exe同目录/modules/ → exe同目录 → target → `JPCG_CORE_LIB` env），update 进度经 HostEvents/回调表。
-- **Tauri commands** split by domain: `commands/calculate.rs`, `config.rs`, `update.rs`, `forum.rs`. Tauri events use `"update-progress"`.
-- **Frontend** is React 19 + TypeScript + Vite. Entry: `src/main.tsx`. Components under `src/components/`. API layer in `src/api/commands.ts` (includes mock responses when not in Tauri).
-- **Tauri lib name**: `jpcg_app_lib` (not `jpcg_app`) due to Windows crate-type conflict.
-- **No `.unwrap()` / `.expect()`** in library code — all errors use `Result<_, Error>` or safe defaults. Previously caused Tauri command hangs.
-- **No `rust-toolchain.toml`** — relies on `rustup default`.
-- **`tauri.conf.json`** has `withGlobalTauri: true` — frontend accesses `window.__TAURI__`. CSP is `null` (disabled).
-- **Forum** default port 8080, configurable via `PORT`. Data dir (`FORUM_DATA_DIR`, default `forum_data`).
-- **版本模型（组件独立）**：root `workspace.package.version` = core/release 版本源（当前 `2.1.0`）；`version.workspace=true` 继承（api/core/combo/update/app/forum/manifest-gen/deploy-gen/json-to-toml）；`jpcg_const` = `130.3.{YYYYMMDD}`（当前 `130.3.20260602`，等级.赛季.日期，独立）；`jpcg_updater` 独立（当前 `2.1.0`）。`data_manifest.data_version` 由 manifest-gen `--version` 写入（当前发布 = `v2.1.0`）；shuxing 文件内 `[version]={level,season,modified}`，modified=YYYYMMDD。FFI 版本 getter：`jpcg_core_version`/`jpcg_const_version`/`jpcg_update_version`；Tauri `get_module_versions` 命令 + ConfigPanel 底部展示。
-- **模块更新**：`modules_manifest.toml` 逐 dll 带 `version`+`sha256`（+size），本地 `modules/modules_manifest.toml` 存快照，`check_modules_update` 逐 dll 比较；部署侧由 deploy-gen 合并三平台为 `platform="multi"`，客户端按扩展名过滤。
+- DTO 单源是 `jpcg_api`；Tauri `commands/types.rs` 只做 re-export。`load_config` 返回形状与 `CalculateRequest` 一致。
+- core 分层：`type_set/` → `engine/` → `store/` → `host/` → `ffi.rs`；DTO ↔ core 转换集中在 `host/conv.rs`，不要另写平行转换。
+- FFI 是句柄 + JSON：`jpcg_handle_create` / `jpcg_call` / `jpcg_last_error` / `jpcg_free_string` / `jpcg_handle_free`，ABI 版本为 1。方法名与 Tauri command 对齐。
+- combo 与 gear 有各自独立 FFI；combo 专属方法不塞回 core，gear 动态任务必须配对 poll/cancel/release，退出时 release。
+- 更新进度经 `HostEventsTable` / `jpcg_set_host_events`，前端事件名为 `update-progress`。
+- Tauri lib 名是 `jpcg_app_lib`；`withGlobalTauri=true`，前端使用 `window.__TAURI__`，CSP 当前关闭。
 
-## Agreement: change log
+### static / dynamic
 
-Each modification MUST be accompanied by a markdown file under `changes/` named `YYYY-MM-DD-HHMMSS.md` describing what, why, and notable decisions.
+- `static` 是默认特性；`dynamic` 经 `commands/ffi_bridge.rs`、`gear_bridge.rs` 等加载模块，不能在动态壳里又静态链接计算引擎。
+- core 加载优先级：显式环境变量 → exe 同目录 `modules/` → exe 同目录 → target 候选。gear 使用 `JPCG_GEAR_LIB`，core 使用 `JPCG_CORE_LIB`。
+- 新 DTO 能力若旧模块无法支持，要显式做能力探测并报错，不能静默走错公式。例如转换后的配装要求 `converted_attack_v1`。
+
+### combo / timeline / gear
+
+- combo 有期望与 MC 双通道；DOT 逐跳独立会心，MC 默认 50,000 路径。固定 seed 只保证同一有限样本下可比较，不等于真实概率的数学最优。
+- HP：`max_hp > 0` 时使用 max/current，否则以 `target_hp` 为满血；全为零时旧连招击杀率恒为 1。timeline 的测量窗口有自己的满血重置语义，不要混用旧连招残血起点。
+- 追加已损失生命真伤的唯一公式在 `JpcgConfig::lost_hp_append`：`已损失 = max - 结算后剩余`，伤害与真伤同扣血。
+- 时序数据由 combat overlay 提供；加速、GCD、读条/引导、CD、形态、曲风、DOT、秘籍和奇穴不得在代码里按门派写分支。
+- `jpcg_gear::player()` 是配装面板进入 core 的唯一适配器。`zhuanhua_gongji=Some(_)` 表示已转换并禁止旧 `atk_up` 再转换；`None` 保留旧公式与金标准。
+- 联合搜索只有 `complete=true` 且 `stop_reason="exhausted"` 才能声称遍历完整；取消、超时、预算耗尽都不是全局最优证明。后端一致性、搜索完整性、统计精度分别验证。
+
+## 路径与兼容细节
+
+- 数据根读取顺序：`JPCG_DATA_DIR` → macOS bundle 用户数据目录 → bundle Resources → exe 同目录 `data/`。高优先级数据损坏时应报错，不能静默回退到旧数据。
+- `JPCG_DATA_DIR` 可指向数据根或 `shuxing/`；`combat/`、`gear/`、`values/` 按同级数据根解析。
+- `saved_config.toml` 读写自 CWD，不是 exe 目录。
+- `toml_input()` 自动追加 `.toml`，调用方不要重复扩展名。
+- `player.jcsx` 是 `String`，前端清理数字字段时不得把它强制转成数字。
+- `tauri.conf.json` 的 `frontendDist` 与 updater `externalBin` 会在 app 编译时校验；优先用 make 目标保证前端 dist 和 updater sidecar 的构建顺序。
+
+## 分支、版本与发布
+
+- 线性模型：`release ⊂ beta ⊂ dev`。日常 feature/fix 从最新 `dev` 切出，经 PR、review 和必需检查后 squash 合入；不要直接推受保护分支。
+- hotfix 从 `release` 修复后向前传播到 `beta`、`dev`。具体保护和 CI 约定见 `CONTRIBUTING.md`。
+- 根 `Cargo.toml` 的 workspace version 是 core/release tag 来源；`jpcg_const`、`jpcg_updater` 独立版本。不要使用会误改独立版本的 `cargo set-version`。
+- 发布统一走 `scripts/release.sh <alpha|beta|release>`、`scripts/sync-version.sh` 与 tag 触发的 release workflow；服务器布局见 `server_manifest.md`，脚本细节见 `scripts/README.md`。
+- 未经用户明确要求，不执行 commit、push、tag、发布或部署。
+
+## 文档索引与长期决策
+
+- `README.md`：面向用户的功能、安装和构建说明。
+- `CONTRIBUTING.md`：分支、评审、验证、版本与发布流程。
+- `data/AGENTS.md`：数据目录职责、录入契约、来源和验证规则。
+- `docs/attribute-engine.md`：职业原始属性换算及证据边界。
+- `crates/jpcg_gear/README.md`：配装目录、优化、CLI/FFI 与联合搜索。
+- `docs/gear-full-benchmark.md`：完整穷举测速方法；`docs/gear-exhaustive-audit-2026-11-17.md` 是带日期的修复前审查快照。
+- `server_manifest.md`：更新服务器 URL、清单和 stage 布局。
+- `PLAN.md`：尚未完成的路线，不当作已实现能力。当前保留 JPCG 命名，仓库公开；数据授权仍需跟进，场景扩展与曲风泛化不要顺手实现。
+- `CHANGELOG.md` 与 `changes/`：历史证据，不是长期 Agent 指令；`.github/` 模板继续用于 Issue/PR。
+
+核心引擎本身场景无关，PVE 主要是目标预设与数据模板；门派差异应落在 TOML，而不是 profession/xinfa 名称的条件分支。
