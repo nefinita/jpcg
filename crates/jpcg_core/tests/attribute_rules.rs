@@ -79,4 +79,38 @@ fn editor_entrypoints_child() {
             .id,
         "explicit-new-revision"
     );
+    assert_editor_preserves_base_gcd(&root);
+}
+
+fn assert_editor_preserves_base_gcd(root: &std::path::Path) {
+    use jpcg_core::host::skill::{load_skill_data, save_skill_data};
+
+    // 合成测试数据：旧布局中的 1 秒 GCD 迁移后仍须保留；默认值仍回退到 1.5 秒。
+    for (profession, input_gcd, effective_gcd) in
+        [("custom_gcd", 1.0_f32, 1.0_f32), ("default_gcd", 0.0, 1.5)]
+    {
+        let source = root.join("shuxing").join(format!("{profession}.toml"));
+        std::fs::write(
+            source,
+            format!("[xinfa]\nxinfa_name = \"before\"\ngcd_base = {input_gcd:.1}\n"),
+        )
+        .unwrap();
+
+        let mut dto = load_skill_data(profession.into()).unwrap();
+        assert_eq!(dto.xinfa.gcd_base, input_gcd);
+        dto.xinfa.xinfa_name = "unrelated edit".into();
+        save_skill_data(profession.into(), dto).unwrap();
+
+        let saved_path = root.join(profession).join("shuxing.toml");
+        let saved = std::fs::read_to_string(saved_path).unwrap();
+        let toml: toml::Value = toml::from_str(&saved).unwrap();
+        assert_eq!(
+            toml["xinfa"]["gcd_base"].as_float(),
+            Some(f64::from(input_gcd)),
+            "{profession}: 编辑器保存必须保留心法基础 GCD"
+        );
+        let cfg = jpcg_core::skill_editor::load_skills(profession);
+        assert_eq!(cfg.xinfa.xinfa_name, "unrelated edit");
+        assert_eq!(cfg.xinfa.gcd_base_secs(), effective_gcd);
+    }
 }
