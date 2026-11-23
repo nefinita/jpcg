@@ -11,7 +11,7 @@ edition.workspace = true
 [dependencies]
 jpcg_api.workspace = true
 jpcg_combo.workspace = true
-pollster = "0.4"
+pollster = "1.0"
 rayon.workspace = true
 wgpu = "30"
 
