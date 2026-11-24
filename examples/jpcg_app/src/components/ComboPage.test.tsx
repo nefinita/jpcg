@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ComboPage from "./ComboPage";
@@ -288,4 +288,68 @@ it("预设往返保留测量标记和单步覆盖，计算请求只覆盖指定�
   await act(async()=>{await new Promise(r=>setTimeout(r,400));});
   const actions=vi.mocked(api.calculateTimeline).mock.lastCall![0].actions;
   expect(actions).toMatchObject([{kind:"cast",overrides:null},{kind:"flag",flag:"start"},{kind:"cast",overrides:{base_damage_override:777}},{kind:"flag",flag:"end"},{kind:"cast",overrides:null}]);
+});
+
+async function selectPreset(name: string) {
+  await act(async () => {
+    const select = host.querySelector("select")!;
+    select.value = name;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+it("并发加载预设只保留最后选择，重挂载仍是新预设", async () => {
+  type Preset = Awaited<ReturnType<typeof api.loadComboPreset>>;
+  let resolveOld!: (value: Preset) => void;
+  const newer = { ...skill, skill_name: "测试技·二", sub_id: 1 };
+  vi.mocked(api.listComboPresets).mockResolvedValue(["旧预设", "新预设"]);
+  vi.mocked(api.loadComboPreset)
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+    .mockResolvedValueOnce({ name: "新预设", steps: [{ skill: newer, overrides: null }] });
+  await act(async () => root.render(<StrictMode><ComboPage key="mowen-0" xinfaName="mowen" formData={form} /></StrictMode>));
+  await selectPreset("旧预设");
+  await selectPreset("新预设");
+  expect(host.querySelector("select")!.value).toBe("新预设");
+  await act(async () => resolveOld({ name: "旧预设", steps: [{ skill, overrides: null }] }));
+  await mount("mowen", 1);
+  expect(host.querySelector("select")!.value).toBe("新预设");
+  const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data;
+  expect(saved.sequence.map((step: { skill: SkillPoolItemDTO }) => step.skill.skill_name)).toEqual(["测试技·二"]);
+  expect(saved.presetName).toBe("新预设");
+});
+
+it("手动编辑草稿后不采用仍在加载的旧预设", async () => {
+  type Preset = Awaited<ReturnType<typeof api.loadComboPreset>>;
+  let resolvePreset!: (value: Preset) => void;
+  vi.mocked(api.loadComboPreset)
+    .mockImplementationOnce(() => new Promise((resolve) => { resolvePreset = resolve; }));
+  await mount();
+  await selectPreset("已保存");
+  await click("测试技·二");
+  await act(async () => resolvePreset({ name: "已保存", steps: [{ skill, overrides: null }] }));
+  await mount("mowen", 1);
+  const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data;
+  expect(saved.sequence.map((step: { skill: SkillPoolItemDTO }) => step.skill.skill_name)).toEqual(["测试技·二"]);
+  expect(saved.selectedPreset).toBe("");
+});
+
+it("过时的预设载入错误静默，当前请求失败仍报告错误", async () => {
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  let rejectOld!: (error: Error) => void;
+  const oldError = new Error("过时预设读取失败");
+  const currentError = new Error("当前预设读取失败");
+  vi.mocked(api.listComboPresets).mockResolvedValue(["旧预设", "新预设"]);
+  vi.mocked(api.loadComboPreset)
+    .mockImplementationOnce(() => new Promise((_, reject) => { rejectOld = reject; }))
+    .mockRejectedValueOnce(currentError);
+  try {
+    await mount();
+    await selectPreset("旧预设");
+    await selectPreset("新预设");
+    expect(log).toHaveBeenCalledWith(currentError);
+    await act(async () => rejectOld(oldError));
+    expect(log).not.toHaveBeenCalledWith(oldError);
+  } finally {
+    log.mockRestore();
+  }
 });

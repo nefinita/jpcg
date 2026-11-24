@@ -39,8 +39,16 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   }, [setDraft]);
   const { sequence, presetName, poolQuery } = draft;
   const collapsedGroups = useMemo(() => new Set(draft.collapsedGroups), [draft.collapsedGroups]);
-  const setSequence = useCallback((update: SetStateAction<SequenceItem[]>) => setDraftField("sequence", update), [setDraftField]);
-  const setPresetName = useCallback((value: string) => setDraftField("presetName", value), [setDraftField]);
+  const presetLoadRevision = useRef(0);
+  useLayoutEffect(() => () => { presetLoadRevision.current += 1; }, [xinfaName]);
+  const setSequence = useCallback((update: SetStateAction<SequenceItem[]>) => {
+    presetLoadRevision.current += 1;
+    setDraftField("sequence", update);
+  }, [setDraftField]);
+  const setPresetName = useCallback((value: string) => {
+    presetLoadRevision.current += 1;
+    setDraftField("presetName", value);
+  }, [setDraftField]);
   const setPoolQuery = useCallback((value: string) => setDraftField("poolQuery", value), [setDraftField]);
   const setCollapsedGroups = useCallback((update: SetStateAction<Set<string>>) => {
     setDraftField("collapsedGroups", (previous) => [...(typeof update === "function" ? update(new Set(previous)) : update)]);
@@ -287,21 +295,24 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
   }, [presetName, sequence, setDraftField]);
 
   const handleLoadPreset = useCallback(async (name: string) => {
+    const revision = ++presetLoadRevision.current;
     try {
       const preset = await api.loadComboPreset(name);
+      if (revision !== presetLoadRevision.current) return;
       const restored: SequenceItem[] = [];
       for (let i = 0; i <= preset.steps.length; i++) {
         for (const flag of preset.flags ?? []) if (flag.position === i) restored.push({kind: "flag", flag: flag.start ? "start" : "end"});
         const step = preset.steps[i];
         if (step) restored.push({kind: "skill", skill: step.skill, overrides: step.overrides});
       }
-      setSequence(restored);
-      setPresetName(name);
-      setDraftField("selectedPreset", name);
+      // 同时更新预设标记和序列；外部恢复的草稿也不能被迟到结果覆盖。
+      setDraft((previous) => previous.sequence !== sequence || previous.presetName !== presetName
+        ? previous
+        : { ...previous, sequence: restored, presetName: name, selectedPreset: name });
     } catch (err) {
-      console.error(err);
+      if (revision === presetLoadRevision.current) console.error(err);
     }
-  }, [setSequence, setPresetName, setDraftField]);
+  }, [setDraft, sequence, presetName]);
 
   const handleDeletePreset = useCallback(async (name: string) => {
     try {
