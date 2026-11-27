@@ -77,6 +77,9 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
       : update), [setDraftField]);
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null);
   const [saveDialog, setSaveDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   /** 秘籍配置弹窗：槽位数由后端职业数据下发 */
   const [mijiOpen, setMijiOpen] = useState(false);
   const [mijiSkill, setMijiSkill] = useState<SkillPoolItemDTO | null>(null);
@@ -303,14 +306,21 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
     }
   }, [setSequence, setPresetName, setDraftField]);
 
-  const handleDeletePreset = useCallback(async (name: string) => {
+  const handleDeletePreset = useCallback(async () => {
+    if (!deleteTarget || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
     try {
-      await api.deleteComboPreset(name);
-      setPresets(await api.listComboPresets());
+      await api.deleteComboPreset(deleteTarget);
+      setPresets((current) => current.filter((name) => name !== deleteTarget));
+      setDraftField("selectedPreset", (current) => current === deleteTarget ? "" : current);
+      setDeleteTarget(null);
     } catch (err) {
-      console.error(err);
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleteBusy(false);
     }
-  }, []);
+  }, [deleteTarget, deleteBusy, setDraftField]);
 
   // ===== 技能池：搜索 + 按基础名分组折叠 =====
   const baseNameOf = useCallback((s: SkillPoolItemDTO) => {
@@ -542,17 +552,29 @@ export default function ComboPage({ xinfaName, formData, draft: controlledDraft,
             </button>
           </div>
           <div className={styles.presetBar}>
-            <select className={styles.presetSelect} value={presets.includes(draft.selectedPreset) ? draft.selectedPreset : ""} onChange={(e) => e.target.value && handleLoadPreset(e.target.value)}>
+            <select className={styles.presetSelect} disabled={deleteTarget !== null} value={presets.includes(draft.selectedPreset) ? draft.selectedPreset : ""} onChange={(e) => e.target.value && handleLoadPreset(e.target.value)}>
               <option value="" disabled>加载预设...</option>
               {presets.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
-            <button className={styles.smallBtn} onClick={() => setSaveDialog(true)}><IconSave size={14} /> 保存</button>
+            <button className={styles.smallBtn} disabled={deleteTarget !== null} onClick={() => setSaveDialog(true)}><IconSave size={14} /> 保存</button>
             {presets.length > 0 && (
-              <button className={styles.smallBtn} onClick={() => { const p = presets[presets.length - 1]; handleDeletePreset(p); }} title="删除最近预设"><IconTrash size={14} /></button>
+              <button type="button" className={styles.smallBtn}
+                disabled={!presets.includes(draft.selectedPreset) || saveDialog || deleteTarget !== null}
+                onClick={() => setDeleteTarget(draft.selectedPreset)}
+                title="删除所选预设" aria-label="删除所选预设"><IconTrash size={14} /></button>
             )}
           </div>
+          {deleteTarget !== null && (
+            <div className={styles.saveDialog} role="group" aria-label="确认删除预设">
+              <span>删除预设「{deleteTarget}」？</span>
+              <button type="button" className={styles.btn} disabled={deleteBusy} onClick={handleDeletePreset}>确认删除</button>
+              <button type="button" className={styles.btn} disabled={deleteBusy}
+                onClick={() => { setDeleteTarget(null); setDeleteError(null); }}>取消删除</button>
+            </div>
+          )}
+          {deleteError && <div className={styles.warnBanner} role="alert">删除预设失败：{deleteError}</div>}
           {saveDialog && (
             <div className={styles.saveDialog}>
               <input className={styles.input} placeholder="连招名称" value={presetName} onChange={(e) => setPresetName(e.target.value)}
