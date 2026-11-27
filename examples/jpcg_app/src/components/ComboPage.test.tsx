@@ -61,6 +61,62 @@ it("加载预设只更新当前草稿，修改后不自动写回预设", async (
   expect(api.saveComboPreset).not.toHaveBeenCalled();
 });
 
+it("仅在确认后删除所选预设，不删除名称排序末项或清空草稿", async () => {
+  const files = new Set(["Z-旧预设", "A-新预设"]);
+  vi.mocked(api.listComboPresets).mockImplementation(async () => [...files].sort());
+  vi.mocked(api.loadComboPreset).mockImplementation(async (name) => ({ name, steps: [{ skill, overrides: null }] }));
+  vi.mocked(api.deleteComboPreset).mockImplementation(async (name) => { files.delete(name); });
+  await mount();
+
+  const trash = [...host.querySelectorAll("button")].find((button) => button.title.startsWith("删除"))!;
+  expect(trash).toBeDefined();
+  const select = host.querySelector("select")!;
+  await act(async () => {
+    select.value = "A-新预设";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => trash.click());
+  expect(api.deleteComboPreset).not.toHaveBeenCalled();
+  const prompt = host.querySelector('[role="group"][aria-label="确认删除预设"]')!;
+  expect(prompt.textContent).toContain("A-新预设");
+  expect(prompt.textContent).not.toContain("Z-旧预设");
+  await click("取消删除");
+  expect([...files]).toEqual(["Z-旧预设", "A-新预设"]);
+
+  await act(async () => trash.click());
+  await click("确认删除");
+  expect(api.deleteComboPreset).toHaveBeenCalledExactlyOnceWith("A-新预设");
+  expect([...files]).toEqual(["Z-旧预设"]);
+  expect(select.value).toBe("");
+  expect(host.textContent).toContain("测试技·一");
+  await mount("mowen", 1);
+  const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEYS.comboDraft}:mowen`)!).data;
+  expect(saved.sequence[0].skill.skill_name).toBe("测试技·一");
+  expect(saved.presetName).toBe("A-新预设");
+  expect(saved.selectedPreset).toBe("");
+});
+
+it("有预设但未选择时不可删除；删除失败不清除选择", async () => {
+  vi.mocked(api.loadComboPreset).mockResolvedValue({ name: "已保存", steps: [] });
+  vi.mocked(api.deleteComboPreset).mockRejectedValue(new Error("测试拒绝删除"));
+  await mount();
+  const trash = [...host.querySelectorAll("button")].find((button) => button.title.startsWith("删除"))!;
+  expect(trash.disabled).toBe(true);
+  await act(async () => trash.click());
+  expect(api.deleteComboPreset).not.toHaveBeenCalled();
+
+  const select = host.querySelector("select")!;
+  await act(async () => {
+    select.value = "已保存";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => trash.click());
+  await click("确认删除");
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("测试拒绝删除");
+  expect(select.value).toBe("已保存");
+});
+
+
 it("时间轴预览下发勾选的秘籍与奇穴", async () => {
   vi.mocked(api.loadCombatBundle).mockResolvedValue({
     skills: [skill],
